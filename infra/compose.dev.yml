@@ -1,0 +1,15 @@
+# Development override: run the playground on the host (pnpm dev) against the Inji containers.
+#   docker compose -f infra/compose.yml -f infra/compose.dev.yml up -d
+# Certify and Verify reach the host's gateway under playground.localhost, and their internal ports
+# are published on 127.0.0.1 only, for the BFF's admin calls.
+services:
+  certify:
+    ports: ["127.0.0.1:8090:8090"]
+    extra_hosts: ["playground.localhost:host-gateway"]
+  verify-service:
+    ports: ["127.0.0.1:8092:8080"]
+    extra_hosts: ["playground.localhost:host-gateway"]
+  postgres:
+    ports: ["127.0.0.1:5434:5432"]
+  playground:
+    profiles: [container-app]

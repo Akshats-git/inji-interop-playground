@@ -1,0 +1,46 @@
+{
+  "name": "@playground/bff",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MPL-2.0",
+  "type": "module",
+  "description": "Backend-for-frontend: playground API, recording gateway, Issuer Studio, run orchestrator, Reference Wallet and Reference Verifier.",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=../../.env.dev src/main.ts",
+    "start": "node dist/main.js",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node20 --packages=external --outfile=dist/main.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@digitalbazaar/credentials-context": "^3.2.0",
+    "@digitalbazaar/ed25519-signature-2020": "^5.4.0",
+    "@digitalbazaar/ed25519-verification-key-2020": "^4.2.0",
+    "@digitalbazaar/vc": "^7.2.0",
+    "@injistack/pixelpass": "0.8.0",
+    "@playground/core": "workspace:*",
+    "credentials-context": "^2.0.0",
+    "did-context": "^3.1.1",
+    "ed25519-signature-2020-context": "^1.1.0",
+    "express": "^4.21.2",
+    "jose": "^6.1.0",
+    "jsonld": "^8.3.3",
+    "pg": "^8.16.3",
+    "pino": "^9.9.0",
+    "ws": "^8.18.3",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.23",
+    "@types/node": "^22.18.0",
+    "@types/pg": "^8.15.5",
+    "@types/supertest": "^6.0.3",
+    "@types/ws": "^8.18.1",
+    "esbuild": "^0.25.9",
+    "supertest": "^7.1.4",
+    "tsx": "^4.20.5",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,136 @@
+# Inji Interoperability Playground: one Compose bundle for the playground and the Inji stack it drives.
+#
+#   docker compose -f infra/compose.yml up -d                     # core: postgres, Certify, Verify, playground
+#   docker compose -f infra/compose.yml --profile tunnel up -d    # + public HTTPS tunnel for a phone wallet
+#
+# Inji services run as released images, unmodified; only their configuration is supplied here.
+# Nothing but the playground gateway is published on the host: wallets reach Certify and Verify
+# through it (/pub/*), which is what lets the protocol inspector record every message.
+
+name: inji-playground
+
+x-java-service: &java-service
+  restart: unless-stopped
+  networks: [inji]
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+    networks: [inji]
+    mem_limit: 384m
+
+  # Certify A: issuer-initiated issuance (pre-authorized code), credential types created at runtime
+  # by the Issuer Studio through /credential-configurations.
+  certify:
+    <<: *java-service
+    image: injistack/inji-certify-with-plugins:0.14.0
+    user: root
+    environment:
+      container_user: mosip
+      active_profile_env: default,playground
+      SPRING_CONFIG_NAME: certify
+      SPRING_CONFIG_LOCATION: /home/mosip/config/
+      enable_certify_artifactory: "false"
+      download_hsm_client: "false"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://playground.localhost:8080}
+      CERTIFY_DEFAULT_DID: ${CERTIFY_DEFAULT_DID:-did:web:playground.localhost%3A8080:pub:certify}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JAVA_TOOL_OPTIONS: -Xms256m -Xmx640m -XX:+UseSerialGC
+    volumes:
+      - ./certify/certify-default.properties:/home/mosip/config/certify-default.properties:ro
+      - ./certify/certify-playground.properties:/home/mosip/config/certify-playground.properties:ro
+      - certify-keys:/home/mosip/CERTIFY_PKCS12
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8090/v1/certify/actuator/health || exit 1"]
+      interval: 10s
+      start_period: 90s
+      retries: 30
+    mem_limit: 1g
+
+  # Inji Verify service: OpenID4VP relying party (Presentation Exchange) + direct VC verification.
+  verify-service:
+    <<: *java-service
+    image: injistack/inji-verify-service:0.18.2
+    user: root
+    environment:
+      active_profile_env: default
+      DATABASE_HOST: postgres
+      DATABASE_PORT: "5432"
+      DATABASE_NAME: inji_verify
+      DATABASE_SCHEMA: verify
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      INJI_VP_REQUEST_LONG_POLLING_TIMEOUT: "20000"
+      INJI_VP_SUBMISSION_BASE_URL: ${PUBLIC_BASE_URL:-http://playground.localhost:8080}/pub/verify/v1/verify
+      INJI_DID_VERIFY_URI: ${VERIFY_DID:-did:web:playground.localhost%3A8080:pub:verify:v1:verify}
+      INJI_DID_VERIFY_PUBLIC_KEY_URI: ${VERIFY_DID:-did:web:playground.localhost%3A8080:pub:verify:v1:verify}#key-0
+      INJI_KEYSTORE_FILE_PASS: mosip
+      INJI_VERIFY_REDIRECT_URI: ${PUBLIC_BASE_URL:-http://playground.localhost:8080}
+      INJI_VERIFY_RESPONSE_CODE_EXPIRY_TIME_IN_MINS: "5"
+      # The SDK's session cookie must survive our /pub/verify prefix and plain-HTTP localhost.
+      INJI_VERIFY_COOKIE_PATH: /pub/verify/v1/verify
+      INJI_VERIFY_COOKIE_SECURE_VALUE: ${VERIFY_COOKIE_SECURE:-false}
+      JAVA_TOOL_OPTIONS: -Xms128m -Xmx384m -XX:+UseSerialGC
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/v1/verify/actuator/health >/dev/null 2>&1 || curl -sf http://localhost:8080/v1/verify/actuator/health || exit 1"]
+      interval: 10s
+      start_period: 60s
+      retries: 30
+    mem_limit: 640m
+
+  # The playground: UI + BFF API + recording gateway, all on one origin.
+  playground:
+    build:
+      context: ..
+      dockerfile: infra/playground.Dockerfile
+    image: inji-interop-playground:local
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://playground.localhost:8080}
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/playground
+      CERTIFY_INTERNAL_URL: http://certify:8090
+      VERIFY_INTERNAL_URL: http://verify-service:8080
+      EVENT_ENCRYPTION_KEY: ${EVENT_ENCRYPTION_KEY:-}
+      RETENTION_DAYS: ${RETENTION_DAYS:-7}
+    ports:
+      - "${PLAYGROUND_PORT:-8080}:8080"
+    networks:
+      inji:
+        # Containers reach the gateway under the same name the browser uses (*.localhost is loopback in
+        # browsers), so one URL works for the laptop, Certify and Verify alike.
+        aliases: [playground.localhost]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 512m
+
+  # Optional: a public HTTPS URL so a phone running Inji Wallet can reach the gateway.
+  tunnel:
+    profiles: [tunnel]
+    image: cloudflare/cloudflared:2025.8.1
+    command: tunnel --no-autoupdate --url http://playground:8080
+    networks: [inji]
+    depends_on: [playground]
+
+networks:
+  inji:
+    name: inji-playground
+
+volumes:
+  pgdata:
+  certify-keys:
