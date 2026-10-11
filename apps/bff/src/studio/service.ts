@@ -25,6 +25,8 @@ import { createPublicKey } from "node:crypto";
 import { base58btcDecode } from "../reference/keys.js";
 import { now, uuid } from "../util/ids.js";
 
+const RESERVED_ISSUER = "certify";
+
 export class StudioError extends Error {
   constructor(
     readonly status: number,
@@ -48,6 +50,7 @@ export class StudioService {
   // ---- issuers -------------------------------------------------------------------------------------
   async createIssuer(input: unknown): Promise<IssuerProfile> {
     const p = IssuerProfileInput.parse(input);
+    if (p.slug === RESERVED_ISSUER) throw new StudioError(409, "reserved_slug", `"${RESERVED_ISSUER}" is reserved for Certify's own keys.`);
     if (await this.store.getIssuer(p.slug)) throw new StudioError(409, "issuer_exists", `An issuer called "${p.slug}" already exists.`);
     const profile: IssuerProfile = { ...p, id: uuid(), createdAt: now() };
     await this.store.putIssuer(profile);
@@ -237,7 +240,8 @@ export class StudioService {
    * verificationMethod URL and expects a single key object, so this returns the key for one algorithm.
    */
   async issuerKey(slug: string, alg: SigningAlg) {
-    if (!(await this.store.getIssuer(slug))) return undefined;
+    // "certify" is reserved for Certify's own keys (it signs status-list credentials with them).
+    if (slug !== RESERVED_ISSUER && !(await this.store.getIssuer(slug))) return undefined;
     const certify = await this.certifyDid();
     const typeFor: Record<SigningAlg, string[]> = {
       EdDSA: ["Ed25519VerificationKey2020", "Ed25519VerificationKey2018"],

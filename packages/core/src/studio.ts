@@ -141,9 +141,10 @@ export function publicUrlsFor(baseUrl: string, t: Pick<CredentialTypeInput, "iss
 /** A JSON-LD context for the type: its terms map into an issuer-specific vocabulary. */
 export function buildContextDocument(baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName" | "fields">) {
   const vocab = `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${t.issuerSlug}/vocab#`;
-  const terms: Record<string, unknown> = { [t.typeName]: `${vocab}${t.typeName}`, name: "https://schema.org/name", description: "https://schema.org/description" };
+  // Only the type's own terms: VCDM terms (id, type, name, description…) are protected by the base context.
+  const terms: Record<string, unknown> = { [t.typeName]: `${vocab}${t.typeName}` };
   for (const f of t.fields) terms[f.name] = `${vocab}${f.name}`;
-  return { "@context": { "@version": 1.1, "@protected": false, ...terms } };
+  return { "@context": { "@version": 1.1, ...terms } };
 }
 
 /** Literal text inside the template: JSON-escaped, with Velocity's `$` and `#` neutralised via Certify's EscapeTool. */
@@ -168,13 +169,19 @@ export function buildVelocityTemplate(urls: PublicUrls, t: CredentialTypeInput, 
   }
 
   const v2 = t.dataModel === "2.0";
-  const expiry = t.expiresAt ? `"${new Date(t.expiresAt).toISOString().replace(/\.\d{3}Z$/, "Z")}"` : `"\${validUntil}"`;
+  // Keep milliseconds: Certify's ledger parses validFrom with a fixed "...ss.SSS'Z'" pattern (gap G23).
+  const iso = (d: Date) => `"${d.toISOString()}"`;
+  const expiry = t.expiresAt ? iso(new Date(t.expiresAt)) : `"\${validUntil}"`;
+  // A credential that is meant to be expired gets a validity window wholly in the past (one year long),
+  // so it is consistent (validFrom before validUntil) and fails only on expiry.
+  const pastExpiry = t.expiresAt && new Date(t.expiresAt).getTime() < Date.now();
+  const start = pastExpiry ? iso(new Date(new Date(t.expiresAt).getTime() - 365 * 86400_000)) : `"\${validFrom}"`;
   return [
     "{",
     `  "@context": ${JSON.stringify(buildContextList(urls, t))},`,
     `  "type": ["VerifiableCredential", "${t.typeName}"],`,
     t.issuerForm === "object" ? `  "issuer": { "id": "${urls.issuerId}", "name": "${literal(issuer.name)}" },` : `  "issuer": "${urls.issuerId}",`,
-    v2 ? `  "validFrom": "\${validFrom}",` : `  "issuanceDate": "\${validFrom}",`,
+    v2 ? `  "validFrom": ${start},` : `  "issuanceDate": ${start},`,
     v2 ? `  "validUntil": ${expiry},` : `  "expirationDate": ${expiry},`,
     `  "credentialSubject": {`,
     `    "id": "\${_holderId}",`,
@@ -196,7 +203,8 @@ export interface CertifyCredentialConfiguration {
   keyManagerRefId: string;
   signatureAlgo: SigningAlg;
   signatureCryptoSuite?: string;
-  sdClaim?: string[];
+  /** Comma-separated JSONPaths of selectively disclosable claims, e.g. "$.fullName,$.crop". */
+  sdClaim?: string;
   metaDataDisplay: unknown[];
   displayOrder: string[];
   scope: string;
@@ -228,7 +236,6 @@ export function buildCertifyConfiguration(baseUrl: string, t: CredentialTypeInpu
       {
         name: t.displayName,
         locale: "en",
-        description: t.description || undefined,
         logo: { url: issuer.logoUrl || `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuer.slug}/logo.svg`, alt_text: `${issuer.name} logo` },
         background_color: issuer.backgroundColor,
         text_color: issuer.textColor,
@@ -243,8 +250,8 @@ export function buildCertifyConfiguration(baseUrl: string, t: CredentialTypeInpu
       ...common,
       credentialFormat: "vc+sd-jwt",
       sdJwtVct: urls.vct,
-      sdClaim: t.fields.filter((f) => f.selectivelyDisclosable).map((f) => f.name),
-      sdJwtClaims: Object.fromEntries(t.fields.map((f) => [f.name, { mandatory: f.required, display: [{ name: f.label, locale: "en" }] }])),
+      sdClaim: t.fields.filter((f) => f.selectivelyDisclosable).map((f) => `$.${f.name}`).join(","),
+      sdJwtClaims: Object.fromEntries(t.fields.map((f) => [f.name, { display: [{ name: f.label, locale: "en" }] }])),
     };
   }
   return {
@@ -258,9 +265,14 @@ export function buildCertifyConfiguration(baseUrl: string, t: CredentialTypeInpu
   };
 }
 
+/**
+ * The VC's @context list. The Ed25519Signature2020 suite context is needed for both data models: the VCDM 2.0
+ * base context does not define that proof type, and strict (safe-mode) JSON-LD processors reject the proof
+ * without it, while lenient ones silently drop it from the signed data.
+ */
 export function buildContextList(urls: PublicUrls, t: Pick<CredentialTypeInput, "dataModel" | "ldpSuite">) {
   const v2 = t.dataModel === "2.0";
-  return [v2 ? W3C_V2 : W3C_V1, urls.context, ...(t.ldpSuite === "Ed25519Signature2020" && !v2 ? [ED25519_2020_CONTEXT] : [])];
+  return [v2 ? W3C_V2 : W3C_V1, urls.context, ...(t.ldpSuite === "Ed25519Signature2020" ? [ED25519_2020_CONTEXT] : [])];
 }
 
 /** Turn form input (strings) into typed claims for /pre-authorized-data, validating against the type. */

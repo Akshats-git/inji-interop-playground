@@ -58,7 +58,7 @@ describe("velocity template", () => {
   });
 
   it("can hard-code a past expiry to produce expired credentials", () => {
-    expect(buildVelocityTemplate(urls, base({ expiresAt: "2024-01-01T00:00:00.000Z" }), issuer)).toContain('"validUntil": "2024-01-01T00:00:00Z"');
+    expect(buildVelocityTemplate(urls, base({ expiresAt: "2024-01-01T00:00:00.000Z" }), issuer)).toContain('"validUntil": "2024-01-01T00:00:00.000Z"');
   });
 });
 
@@ -72,7 +72,7 @@ describe("Certify configuration", () => {
     const c = buildCertifyConfiguration("http://h", base({ format: "vc+sd-jwt", fields: [{ name: "a", label: "A", selectivelyDisclosable: false }, { name: "b", label: "B" }] as never }), issuer);
     expect(c.credentialFormat).toBe("vc+sd-jwt");
     expect(c.sdJwtVct).toBe("http://h/pub/issuers/agri-dept/types/FarmerCard");
-    expect(c.sdClaim).toEqual(["b"]);
+    expect(c.sdClaim).toBe("$.b");
     const tpl = atob(c.vcTemplate);
     expect(JSON.parse(tpl.replace(/"\$!\{_esc\.java\(\$\w+\)\}"/g, '"x"'))).toMatchObject({ a: "x", b: "x" });
   });

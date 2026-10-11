@@ -47,15 +47,20 @@ services:
       enable_certify_artifactory: "false"
       download_hsm_client: "false"
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://playground.localhost:8080}
-      CERTIFY_DEFAULT_DID: ${CERTIFY_DEFAULT_DID:-did:web:playground.localhost%3A8080:pub:certify}
+      # Signs Certify's own status-list credentials. A URL key locally (did:web needs HTTPS, and Inji Verify
+      # 0.18.2 cannot resolve did:web hosts with an encoded port); playground.sh sets did:web for tunnels.
+      CERTIFY_DEFAULT_DID: ${CERTIFY_DEFAULT_DID:-http://playground.localhost:8080/pub/issuers/certify/keys/EdDSA}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       JAVA_TOOL_OPTIONS: -Xms256m -Xmx640m -XX:+UseSerialGC
     volumes:
       - ./certify/certify-default.properties:/home/mosip/config/certify-default.properties:ro
       - ./certify/certify-playground.properties:/home/mosip/config/certify-playground.properties:ro
-      - certify-keys:/home/mosip/CERTIFY_PKCS12
+      # The image runs from /home/inji, so the relative keystore path resolves here (injistack mounts
+      # /home/mosip/CERTIFY_PKCS12, which leaves keys unpersisted: recreate the container and Certify won't boot).
+      - certify-keys:/home/inji/CERTIFY_PKCS12
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://localhost:8090/v1/certify/actuator/health || exit 1"]
+      # /actuator/health answers 200 even when it refuses access, so check the public issuer metadata instead.
+      test: ["CMD-SHELL", "curl -sf http://localhost:8090/v1/certify/.well-known/openid-credential-issuer | grep -q credential_issuer"]
       interval: 10s
       start_period: 90s
       retries: 30

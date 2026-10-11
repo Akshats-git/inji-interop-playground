@@ -1,0 +1,73 @@
+import type { TamperPreset } from "@playground/core";
+import type { Store, HeldCredential } from "../../store/types.js";
+import { now, uuid } from "../../util/ids.js";
+import { resolveLocalDid } from "../keys.js";
+import { walletHttp } from "./http.js";
+import { receiveOffer } from "./issuance.js";
+import { present, resolveRequest, type WalletCredential } from "./presentation.js";
+
+interface RawHeld {
+  credential: unknown;
+  holder: WalletCredential["holder"];
+}
+
+/** The Reference Wallet as a service: keeps credentials (sealed at rest) and answers offers and requests. */
+export class ReferenceWallet {
+  constructor(
+    private readonly store: Store,
+    private readonly urls: { publicBaseUrl: () => string; selfUrl: string },
+  ) {}
+
+  private http(runId?: string | null) {
+    return walletHttp({ publicBaseUrl: this.urls.publicBaseUrl(), selfUrl: this.urls.selfUrl, runId });
+  }
+
+  /** did:web over HTTPS, with a plain-HTTP fallback for *.localhost so local runs work without a tunnel. */
+  async resolveDidWeb(did: string, runId?: string | null): Promise<Record<string, unknown>> {
+    const local = resolveLocalDid(did);
+    if (local) return local;
+    if (!did.startsWith("did:web:")) throw new Error(`Unsupported DID method: ${did.split(":")[1]}`);
+    const parts = did.slice(8).split(":").map(decodeURIComponent);
+    const host = parts.shift()!;
+    const path = parts.length ? `/${parts.join("/")}/did.json` : "/.well-known/did.json";
+    const scheme = /(^|\.)localhost(:\d+)?$/.test(host) ? "http" : "https";
+    return (await this.http(runId).getJson(`${scheme}://${host}${path}`)) as Record<string, unknown>;
+  }
+
+  async receive(offerUri: string, opts: { txCode?: string; runId?: string | null; typeId?: string } = {}) {
+    const got = await receiveOffer(this.http(opts.runId), offerUri, { txCode: opts.txCode });
+    const held: HeldCredential = {
+      id: uuid(),
+      createdAt: now(),
+      configId: got.configId,
+      typeId: opts.typeId,
+      format: got.format,
+      issuer: got.issuer,
+      holder: got.holder.did,
+      title: got.title,
+      runId: opts.runId ?? undefined,
+      raw: { credential: got.credential, holder: { kind: got.holder.kind, privateJwk: got.holder.privateJwk, publicJwk: got.holder.publicJwk } } satisfies RawHeld,
+    };
+    await this.store.putHeld(held);
+    return { held, credential: got.credential };
+  }
+
+  async walletCredentials(onlyId?: string): Promise<WalletCredential[]> {
+    const ids = onlyId ? [onlyId] : (await this.store.listHeld()).map((h) => h.id);
+    const out: WalletCredential[] = [];
+    for (const id of ids) {
+      const h = await this.store.getHeld(id);
+      if (!h) continue;
+      const raw = h.raw as RawHeld;
+      out.push({ id: h.id, format: h.format, credential: raw.credential, holder: raw.holder });
+    }
+    return out;
+  }
+
+  async present(requestUri: string, opts: { heldId?: string; tamper?: TamperPreset; runId?: string | null } = {}) {
+    const http = this.http(opts.runId);
+    const req = await resolveRequest(http, requestUri, (did) => this.resolveDidWeb(did, opts.runId));
+    const held = await this.walletCredentials(opts.heldId);
+    return present(http, req, held, opts.tamper ?? "none");
+  }
+}

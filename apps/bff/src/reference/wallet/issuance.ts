@@ -94,21 +94,37 @@ export async function receiveOffer(http: WalletHttp, offerUri: string, opts: { t
   // 5. Prove possession of a fresh holder key over the c_nonce, and request the credential.
   const format = String(config.format);
   const holder = await newHolderKey(format === "ldp_vc" ? "ed25519" : "p256");
-  const proofJwt = await new SignJWT({ nonce: token.c_nonce, aud: offer.credential_issuer })
-    .setProtectedHeader({ alg: holder.alg, typ: "openid4vci-proof+jwt", kid: holder.kid })
-    .setIssuedAt()
-    .setExpirationTime("5m")
-    .sign(await privateKeyOf(holder));
+  const proofJwt = async (nonce?: string) =>
+    new SignJWT({ nonce, aud: offer.credential_issuer })
+      .setProtectedHeader({ alg: holder.alg, typ: "openid4vci-proof+jwt", kid: holder.kid })
+      .setIssuedAt()
+      .setExpirationTime("5m")
+      .sign(await privateKeyOf(holder));
 
-  const request: Record<string, unknown> = { format, proof: { proof_type: "jwt", jwt: proofJwt } };
+  const request: Record<string, unknown> = { format };
   if (format === "ldp_vc") {
     const def = (config.credential_definition ?? {}) as Record<string, unknown>;
     request.credential_definition = { "@context": def["@context"], type: def.type };
   } else if (format === "vc+sd-jwt" || format === "dc+sd-jwt") request.vct = config.vct;
   else if (format === "mso_mdoc") request.doctype = config.doctype;
 
-  const res = (await http.postJson(String(metadata.credential_endpoint), request, { authorization: `${token.token_type ?? "Bearer"} ${token.access_token}` })) as { credential?: unknown; credentials?: { credential: unknown }[] };
-  const credential = res.credential ?? res.credentials?.[0]?.credential;
+  // Certify 0.14 fetches W3C contexts from the internet while signing (gap G16); a transient fetch failure
+  // surfaces as ERROR_SIGNING_QR_DATA. Retry that case twice with a fresh proof; every attempt is recorded.
+  let nonce = token.c_nonce;
+  let res: { credential?: unknown; credentials?: { credential: unknown }[] } | undefined;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = (await http.postJson(String(metadata.credential_endpoint), { ...request, proof: { proof_type: "jwt", jwt: await proofJwt(nonce) } }, { authorization: `${token.token_type ?? "Bearer"} ${token.access_token}` })) as typeof res;
+      break;
+    } catch (e) {
+      const body = (e as { body?: Record<string, unknown> }).body;
+      const transient = body?.error === "ERROR_SIGNING_QR_DATA" && /canonicali/i.test(String(body?.error_description ?? ""));
+      if (!transient || attempt >= 2) throw e;
+      if (typeof body?.c_nonce === "string") nonce = body.c_nonce;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  const credential = res?.credential ?? res?.credentials?.[0]?.credential;
   if (!credential) throw new IssuanceError("no_credential", "The credential response holds no credential.", res);
 
   const display = (config.display as { name?: string }[] | undefined)?.[0]?.name ?? configId;

@@ -1,18 +1,44 @@
 import express from "express";
+import type { JWK } from "jose";
 import type { Config } from "./config.js";
 import { CertifyClient } from "./inji/certify.js";
+import { InjiVerifyClient } from "./inji/verify.js";
 import { Recorder } from "./gateway/recorder.js";
 import { certifyRoute, recordingProxy, verifyRoute } from "./gateway/proxy.js";
 import { publicRoutes } from "./public/routes.js";
 import { StudioService } from "./studio/service.js";
 import type { Store } from "./store/types.js";
 import { studioApi } from "./api/studio.js";
+import { runsApi } from "./api/runs.js";
+import { walletApi } from "./api/wallet.js";
 import { errorHandler } from "./api/errors.js";
+import { ReferenceWallet } from "./reference/wallet/service.js";
+import { ReferenceVerifier } from "./reference/verifier/service.js";
+import { walletHttp } from "./reference/wallet/http.js";
+import { Orchestrator } from "./runs/orchestrator.js";
+import { call } from "./util/http.js";
 
 export function createApp(config: Config, store: Store) {
+  const publicBaseUrl = () => config.publicBaseUrl;
   const recorder = new Recorder(store);
   const certify = new CertifyClient(config.certifyUrl, recorder);
-  const studio = new StudioService(store, certify, () => config.publicBaseUrl);
+  const studio = new StudioService(store, certify, publicBaseUrl);
+  const wallet = new ReferenceWallet(store, { publicBaseUrl, selfUrl: config.selfUrl });
+  const injiVerify = new InjiVerifyClient(`${config.selfUrl}/pub/verify/v1/verify`, config.publicBaseUrl);
+
+  // The Reference Verifier fetches public documents like any outside party would (through the gateway),
+  // and trusts exactly one SD-JWT issuer: the playground's Certify, by its published JWKS.
+  const verifierHttp = walletHttp({ publicBaseUrl: config.publicBaseUrl, selfUrl: config.selfUrl, actor: "reference-verifier" });
+  let jwksCache: { at: number; keys: JWK[] } | undefined;
+  const refVerifier = new ReferenceVerifier(publicBaseUrl, {
+    fetchJson: (url) => verifierHttp.getJson(url),
+    resolveDidWeb: (did) => wallet.resolveDidWeb(did),
+    trustedIssuerJwks: async () => {
+      if (!jwksCache || Date.now() - jwksCache.at > 60_000) jwksCache = { at: Date.now(), keys: (await call<{ keys: JWK[] }>(`${config.certifyUrl}/v1/certify/.well-known/jwks.json`)).body.keys };
+      return jwksCache.keys;
+    },
+  }, recorder);
+  const orchestrator = new Orchestrator({ store, recorder, studio, wallet, refVerifier, injiVerify });
 
   const app = express();
   app.disable("x-powered-by");
@@ -21,14 +47,17 @@ export function createApp(config: Config, store: Store) {
   // Wallet-facing gateway first: it needs raw bodies.
   app.use(recordingProxy(certifyRoute(config.certifyUrl), recorder));
   app.use(recordingProxy(verifyRoute(config.verifyUrl), recorder));
+  app.use(refVerifier.router());
   app.use(publicRoutes(studio, store));
 
   const api = express.Router();
   api.use(express.json({ limit: "2mb" }));
   api.use(studioApi(studio, store));
+  api.use(runsApi(store, orchestrator));
+  api.use(walletApi(store, wallet, refVerifier));
   app.use("/api", api);
   app.use("/api", (_req, res) => void res.status(404).json({ error: "not_found" }));
   app.use(errorHandler);
 
-  return { app, recorder, certify, studio };
+  return { app, recorder, certify, studio, wallet, refVerifier, injiVerify, orchestrator };
 }

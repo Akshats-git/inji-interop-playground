@@ -5,6 +5,8 @@ import { log } from "./log.js";
 import { MemoryStore } from "./store/memory.js";
 import { PgStore } from "./store/pg.js";
 import { Sealer } from "./util/sealed.js";
+import { attachWebSocket } from "./ws.js";
+import { seedDemo } from "./studio/seed.js";
 
 const config = loadConfig();
 let sealer: Sealer;
@@ -17,11 +19,27 @@ else {
 const store = config.databaseUrl ? new PgStore(config.databaseUrl, sealer) : new MemoryStore();
 await store.init();
 
-const { app, studio } = createApp(config, store);
+const { app, studio, recorder, orchestrator, certify } = createApp(config, store);
 const server = createServer(app);
+attachWebSocket(server, recorder, orchestrator, app);
 server.listen(config.port, config.host, () => log.info({ port: config.port, publicBaseUrl: config.publicBaseUrl, store: config.databaseUrl ? "postgres" : "memory" }, "playground listening"));
 
-void studio.reconcile().then((r) => (r.created.length || r.updated.length) && log.info(r, "re-synced credential types with Certify"));
+// Once Certify is reachable: seed demo content on a fresh install, then make Certify match our store.
+void (async () => {
+  for (let i = 0; i < 120 && !(await certify.health()); i++) await new Promise((r) => setTimeout(r, 2000));
+  if (process.env.SEED_DEMO !== "false") await seedDemo(store, studio).catch((e) => log.warn({ err: e }, "seeding failed"));
+  const r = await studio.reconcile();
+  if (r.created.length || r.updated.length) log.info(r, "re-synced credential types with Certify");
+})();
+
+// Retention: protocol payloads and runs are purged after RETENTION_DAYS.
+const purge = () =>
+  store
+    .purge(new Date(Date.now() - config.retentionDays * 86400_000))
+    .then((n) => (n.runs || n.events || n.held) && log.info(n, "purged expired data"))
+    .catch((e) => log.warn({ err: e }, "purge failed"));
+void purge();
+setInterval(purge, 3600_000).unref();
 
 const shutdown = () => {
   server.close();

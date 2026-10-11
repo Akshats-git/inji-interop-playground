@@ -11,7 +11,8 @@
     "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node20 --packages=external --outfile=dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "matrix": "tsx scripts/matrix.ts"
   },
   "dependencies": {
     "@digitalbazaar/credentials-context": "^3.2.0",
@@ -19,6 +20,7 @@
     "@digitalbazaar/ed25519-verification-key-2020": "^4.2.0",
     "@digitalbazaar/vc": "^7.2.0",
     "@injistack/pixelpass": "0.8.0",
+    "@peculiar/x509": "^1.12.3",
     "@playground/core": "workspace:*",
     "credentials-context": "^2.0.0",
     "did-context": "^3.1.1",

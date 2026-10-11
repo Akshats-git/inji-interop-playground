@@ -29,8 +29,10 @@ export class CertifyClient {
 
   async health(): Promise<boolean> {
     try {
-      await call(`${this.base}/v1/certify/actuator/health`, { timeoutMs: 3000 });
-      return true;
+      // Certify answers /actuator/health with HTTP 200 and an authentication-error envelope, so probe the
+      // public issuer metadata instead.
+      const r = await call<{ credential_issuer?: string }>(this.url("/.well-known/openid-credential-issuer"), { timeoutMs: 3000 });
+      return Boolean(r.body.credential_issuer);
     } catch {
       return false;
     }
