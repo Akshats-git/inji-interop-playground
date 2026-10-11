@@ -11,6 +11,9 @@ import type { Store } from "./store/types.js";
 import { studioApi } from "./api/studio.js";
 import { runsApi } from "./api/runs.js";
 import { walletApi } from "./api/wallet.js";
+import { insightsApi } from "./api/insights.js";
+import { existsSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { errorHandler } from "./api/errors.js";
 import { ReferenceWallet } from "./reference/wallet/service.js";
 import { ReferenceVerifier } from "./reference/verifier/service.js";
@@ -55,9 +58,17 @@ export function createApp(config: Config, store: Store) {
   api.use(studioApi(studio, store));
   api.use(runsApi(store, orchestrator));
   api.use(walletApi(store, wallet, refVerifier));
+  api.use(insightsApi(config, store, certify));
   app.use("/api", api);
   app.use("/api", (_req, res) => void res.status(404).json({ error: "not_found" }));
   app.use(errorHandler);
+
+  // The built UI (single origin with the API and gateway). Client-side routes fall back to index.html.
+  const uiDist = resolve(config.uiDist ?? join(import.meta.dirname, "../../ui/dist"));
+  if (existsSync(uiDist)) {
+    app.use(express.static(uiDist, { index: false, maxAge: "1h", setHeaders: (res, path) => path.endsWith(".html") && res.setHeader("cache-control", "no-cache") }));
+    app.get(/^\/(?!api|pub|ws).*/, (_req, res) => res.sendFile(join(uiDist, "index.html")));
+  }
 
   return { app, recorder, certify, studio, wallet, refVerifier, injiVerify, orchestrator };
 }

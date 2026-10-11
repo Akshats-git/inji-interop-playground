@@ -1,0 +1,147 @@
+@import "tailwindcss";
+@import "@fontsource-variable/overpass";
+@import "@fontsource/overpass-mono/400.css";
+@import "@fontsource/overpass-mono/600.css";
+
+/*
+ * Design tokens. The playground is drawn as a transit map: issuance travels on the blue line,
+ * presentation on the saffron line, stations are the parties. Everything else stays quiet.
+ */
+:root {
+  --paper: #f2f4f7;
+  --surface: #ffffff;
+  --sunken: #e8ecf2;
+  --ink: #16233f;
+  --muted: #5a6478;
+  --hairline: #d5dbe5;
+  --issue: #2447b5;
+  --issue-soft: #e3e9fb;
+  --present: #d68a12;
+  --present-ink: #8a5300;
+  --present-soft: #fbefd9;
+  --pass: #12715a;
+  --pass-soft: #def3ec;
+  --fail: #b42318;
+  --fail-soft: #fde6e3;
+  --focus: #2447b5;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0d1628;
+    --surface: #14213a;
+    --sunken: #0a1222;
+    --ink: #e6eaf2;
+    --muted: #9aa5ba;
+    --hairline: #26344f;
+    --issue: #7b95ff;
+    --issue-soft: #1c2b55;
+    --present: #f0a93b;
+    --present-ink: #f3bd66;
+    --present-soft: #3a2b12;
+    --pass: #45c49c;
+    --pass-soft: #12352c;
+    --fail: #ff7a6b;
+    --fail-soft: #3d1a17;
+    --focus: #9fb2ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0d1628;
+  --surface: #14213a;
+  --sunken: #0a1222;
+  --ink: #e6eaf2;
+  --muted: #9aa5ba;
+  --hairline: #26344f;
+  --issue: #7b95ff;
+  --issue-soft: #1c2b55;
+  --present: #f0a93b;
+  --present-ink: #f3bd66;
+  --present-soft: #3a2b12;
+  --pass: #45c49c;
+  --pass-soft: #12352c;
+  --fail: #ff7a6b;
+  --fail-soft: #3d1a17;
+  --focus: #9fb2ff;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-hairline: var(--hairline);
+  --color-issue: var(--issue);
+  --color-issue-soft: var(--issue-soft);
+  --color-present: var(--present);
+  --color-present-ink: var(--present-ink);
+  --color-present-soft: var(--present-soft);
+  --color-pass: var(--pass);
+  --color-pass-soft: var(--pass-soft);
+  --color-fail: var(--fail);
+  --color-fail-soft: var(--fail-soft);
+  --font-sans: "Overpass Variable", "Overpass", system-ui, sans-serif;
+  --font-mono: "Overpass Mono", ui-monospace, "SFMono-Regular", monospace;
+  /* Type scale: 1.2 ratio from a 16px base. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.44rem;
+  --text-2xl: 1.728rem;
+  --text-3xl: 2.488rem;
+}
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+@layer base {
+  /* Fieldsets default to min-content width, which lets one long option widen a whole form on phones. */
+  fieldset {
+    min-width: 0;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+::selection {
+  background: var(--issue-soft);
+}
+
+/* Headings use the signage weight of Overpass with tight tracking. */
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
