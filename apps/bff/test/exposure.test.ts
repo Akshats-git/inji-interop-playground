@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import request from "supertest";
 import express from "express";
-import { publicExposureGuard } from "../src/gateway/exposure.js";
+import { defaultGatewayFromRoutes, isThisComputer, publicExposureGuard } from "../src/gateway/exposure.js";
 
 function app(publicBaseUrl: string, publicUi = false) {
   const a = express();
@@ -30,5 +30,22 @@ describe("public exposure guard", () => {
   it("does nothing for a plain-HTTP local setup, or when PUBLIC_UI opts in", async () => {
     await request(app("http://playground.localhost:8080")).get("/api/runs").set("host", "playground.localhost:8080").expect(200);
     await request(app("https://abc.trycloudflare.com", true)).get("/api/runs").set("host", "abc.trycloudflare.com").expect(200);
+  });
+});
+
+describe("this computer", () => {
+  const routes = "Iface\tDestination\tGateway \tFlags\neth0\t00000000\t010014AC\t0003\neth0\t000014AC\t00000000\t0001\n";
+
+  it("reads the default gateway from /proc/net/route", () => {
+    expect(defaultGatewayFromRoutes(routes)).toBe("172.20.0.1");
+    expect(defaultGatewayFromRoutes("Iface\tDestination\tGateway\n")).toBeUndefined();
+  });
+
+  it("trusts loopback and, in a container, the bridge gateway, but not other addresses", () => {
+    expect(isThisComputer("127.0.0.1", undefined)).toBe(true);
+    expect(isThisComputer("::ffff:172.20.0.1", "172.20.0.1")).toBe(true);
+    expect(isThisComputer("172.20.0.1", undefined)).toBe(false);
+    expect(isThisComputer("192.168.1.23", "172.20.0.1")).toBe(false);
+    expect(isThisComputer("172.20.0.5", "172.20.0.1")).toBe(false);
   });
 });

@@ -3,9 +3,35 @@
  * can connect, but a wallet only ever needs the wallet-facing gateway (/pub/*). The UI, the API (which can
  * reveal recorded tokens) and the live feed stay on this machine unless PUBLIC_UI=true opts in.
  */
+import { existsSync, readFileSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import type { RequestHandler } from "express";
 import type { Config } from "../config.js";
+
+/** IPv4 default gateway from a /proc/net/route table (little-endian hex), if there is one. */
+export function defaultGatewayFromRoutes(table: string): string | undefined {
+  const hex = table.split("\n").map((l) => l.trim().split(/\s+/)).find((cols) => cols[1] === "00000000" && /^[0-9A-F]{8}$/i.test(cols[2] ?? ""))?.[2];
+  return hex && hex !== "00000000" ? hex.match(/../g)!.reverse().map((b) => parseInt(b, 16)).join(".") : undefined;
+}
+
+// In a container, requests from the host's browser arrive from the Docker bridge gateway, not loopback (the
+// port is published on 127.0.0.1 only, so the gateway is this computer). Outside a container the default
+// gateway is a router, so it is never trusted there.
+const containerGateway = (() => {
+  try {
+    return existsSync("/.dockerenv") ? defaultGatewayFromRoutes(readFileSync("/proc/net/route", "utf8")) : undefined;
+  } catch {
+    return undefined;
+  }
+})();
+
+const LOOPBACK = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+/** Whether a connection comes from the computer running the playground (not the LAN, not the tunnel). */
+export function isThisComputer(remoteAddress: string | undefined, gateway = containerGateway) {
+  const addr = remoteAddress ?? "";
+  return LOOPBACK.has(addr) || (!!gateway && (addr === gateway || addr === `::ffff:${gateway}`));
+}
 
 export function isPublicHostRequest(config: Pick<Config, "publicBaseUrl">, req: Pick<IncomingMessage, "headers">) {
   const pub = new URL(config.publicBaseUrl);

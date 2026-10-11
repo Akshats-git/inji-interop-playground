@@ -114,8 +114,9 @@ services:
       RETENTION_DAYS: ${RETENTION_DAYS:-7}
       # The tunnel only exposes the wallet-facing gateway (/pub/*) unless this is "true".
       PUBLIC_UI: ${PUBLIC_UI:-false}
+    # This computer only: the API is unauthenticated. Phones reach the gateway through the tunnel instead.
     ports:
-      - "${PLAYGROUND_PORT:-8080}:8080"
+      - "127.0.0.1:${PLAYGROUND_PORT:-8080}:8080"
     networks:
       inji:
         # Containers reach the gateway under the same name the browser uses (*.localhost is loopback in

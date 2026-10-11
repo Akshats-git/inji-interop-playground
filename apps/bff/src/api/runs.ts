@@ -1,4 +1,5 @@
 import express from "express";
+import { isThisComputer } from "../gateway/exposure.js";
 import { presentEvent } from "../gateway/recorder.js";
 import type { Orchestrator } from "../runs/orchestrator.js";
 import { runReportMarkdown, redactRun } from "../runs/report.js";
@@ -6,7 +7,7 @@ import type { Store } from "../store/types.js";
 import { ApiError, h } from "./errors.js";
 
 /** Reveal secrets in the inspector only for requests from this machine. */
-export const canReveal = (req: express.Request) => req.query.reveal === "1" && ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress ?? "");
+export const canReveal = (req: express.Request) => req.query.reveal === "1" && isThisComputer(req.socket.remoteAddress);
 
 export function runsApi(store: Store, orchestrator: Orchestrator) {
   const r = express.Router();
