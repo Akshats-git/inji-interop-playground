@@ -120,6 +120,27 @@ export interface PublicUrls {
   vct: string;
 }
 
+/**
+ * Inji Certify 0.14.0 records each issued credential's type in `certify.ledger.credential_type`, a
+ * varchar(100); for SD-JWT that is the `vct`. A longer vct makes issuance fail (gap G24), which happens as
+ * soon as the playground runs on a long tunnel hostname.
+ */
+export const CERTIFY_VCT_MAX = 100;
+
+/** Short, stable id for a type, for when its readable vct URL would be too long. Not a security measure. */
+export function shortTypeId(issuerSlug: string, typeName: string): string {
+  let h = 0x811c9dc5; // FNV-1a, 32-bit
+  for (const ch of `${issuerSlug}/${typeName}`) h = Math.imul(h ^ ch.codePointAt(0)!, 0x01000193) >>> 0;
+  return h.toString(36).padStart(7, "0");
+}
+
+/** The SD-JWT `vct`: a resolvable type-metadata URL, readable when it fits Certify's limit, short when not. */
+export function vctFor(baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName">): string {
+  const base = baseUrl.replace(/\/+$/, "");
+  const readable = `${base}/pub/issuers/${t.issuerSlug}/types/${t.typeName}`;
+  return readable.length <= CERTIFY_VCT_MAX ? readable : `${base}/pub/vct/${shortTypeId(t.issuerSlug, t.typeName)}`;
+}
+
 /** Where a type's public artefacts live. did:web needs HTTPS, so plain-HTTP local runs use URL-based keys. */
 export function publicUrlsFor(baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName" | "format" | "ldpSuite" | "sdJwtAlg">): PublicUrls {
   const base = baseUrl.replace(/\/+$/, "");
@@ -128,13 +149,13 @@ export function publicUrlsFor(baseUrl: string, t: Pick<CredentialTypeInput, "iss
   const alg = signingAlgOf(t);
   if (url.protocol === "https:") {
     const did = `did:web:${encodeURIComponent(url.host)}${(url.pathname.replace(/\/$/, "") + issuerPath).split("/").join(":")}`;
-    return { context: `${base}/pub/contexts/${t.issuerSlug}/${t.typeName}.jsonld`, issuerId: did, keyBase: did, vct: `${base}${issuerPath}/types/${t.typeName}` };
+    return { context: `${base}/pub/contexts/${t.issuerSlug}/${t.typeName}.jsonld`, issuerId: did, keyBase: did, vct: vctFor(base, t) };
   }
   return {
     context: `${base}/pub/contexts/${t.issuerSlug}/${t.typeName}.jsonld`,
     issuerId: `${base}${issuerPath}`,
     keyBase: `${base}${issuerPath}/keys/${alg}`,
-    vct: `${base}${issuerPath}/types/${t.typeName}`,
+    vct: vctFor(base, t),
   };
 }
 

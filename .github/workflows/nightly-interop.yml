@@ -1,0 +1,45 @@
+name: Nightly interop matrix
+
+# Every night the whole bundle (Inji Certify, Inji Verify, the playground) starts from scratch and the
+# Reference Wallet runs every journey that needs no human. The report is attached to the run and shown
+# in its summary. Known gaps (docs/gaps.md) are reported but do not fail the job.
+on:
+  schedule:
+    - cron: "30 20 * * *" # 02:00 IST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Start the bundle
+        run: ./playground.sh up
+      - name: Run the interop matrix
+        working-directory: apps/bff
+        env:
+          REPORT: ${{ github.workspace }}/interop-report.md
+        run: npx tsx scripts/matrix.ts
+      - name: Publish the report
+        if: always()
+        run: |
+          if [ -f interop-report.md ]; then cat interop-report.md >> "$GITHUB_STEP_SUMMARY"; else echo "No report was written." >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: interop-report-${{ github.run_number }}
+          path: interop-report.md
+          if-no-files-found: ignore
+      - name: Container logs
+        if: failure()
+        run: docker compose --project-name inji-playground --env-file .env -f infra/compose.yml logs --no-color --tail 300

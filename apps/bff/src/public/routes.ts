@@ -1,6 +1,6 @@
 /** Public, unauthenticated documents that verifiers and wallets fetch: contexts, issuer documents, keys, logos. */
 import express from "express";
-import type { SigningAlg } from "@playground/core";
+import { shortTypeId, vctFor, type CredentialType, type SigningAlg } from "@playground/core";
 import type { StudioService } from "../studio/service.js";
 import type { Store } from "../store/types.js";
 
@@ -46,10 +46,17 @@ export function publicRoutes(studio: StudioService, store: Store) {
     );
   });
 
+  // SD-JWT VC type metadata, at the type's vct URL (readable form, or the short form used on long hosts).
+  const typeMetadata = (t: CredentialType) => ({ vct: vctFor(t.syncedBaseUrl, t), name: t.displayName, description: t.description, claims: t.fields.map((f) => ({ path: [f.name], display: [{ lang: "en", label: f.label }] })) });
   r.get("/pub/issuers/:slug/types/:type", async (req, res) => {
     const t = (await store.listTypes(req.params.slug)).find((x) => x.typeName === req.params.type);
     if (!t) return void res.sendStatus(404);
-    res.json({ vct: req.originalUrl, name: t.displayName, description: t.description, claims: t.fields.map((f) => ({ path: [f.name], display: [{ lang: "en", label: f.label }] })) });
+    res.json(typeMetadata(t));
+  });
+  r.get("/pub/vct/:id", async (req, res) => {
+    const t = (await store.listTypes()).find((x) => shortTypeId(x.issuerSlug, x.typeName) === req.params.id);
+    if (!t) return void res.sendStatus(404);
+    res.json(typeMetadata(t));
   });
 
   r.get("/pub/issuers/:slug/vocab", (req, res) => res.type("text/plain").send(`Vocabulary for credentials issued by "${req.params.slug}" through the Inji Interoperability Playground.`));

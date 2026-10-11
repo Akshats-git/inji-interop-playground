@@ -49,6 +49,9 @@ export async function measureQr(payload: string) {
 export function insightsApi(config: Config, store: Store, certify: CertifyClient) {
   const r = express.Router();
 
+  /** Liveness for container health checks: answers without touching Certify or Verify. */
+  r.get("/health", (_req, res) => void res.json({ ok: true }));
+
   r.get("/status", h(async (_req, res) => {
     const [certifyUp, verifyUp] = await Promise.all([
       certify.health(),

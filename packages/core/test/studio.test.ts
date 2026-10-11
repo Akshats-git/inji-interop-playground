@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCertifyConfiguration, buildVelocityTemplate, coerceClaims, configIdOf, CredentialTypeInput, publicUrlsFor, type IssuerProfile } from "../src/index.js";
+import { buildCertifyConfiguration, CERTIFY_VCT_MAX, shortTypeId, vctFor, buildVelocityTemplate, coerceClaims, configIdOf, CredentialTypeInput, publicUrlsFor, type IssuerProfile } from "../src/index.js";
 
 const issuer: IssuerProfile = { id: "1", slug: "agri-dept", name: 'Agri "Dept" $1 #2', description: "", logoUrl: "", backgroundColor: "#1F4D3A", textColor: "#FFFFFF", createdAt: "" };
 const base = (over: Partial<CredentialTypeInput> = {}) =>
@@ -88,5 +88,21 @@ describe("claims", () => {
     const t = base({ fields: [{ name: "n", label: "N", kind: "number" }, { name: "c", label: "C", kind: "choice", options: ["A", "B"] }, { name: "d", label: "D", kind: "date", required: false }] as never });
     expect(coerceClaims(t, { n: "3.5", c: "A" })).toMatchObject({ ok: true, claims: { n: 3.5, c: "A" } });
     expect(coerceClaims(t, { n: "x", c: "Z", d: "1/2/2020" }).errors).toEqual({ n: "must be a number", c: "one of: A, B", d: "use YYYY-MM-DD" });
+  });
+});
+
+describe("vctFor", () => {
+  const t = { issuerSlug: "agri-dept", typeName: "KarnatakaFarmerCard" };
+
+  it("uses the readable type-metadata URL when it fits Certify's 100-character ledger column", () => {
+    expect(vctFor("http://playground.localhost:8080", t)).toBe("http://playground.localhost:8080/pub/issuers/agri-dept/types/KarnatakaFarmerCard");
+  });
+
+  it("falls back to a short, stable URL on long hosts", () => {
+    const base = "https://appearing-calvin-bonus-rows.trycloudflare.com";
+    const vct = vctFor(base, t);
+    expect(vct.length).toBeLessThanOrEqual(CERTIFY_VCT_MAX);
+    expect(vct).toBe(`${base}/pub/vct/${shortTypeId("agri-dept", "KarnatakaFarmerCard")}`);
+    expect(shortTypeId("agri-dept", "KarnatakaFarmerCard")).not.toBe(shortTypeId("agri-dept", "KarnatakaFarmerCardX"));
   });
 });

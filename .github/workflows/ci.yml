@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Types, tests and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Shellcheck playground.sh
+        run: shellcheck -S warning playground.sh
+
+  bundle:
+    name: Compose bundle smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the bundle
+        run: ./playground.sh up
+      - name: Doctor
+        run: ./playground.sh doctor
+      - name: Demo credential types are seeded into Inji Certify
+        run: |
+          for i in $(seq 1 60); do
+            n=$(curl -fsS http://localhost:8080/api/types | jq length) && [ "$n" -ge 3 ] && { echo "$n credential types"; exit 0; }
+            sleep 3
+          done
+          echo "Credential types were not seeded"; exit 1
+      - name: Issuer metadata is served through the gateway
+        run: curl -fsS http://localhost:8080/pub/certify/v1/certify/.well-known/openid-credential-issuer | jq -e '.credential_configurations_supported | length >= 3'
+      - name: Container logs
+        if: failure()
+        run: docker compose --project-name inji-playground --env-file .env -f infra/compose.yml logs --no-color --tail 300

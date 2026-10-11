@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/coverage
+**/.vite
+.git
+.github
+.env
+.env.*
+*.log
+docs
+infra/postgres
+infra/certify
+infra/verify

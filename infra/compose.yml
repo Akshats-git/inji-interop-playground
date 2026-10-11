@@ -112,6 +112,8 @@ services:
       VERIFY_INTERNAL_URL: http://verify-service:8080
       EVENT_ENCRYPTION_KEY: ${EVENT_ENCRYPTION_KEY:-}
       RETENTION_DAYS: ${RETENTION_DAYS:-7}
+      # The tunnel only exposes the wallet-facing gateway (/pub/*) unless this is "true".
+      PUBLIC_UI: ${PUBLIC_UI:-false}
     ports:
       - "${PLAYGROUND_PORT:-8080}:8080"
     networks:
@@ -128,6 +130,8 @@ services:
   tunnel:
     profiles: [tunnel]
     image: cloudflare/cloudflared:2025.8.1
+    # Retries when the quick-tunnel request fails; note that each restart gets a new URL.
+    restart: unless-stopped
     command: tunnel --no-autoupdate --url http://playground:8080
     networks: [inji]
     depends_on: [playground]

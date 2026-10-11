@@ -115,8 +115,20 @@ async function runOne(row: Row, types: CredentialType[]): Promise<Run> {
 
 const icon = (r: Run) => (r.result?.verdict === "PASS" ? "✅" : "❌");
 
+/** On a fresh stack the demo types are seeded in the background once Certify is up; wait for them. */
+async function seededTypes(): Promise<CredentialType[]> {
+  const needed = [FARMER, FARMER_SD, DEGREE];
+  for (let i = 0; ; i++) {
+    const types = await api<CredentialType[]>("/types").catch(() => [] as CredentialType[]);
+    if (needed.every((id) => types.some((t) => t.configId === id))) return types;
+    if (i >= 90) throw new Error(`demo credential types were not seeded within 3 minutes (missing ${needed.filter((id) => !types.some((t) => t.configId === id)).join(", ")})`);
+    if (i === 0) console.log("waiting for the demo credential types to be seeded…");
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
 async function main() {
-  let types = await api<CredentialType[]>("/types");
+  let types = await seededTypes();
   await ensureExpiredType(types);
   types = await api<CredentialType[]>("/types");
   const results: { row: Row; run?: Run; error?: string }[] = [];

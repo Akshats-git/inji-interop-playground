@@ -16,6 +16,7 @@ import {
   type CredentialType,
   type IssuerProfile,
   type SigningAlg,
+  vctFor,
 } from "@playground/core";
 import type { CertifyClient, DidDocument } from "../inji/certify.js";
 import { log } from "../log.js";
@@ -169,7 +170,9 @@ export class StudioService {
       const issuer = await this.store.getIssuer(t.issuerSlug);
       if (!issuer) continue;
       const missing = !(t.configId in advertised);
-      const stale = t.syncedBaseUrl !== this.baseUrl();
+      // Also re-sync when the generated vct changed although the host did not (e.g. the vct length rule).
+      const vctDrift = !missing && t.format === "vc+sd-jwt" && (advertised[t.configId] as { vct?: string }).vct !== vctFor(this.baseUrl(), t);
+      const stale = t.syncedBaseUrl !== this.baseUrl() || vctDrift;
       if (!missing && !stale) continue;
       try {
         const next = { ...t, syncedBaseUrl: this.baseUrl() };
@@ -219,8 +222,8 @@ export class StudioService {
    * rewritten onto the issuer's own did:web.
    */
   async issuerDidDocument(slug: string) {
-    const issuer = await this.store.getIssuer(slug);
-    if (!issuer) return undefined;
+    // "certify" has no stored profile, but over HTTPS Certify's status lists are signed as did:web:…:certify.
+    if (slug !== RESERVED_ISSUER && !(await this.store.getIssuer(slug))) return undefined;
     const base = this.baseUrl();
     const did = publicUrlsFor(base, { issuerSlug: slug, typeName: "X", format: "ldp_vc", ldpSuite: "Ed25519Signature2020", sdJwtAlg: "ES256" }).issuerId;
     const certify = await this.certifyDid();

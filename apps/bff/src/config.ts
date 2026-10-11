@@ -14,6 +14,8 @@ const Env = z.object({
   EVENT_ENCRYPTION_KEY: z.string().optional(),
   RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   UI_DIST: z.string().optional(),
+  /** Also serve the UI and API on the public (tunnel) URL. Off by default: wallets only need /pub/*. */
+  PUBLIC_UI: z.enum(["true", "false"]).default("false"),
   LOG_LEVEL: z.string().default("info"),
   NODE_ENV: z.string().default("development"),
 });
@@ -34,6 +36,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     encryptionKey: e.EVENT_ENCRYPTION_KEY,
     retentionDays: e.RETENTION_DAYS,
     uiDist: e.UI_DIST,
+    publicUi: e.PUBLIC_UI === "true",
     logLevel: e.LOG_LEVEL,
     production: e.NODE_ENV === "production",
   };

@@ -15,6 +15,7 @@ import { insightsApi } from "./api/insights.js";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { errorHandler } from "./api/errors.js";
+import { publicExposureGuard } from "./gateway/exposure.js";
 import { ReferenceWallet } from "./reference/wallet/service.js";
 import { ReferenceVerifier } from "./reference/verifier/service.js";
 import { walletHttp } from "./reference/wallet/http.js";
@@ -46,6 +47,7 @@ export function createApp(config: Config, store: Store) {
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", true);
+  app.use(publicExposureGuard(config));
 
   // Wallet-facing gateway first: it needs raw bodies.
   app.use(recordingProxy(certifyRoute(config.certifyUrl), recorder));

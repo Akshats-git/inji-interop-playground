@@ -35,6 +35,7 @@ standards-valid variant; **Low** = misleading behaviour or papercut.
 | G21 | Inji Verify | When a credential's status list cannot be resolved, the whole presentation fails with an opaque `VP_VERIFICATION_FAILED` ("runtime exception") instead of a status-check error | Low |
 | G22 | Inji Verify | A DCQL request (`dcqlQuery`, the 1.0 shape) to 0.18.2 fails with `BOTH_ID_AND_PD_CANNOT_BE_NULL` rather than a clear "query language not supported", so integrators mixing versions get a misleading error | Low |
 | G23 | Certify | A template `validFrom` that is valid RFC 3339 but has no milliseconds (`2024-01-02T00:00:00Z`) makes issuance fail with HTTP 500 (`DateTimeParseException` in the ledger), so issuers cannot set their own validity dates freely | Low |
+| G24 | Certify | Each issued credential's type is written to `certify.ledger.credential_type`, a `varchar(100)`; for SD-JWT that is the `vct`. The SD-JWT VC spec recommends a collision-resistant URL for `vct`, and a URL on a longer host (e.g. `https://<four-words>.trycloudflare.com/pub/issuers/agri-dept/types/KarnatakaFarmerCard`, 101 chars) makes every issuance fail with `ERROR_SIGNING_QR_DATA` after a `value too long` SQL error. Found by running the matrix in tunnel mode; the playground now shortens long vct URLs to `/pub/vct/<id>` | Medium |
 
 ## Responsible disclosure
 

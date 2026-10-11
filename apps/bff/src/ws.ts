@@ -6,12 +6,13 @@ import type { EventSummary, Run } from "@playground/core";
 import type { Recorder } from "./gateway/recorder.js";
 import type { Orchestrator } from "./runs/orchestrator.js";
 
-export function attachWebSocket(server: Server, recorder: Recorder, orchestrator: Orchestrator, app: (req: IncomingMessage, res: ServerResponse) => void) {
+export function attachWebSocket(server: Server, recorder: Recorder, orchestrator: Orchestrator, app: (req: IncomingMessage, res: ServerResponse) => void, allowFeed: (req: IncomingMessage) => boolean = () => true) {
   const wss = new WebSocketServer({ noServer: true });
   // Java's HttpClient (Certify's and Verify's JSON-LD loaders) sends "Upgrade: h2c" on plain GETs. Node hands
   // every upgrade to this listener, so anything that is not our WebSocket goes back to the HTTP app.
   server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const isWs = String(req.headers.upgrade ?? "").toLowerCase() === "websocket" && (req.url ?? "").split("?")[0] === "/ws";
+    if (isWs && !allowFeed(req)) return void socket.end("HTTP/1.1 404 Not Found\r\nconnection: close\r\n\r\n");
     if (isWs) return void wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
     delete req.headers.upgrade;
     const res = new ServerResponse(req);

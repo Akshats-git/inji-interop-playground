@@ -6,6 +6,7 @@ import { MemoryStore } from "./store/memory.js";
 import { PgStore } from "./store/pg.js";
 import { Sealer } from "./util/sealed.js";
 import { attachWebSocket } from "./ws.js";
+import { isPublicHostRequest } from "./gateway/exposure.js";
 import { seedDemo } from "./studio/seed.js";
 
 const config = loadConfig();
@@ -21,7 +22,8 @@ await store.init();
 
 const { app, studio, recorder, orchestrator, certify } = createApp(config, store);
 const server = createServer(app);
-attachWebSocket(server, recorder, orchestrator, app);
+// The live feed carries every recorded message title, so like the API it stays off the public URL.
+attachWebSocket(server, recorder, orchestrator, app, (req) => config.publicUi || !isPublicHostRequest(config, req));
 server.listen(config.port, config.host, () => log.info({ port: config.port, publicBaseUrl: config.publicBaseUrl, store: config.databaseUrl ? "postgres" : "memory" }, "playground listening"));
 
 // Once Certify is reachable: seed demo content on a fresh install, then make Certify match our store.

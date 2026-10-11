@@ -6,6 +6,7 @@
 import { EventEmitter } from "node:events";
 import {
   signingAlgOf,
+  vctFor,
   TAMPER_PRESETS,
   VERIFIERS,
   WALLETS,
@@ -178,7 +179,7 @@ export class Orchestrator extends EventEmitter {
   }
 
   private querySpec(run: Run, type: CredentialType): QuerySpec {
-    const urls = { vct: `${type.syncedBaseUrl}/pub/issuers/${type.issuerSlug}/types/${type.typeName}` };
+    const urls = { vct: vctFor(type.syncedBaseUrl, type) };
     const claims = run.spec.requestedClaims.filter((c) => type.fields.some((f) => f.name === c));
     return {
       id: `${type.issuerSlug}-${type.typeName}`.toLowerCase(),

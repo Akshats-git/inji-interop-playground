@@ -1,6 +1,7 @@
 import pg from "pg";
 import type { CredentialType, EventSummary, IssuerProfile, ProtocolEvent, Run } from "@playground/core";
-import type { Sealer } from "../util/sealed.js";
+import { log } from "../log.js";
+import type { Sealed, Sealer } from "../util/sealed.js";
 import type { HeldCredential, HeldSummary, RunFilter, Store } from "./types.js";
 
 /**
@@ -96,12 +97,28 @@ export class PgStore implements Store {
       [r.id, r.createdAt, r.status, r.result?.verdict ?? null, r.labels.format, r.spec.wallet, r.spec.verifier, r.spec.mode, r.spec.query, r.spec.tamper, s.data, s.iv],
     );
   }
+  private warnedUnreadable = false;
+  /**
+   * Open a sealed row, or undefined when it was sealed under another EVENT_ENCRYPTION_KEY (the key was
+   * regenerated or lost). Those rows are unreadable by design; they must not take the whole API down.
+   */
+  private tryOpen<T>(s: Sealed, aad: string): T | undefined {
+    try {
+      return this.sealer.open<T>(s, aad);
+    } catch {
+      if (!this.warnedUnreadable) {
+        this.warnedUnreadable = true;
+        log.warn("some stored rows were sealed with a different EVENT_ENCRYPTION_KEY and are skipped; ./playground.sh reset clears them");
+      }
+      return undefined;
+    }
+  }
   private openRun(row: { id: string; body: Buffer; iv: Buffer }) {
-    return this.sealer.open<Run>({ data: row.body, iv: row.iv }, row.id);
+    return this.tryOpen<Run>({ data: row.body, iv: row.iv }, row.id);
   }
   async getRun(id: string) {
     const row = (await this.q<{ id: string; body: Buffer; iv: Buffer }>("SELECT id, body, iv FROM runs WHERE id=$1", [id])).rows[0];
-    return row && this.openRun(row);
+    return row ? this.openRun(row) : undefined;
   }
   async listRuns(f: RunFilter = {}) {
     const where: string[] = [];
@@ -119,7 +136,7 @@ export class PgStore implements Store {
     add("verifier", f.verifier);
     params.push(f.limit ?? 200);
     const rows = (await this.q<{ id: string; body: Buffer; iv: Buffer }>(`SELECT id, body, iv FROM runs ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY created_at DESC LIMIT $${params.length}`, params)).rows;
-    return rows.map((r) => this.openRun(r));
+    return rows.map((r) => this.openRun(r)).filter((r): r is Run => r !== undefined);
   }
   async deleteRun(id: string) {
     await this.q("DELETE FROM run_events WHERE run_id=$1", [id]);
@@ -172,8 +189,8 @@ export class PgStore implements Store {
   async getEvent(id: string) {
     const r = (await this.q("SELECT * FROM run_events WHERE id=$1", [id])).rows[0];
     if (!r) return undefined;
-    const body = this.sealer.open<Pick<ProtocolEvent, "request" | "response">>({ data: r.payload as Buffer, iv: r.iv as Buffer }, id);
-    return { ...this.toSummary(r), ...body };
+    const body = this.tryOpen<Pick<ProtocolEvent, "request" | "response">>({ data: r.payload as Buffer, iv: r.iv as Buffer }, id);
+    return body && { ...this.toSummary(r), ...body };
   }
   async attachEvents(ids: string[], runId: string) {
     if (!ids.length) return;
@@ -196,7 +213,8 @@ export class PgStore implements Store {
   }
   async getHeld(id: string) {
     const r = (await this.q<{ summary: HeldSummary; body: Buffer; iv: Buffer }>("SELECT summary, body, iv FROM held_credentials WHERE id=$1", [id])).rows[0];
-    return r && { ...r.summary, raw: this.sealer.open({ data: r.body, iv: r.iv }, id) };
+    const raw = r && this.tryOpen({ data: r.body, iv: r.iv }, id);
+    return raw === undefined ? undefined : { ...r!.summary, raw };
   }
   async deleteHeld(id: string) {
     await this.q("DELETE FROM held_credentials WHERE id=$1", [id]);

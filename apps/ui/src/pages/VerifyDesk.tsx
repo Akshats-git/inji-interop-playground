@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { OpenID4VPVerification, QRCodeVerification } from "@injistack/react-inji-verify-sdk";
-import { explainMapping, toDcql, toPresentationDefinition, validateDcql, type CredentialType, type PeDialect, type QuerySpec } from "@playground/core";
+import { explainMapping, vctFor, toDcql, toPresentationDefinition, validateDcql, type CredentialType, type PeDialect, type QuerySpec } from "@playground/core";
 import { api } from "../lib/api";
 import { formatLabel } from "../lib/format";
 import { JsonView } from "../components/JsonView";
@@ -18,7 +18,7 @@ function specFor(t: CredentialType, claims: string[]): QuerySpec {
     purpose: `Show your ${t.displayName}`,
     format: t.format,
     typeName: t.typeName,
-    vct: `${t.syncedBaseUrl}/pub/issuers/${t.issuerSlug}/types/${t.typeName}`,
+    vct: vctFor(t.syncedBaseUrl, t),
     claims,
     requireHolderBinding: true,
   };
