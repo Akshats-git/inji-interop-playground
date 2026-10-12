@@ -9,6 +9,7 @@ import * as pixelpass from "@injistack/pixelpass";
 import { LDP_SUITES, signingAlgOf, type Run } from "@playground/core";
 import type { Config } from "../config.js";
 import type { CertifyClient } from "../inji/certify.js";
+import type { PartiesService } from "../parties/service.js";
 import type { Store } from "../store/types.js";
 import { call } from "../util/http.js";
 import { VERSIONS } from "../runs/orchestrator.js";
@@ -46,16 +47,17 @@ export async function measureQr(payload: string) {
   };
 }
 
-export function insightsApi(config: Config, store: Store, certify: CertifyClient) {
+export function insightsApi(config: Config, store: Store, certify: CertifyClient, parties: PartiesService) {
   const r = express.Router();
 
   /** Liveness for container health checks: answers without touching Certify or Verify. */
   r.get("/health", (_req, res) => void res.json({ ok: true }));
 
   r.get("/status", h(async (_req, res) => {
-    const [certifyUp, verifyUp] = await Promise.all([
+    const [certifyUp, verifyUp, partyHealth] = await Promise.all([
       certify.health(),
       call(`${config.verifyUrl}/v1/verify/actuator/health`, { timeoutMs: 3000 }).then(() => true).catch(() => false),
+      parties.health(),
     ]);
     const https = config.publicBaseUrl.startsWith("https://");
     res.json({
@@ -66,6 +68,12 @@ export function insightsApi(config: Config, store: Store, certify: CertifyClient
       services: { certify: certifyUp, verify: verifyUp },
       versions: VERSIONS,
       retentionDays: config.retentionDays,
+      parties: {
+        file: parties.loaded.file,
+        errors: parties.loaded.errors.length,
+        configured: Object.keys(partyHealth).length,
+        reachable: Object.values(partyHealth).filter((h) => h.ok).length,
+      },
     });
   }));
 

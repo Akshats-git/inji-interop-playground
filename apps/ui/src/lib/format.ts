@@ -13,7 +13,7 @@ export const formatLabel = (f: string, dm?: string) => (f === "ldp_vc" ? `W3C JS
 
 /** Which station on the transit line a party sits at. */
 export type Station = "issuer" | "wallet" | "verifier";
-export const stationOf = (p: Party): Station => (p === "studio" || p === "certify" ? "issuer" : p === "wallet" ? "wallet" : "verifier");
+export const stationOf = (p: Party): Station => (p === "studio" || p === "certify" || p === "external-issuer" ? "issuer" : p === "wallet" || p === "external-wallet" ? "wallet" : "verifier");
 
 export function bytes(n: number) {
   return n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;

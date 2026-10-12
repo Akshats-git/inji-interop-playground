@@ -23,7 +23,9 @@ export function walletApi(store: Store, wallet: ReferenceWallet, refVerifier: Re
     const { offerUri, txCode } = req.body ?? {};
     if (typeof offerUri !== "string") throw new ApiError(400, "invalid_offer", "Provide offerUri.");
     const { held } = await wallet.receive(offerUri, { txCode });
-    res.status(201).json(held);
+    // Never send the stored credential back with its holder's private key.
+    const { raw: _raw, ...summary } = held;
+    res.status(201).json(summary);
   }));
   /** Answer any OpenID4VP request (Inji Verify's, the Reference Verifier's, or an external verifier's). */
   r.post("/wallet/present", h(async (req, res) => {

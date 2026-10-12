@@ -1,6 +1,8 @@
 # Interoperability gaps found with the playground
 
-These are real problems the playground surfaced while wiring released Inji modules together. Each comes with
+These are real problems the playground surfaced while wiring released Inji modules together, and (G29–G34)
+while connecting them to parties that are not Inji: the walt.id issuer, verifier and wallet declared in
+[infra/parties.yaml](../infra/parties.yaml). Each comes with
 evidence, a way to reproduce it and the workaround the playground applies. Versions: **Inji Certify 0.14.0,
 Inji Verify 0.18.2** (released images, unmodified), the Verify React SDK 0.18.1 and vc-verifier 1.8.1
 (inside Verify).
@@ -9,7 +11,7 @@ Inji Verify 0.18.2** (released images, unmodified), the Verify React SDK 0.18.1 
 breaks a standards-valid variant. **Low** means misleading behaviour or a papercut.
 
 **Evidence:**
-- **Matrix Mx/Tx** is a row of the automated matrix ([interop-report.md](interop-report.md)), regenerated on
+- **Matrix Mx/Tx/Xx** is a row of the automated matrix ([interop-report.md](interop-report.md)), regenerated on
   every run.
 - **Run `run-…`** is a playground run you can open at `/runs/<id>` (runs are purged after `RETENTION_DAYS`).
 - **Probe** is a direct HTTP call, given in the reproduction steps.
@@ -51,9 +53,18 @@ a **public issue** on the named repository, or **docs** (an update to the deploy
 | G26 | Certify (SD-JWT) + QR | A 5-claim SD-JWT VC from Certify is 4,545 characters, 73 % of it the two-certificate `x5c` chain in the header, so it **fits no QR code** (PixelPass makes it 5 % larger). A JSON-LD credential with a 1 KB photo already needs QR v27 (Inji Verify's camera limit), and above ~2.4 KB nothing fits | Medium | QR Lab probes (below) | Public issue (inji-certify) |
 | G27 | Certify | In the pre-authorized flow the access token's `sub` is the **whole claim set as JSON** (name, IDs, every attribute), so personal data travels in a bearer JWT that proxies, logs and APM tools routinely record | Medium (privacy) | Probe (below) | **Private** |
 | G28 | Certify | Concurrent pre-authorized issuances intermittently fail with `invalid_proof`, although each proof JWT carries the `c_nonce` its own token response returned and uses its own holder key | Low | Runs `run-c7mbyq`, `run-izg6ca` (failed) next to `run-hkvnrw`; `run-jg3rbg` (below) | Public issue (inji-certify), after confirming |
+| G29 | Inji Verify React SDK | `QRCodeVerification` refuses uploaded images under **10 KB** ("File size not supported. The file size should be between 10 KB and 5 MB"). A plain QR PNG is usually smaller: two of the four sample QR codes in Inji Verify's own docs (3.4 KB and 4.4 KB) cannot be uploaded | Low | Probe on the Verifier desk (below) | Public issue (inji-verify) |
+| G30 | walt.id wallet-api 1.0 ↔ Certify | walt.id's wallet reads every credential configuration's `claims` as an mdoc-style namespace map. Certify's SD-JWT configurations use the draft-13 shape (`{"fullName": {"display": […]}}`), so parsing the **whole** metadata fails and the wallet can collect **no** Certify credential, JSON-LD ones included, while Certify advertises any SD-JWT type | Medium | Matrix X11, X12 (below) | Public issue (walt-id/waltid-identity) |
+| G31 | walt.id verifier-api 1.0 | A key-binding JWT without a `kid` header is refused ("No key ID found in JWT header"), although the holder key is the one in `cnf` and SD-JWT does not require `kid` | Low | Workaround: the Reference Wallet sets `kid` ([presentation.ts](../apps/bff/src/reference/wallet/presentation.ts)) | Public issue (walt-id/waltid-identity) |
+| G32 | Certify ↔ walt.id verifier-api 1.0 | Certify binds SD-JWTs to the holder with `cnf: {"kid": "did:jwk:…"}`; walt.id's verifier only reads `cnf.jwk` and fails with a `NullPointerException`, so **no Certify SD-JWT verifies at walt.id**. Both forms are allowed by RFC 7800; the SD-JWT VC drafts show `cnf.jwk` | Medium | Matrix X10 | Public issue (walt.id); note to inji-certify |
+| G33 | walt.id wallet-api 1.0 (and Inji Verify's leniency) | walt.id's wallet sets `presentation_submission.descriptor_map[].id` to the presentation **definition** id instead of the **input descriptor** id that Presentation Exchange requires. Inji Verify 0.18.2 accepts it without checking; the Reference Verifier rejects it | Low | Matrix X9 (rejected) vs X7 (Inji Verify accepts) | Public issue (walt.id); mention to inji-verify |
+| G34 | walt.id wallet-api 1.0 | `matchCredentialsForPresentationRequest` returns `[]` for an Inji Verify request the same wallet resolves without trouble; matching on the resolved `presentation_definition` finds the credential | Low | Workaround: two steps in [parties.yaml](../infra/parties.yaml) | Public issue (walt-id/waltid-identity) |
 
 Every Matrix and Run reference above was produced or re-checked on 11 Oct 2026 with the local bundle.
 The matrix run that day: 28 of 31 rows as expected, 3 known gaps (T6 = G19, T10 = G20, T17 = G11) and
+0 unexpected.
+On 12 Oct 2026 the matrix gained 17 rows with external parties (`./playground.sh up --external`): 40 of 48
+rows as expected, 8 known gaps (T6, T10, T17, and X9 = G33, X10 = G32, X11 and X12 = G30, X14 = G11) and
 0 unexpected.
 
 ## Responsible disclosure
@@ -231,6 +242,50 @@ JWT's `nonce` equals its own token response's `c_nonce`, the holder keys differ 
 the wallet side is right. Sequential issuance (the matrix) never fails. Not yet narrowed down to a cause
 inside Certify (a shared nonce cache entry is the likely candidate); confirm with maintainers before filing.
 
+### G29: uploads under 10 KB
+On the Verifier desk, choose **Upload a QR code image** and pick `valid-vc-dm-1.1.png` or `expired-vc.png` from
+Inji Verify's documentation samples (3.4 KB and 4.4 KB). The SDK answers "File size not supported. The file
+size should be between 10 KB and 5 MB" and never calls the service. The same images scaled up past 10 KB
+(`ffmpeg -i in.png -vf scale=iw*2:ih*2:flags=neighbor out.png`) verify as SUCCESS and EXPIRED. Checked on
+12 Oct 2026; the larger samples (`valid-vc-dm-2.0.png`, `invalid-vc.png`) upload normally.
+
+### G30: walt.id's wallet cannot read Certify's metadata
+With the external lab running, start a run with wallet *walt.id Wallet (API)* and any Studio type (Matrix X11,
+X12). Its "Accept the offer" step answers HTTP 400 `Element class kotlinx.serialization.json.JsonArray is not a
+JsonObject`; the inspector shows walt.id fetching the offer and Certify's metadata through the gateway, then
+stopping. The stack trace runs through `ClaimDescriptorNamespacedMapSerializer` inside `CredentialSupported`.
+Removing the one SD-JWT configuration from Certify (`DELETE /v1/certify/credential-configurations/agri-dept__KarnatakaFarmerCard__sdjwt`,
+restored with `POST /api/studio/reconcile`) lets walt.id get past the metadata. Certify's shape follows
+OpenID4VCI draft 13 (Appendix A.3.2), so the fix belongs in walt.id.
+
+### G32: `cnf.kid` versus `cnf.jwk`
+Matrix X10: the Reference Wallet collects the SD-JWT Farmer Card from Certify and presents it to the walt.id
+verifier. walt.id answers `signature_sd-jwt-vc: java.lang.NullPointerException … JWK.parse`. Decoding the
+credential shows `"cnf": {"kid": "did:jwk:…#0"}`; walt.id's own credentials (X6, accepted) use `"cnf": {"jwk": {…}}`.
+
+### G33: descriptor ids
+Matrix X9: the walt.id wallet answers the Reference Verifier with `descriptor_map[0].id` =
+`waltid-demo-librarycard-vc-sd-jwt` (the definition id). The request's only input descriptor is
+`waltid-demo-librarycard-vc-sd-jwt-credential`. The Reference Verifier's check "Every requested credential
+answered" names both. X7 (the same wallet, Inji Verify) is accepted.
+
+## External parties
+
+The X rows of the matrix put Inji next to an independent stack. What works, all without code written for
+walt.id (the parties file describes every call):
+
+- A credential from **an issuer that is not Inji** (walt.id, SD-JWT VC signed with its own key and `x5c`) is
+  collected by the Reference Wallet and **verified by Inji Verify**, over OpenID4VP (X1, X3) and by direct share
+  (X2); tampering is still caught (X13). This is the case the mentors described at AMA 2.
+- **A wallet that is not Inji** (walt.id's wallet API) presents to Inji Verify (X7) and to walt.id's verifier (X8).
+- The Reference Wallet presents to **a verifier that is not Inji** (X6), which catches a stale nonce and an
+  altered claim (X16, X17).
+- The Reference Verifier trusts the external issuer only through the certificate listed in the parties file,
+  so the forged-signature preset is rejected there (X15) and accepted by Inji Verify (X14 = G11 again).
+
+What does not work yet is G30 (walt.id cannot collect from Certify), G32 (walt.id cannot verify Certify's
+SD-JWTs) and G33 (walt.id's submission ids). G31 and G34 have workarounds.
+
 ## Tamper matrix (Reference Wallet, OpenID4VP cross-device, Presentation Exchange)
 
 Expected for every tamper preset: the verifier **rejects**. ✅ = rejected (correct), ❌ = accepted.
@@ -242,6 +297,10 @@ Expected for every tamper preset: the verifier **rejects**. ✅ = rejected (corr
 | Drop holder proof | ✅ client id / nonce validation failed | ❌ **accepted** (G20) | ✅ | ✅ |
 | Someone else's credential | ✅ `ERR_HOLDER_BINDING_CHECK_FAILED` | ✅ `ERR_INVALID_KB_SIGNATURE` | ✅ | ✅ |
 | Forged SD-JWT, self-signed x5c | n/a | ❌ **accepted** (G11) | n/a | ✅ not anchored in trusted issuer keys |
+
+With the walt.id issuer's Library Card (SD-JWT): Inji Verify rejects an altered claim (X13) and accepts the
+forged signature (X14, G11); the Reference Verifier rejects the forgery (X15); walt.id's verifier rejects a
+stale nonce (X16) and an altered claim (X17).
 
 ## Which to file first
 

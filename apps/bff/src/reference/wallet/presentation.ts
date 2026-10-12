@@ -203,8 +203,12 @@ async function sdJwtPresentation(cred: string, holder: HolderKey, requested: str
   const keep = d.disclosures.filter((x) => !requested.length || (x.name && requested.includes(x.name)));
   const presented = [d.issuerJwtRaw, ...keep.map((x) => x.raw)].join("~") + "~";
   const sdHash = createHash("sha256").update(presented).digest("base64url");
+  // The holder key is the one in cnf, so the spec needs no kid here. walt.id's verifier 1.0 refuses a KB-JWT
+  // without one (gap G31), and naming the key costs nothing, so say which key it is.
+  const cnf = d.issuerJwt.payload.cnf as { jwk?: { kid?: string }; kid?: string } | undefined;
+  const kid = cnf?.jwk?.kid ?? cnf?.kid ?? holder.kid;
   const kb = await new SignJWT({ nonce, aud, sd_hash: sdHash })
-    .setProtectedHeader({ alg: holder.alg, typ: "kb+jwt" })
+    .setProtectedHeader({ alg: holder.alg, typ: "kb+jwt", kid })
     .setIssuedAt()
     .sign(await privateKeyOf(holder));
   return { token: presented + kb, disclosed: keep.map((x) => x.name ?? "?"), withheld: d.disclosures.filter((x) => !keep.includes(x)).map((x) => x.name ?? "?") };

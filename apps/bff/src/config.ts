@@ -16,6 +16,8 @@ const Env = z.object({
   UI_DIST: z.string().optional(),
   /** Also serve the UI and API on the public (tunnel) URL. Off by default: wallets only need /pub/*. */
   PUBLIC_UI: z.enum(["true", "false"]).default("false"),
+  /** External issuers, verifiers and wallets (infra/parties.yaml). Read at start-up: edit it, then restart. */
+  PARTIES_FILE: z.string().optional(),
   LOG_LEVEL: z.string().default("info"),
   NODE_ENV: z.string().default("development"),
 });
@@ -37,6 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     retentionDays: e.RETENTION_DAYS,
     uiDist: e.UI_DIST,
     publicUi: e.PUBLIC_UI === "true",
+    partiesFile: e.PARTIES_FILE,
     logLevel: e.LOG_LEVEL,
     production: e.NODE_ENV === "production",
   };

@@ -24,7 +24,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Start the bundle
-        run: ./playground.sh up
+        # --external adds walt.id's issuer, verifier and wallet, so the matrix's X rows run too.
+        run: ./playground.sh up --external
       - name: Run the interop matrix
         working-directory: apps/bff
         env:

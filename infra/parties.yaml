@@ -1,0 +1,161 @@
+# External parties: issuers, verifiers and wallets that are not part of the playground.
+#
+# The playground reads this file when it starts. Edit it, then run `./playground.sh restart` and the
+# Run builder, Verifier desk, Wallet and Parties pages list what is here. No code changes are needed to add
+# another issuer, credential type, verifier or wallet; problems in an entry are shown on the Parties page and
+# that entry is skipped.
+#
+# Talking to a party is a short list of HTTP steps. In a step:
+#   url, headers, body   templates: ${claims}, ${claims.memberName}, ${offerUri}, ${requestUri}, ${vct} …
+#                        are filled in when the step runs (see the comments on each list for what is there)
+#   save                 values to keep for later steps: "$" (whole response), "$.a.b[0]" (JSON path),
+#                        "query:state" (a query parameter of a URI the response returned), "header:location"
+#   okStatus             HTTP statuses that count as success (default 200, 201, 202, 204)
+# Values resolved once, when the file is read (paths are relative to this file):
+#   ${file:path}  the file's text     ${json:path}  parsed JSON     ${jwk:path}  a PEM private key as a JWK
+#   ${env:NAME}   an environment variable of the playground container
+#
+# The entries below are the walt.id community stack, started by `./playground.sh up --external`
+# (see infra/external/README.md). Without it they show as "not reachable" and runs that use them stop at the
+# first call with that reason.
+
+version: 1
+
+issuers:
+  - id: waltid-demo
+    name: walt.id demo issuer
+    description: >-
+      An issuer built on walt.id's issuer API, not on Inji. It signs SD-JWT VCs with its own P-256 key and puts its
+      certificate in the x5c header.
+    software: walt.id issuer-api 1.0.0
+    homepage: https://github.com/walt-id/waltid-identity
+    # The OpenID4VCI credential_issuer: metadata is at <this>/.well-known/openid-credential-issuer.
+    credentialIssuer: http://waltid-issuer:7002/draft13
+    # The Reference Verifier trusts this issuer's SD-JWTs when the x5c certificate (or kid) matches one of these.
+    trust:
+      certificates:
+        - ${file:external/keys/waltid-demo.cert.pem}
+    backgroundColor: "#7A2E1D"
+    textColor: "#FFF8EE"
+    types:
+      - id: library-card
+        name: City Library Card
+        description: A library membership card. The holder chooses which claims to reveal.
+        configurationId: LibraryCard_vc+sd-jwt
+        format: vc+sd-jwt
+        vct: http://waltid-issuer:7002/LibraryCard
+        proof: SD-JWT ES256 (x5c)
+        claims:
+          - { name: memberName, label: Member name, sample: Priya Nair }
+          - { name: memberId, label: Member ID, sample: BLR-LIB-55120 }
+          - { name: branch, label: Branch, sample: Jayanagar }
+          - { name: membershipLevel, label: Membership level, kind: choice, options: [Basic, Silver, Gold], sample: Gold }
+        # Ask walt.id to sign the card and give back an offer. Available here: ${claims} (the run's claim values,
+        # typed by kind), ${configurationId}, ${vct}, ${txCode}. Must save offerUri.
+        offer:
+          - title: Sign the card and create an offer (walt.id)
+            method: POST
+            url: http://waltid-issuer:7002/openid4vc/sdjwt/issue
+            body:
+              issuerKey: { type: jwk, jwk: "${jwk:external/keys/waltid-demo.key.pem}" }
+              credentialConfigurationId: ${configurationId}
+              credentialData: ${claims}
+              mapping: { id: "<uuid>", iat: "<timestamp-seconds>", nbf: "<timestamp-seconds>", exp: "<timestamp-in-seconds:365d>" }
+              selectiveDisclosure:
+                fields: { memberName: { sd: true }, memberId: { sd: true }, branch: { sd: true }, membershipLevel: { sd: true } }
+              x5Chain: ["${file:external/keys/waltid-demo.cert.pem}"]
+            save: { offerUri: "$" }
+
+      - id: university-degree
+        name: Open University Degree
+        description: A degree certificate as an SD-JWT VC, from walt.id's built-in UniversityDegree type.
+        configurationId: UniversityDegree_vc+sd-jwt
+        format: vc+sd-jwt
+        vct: http://waltid-issuer:7002/draft13/UniversityDegree
+        proof: SD-JWT ES256 (x5c)
+        claims:
+          - { name: graduateName, label: Graduate, sample: Kavya Menon }
+          - { name: degree, label: Degree, kind: choice, options: [B.Sc, M.Sc, B.A], sample: B.Sc }
+          - { name: subject, label: Subject, sample: Mathematics }
+        offer:
+          - title: Sign the degree and create an offer (walt.id)
+            method: POST
+            url: http://waltid-issuer:7002/openid4vc/sdjwt/issue
+            body:
+              issuerKey: { type: jwk, jwk: "${jwk:external/keys/waltid-demo.key.pem}" }
+              credentialConfigurationId: ${configurationId}
+              credentialData: ${claims}
+              mapping: { id: "<uuid>", iat: "<timestamp-seconds>", nbf: "<timestamp-seconds>", exp: "<timestamp-in-seconds:365d>" }
+              selectiveDisclosure:
+                fields: { graduateName: { sd: true }, degree: { sd: true }, subject: { sd: true } }
+              x5Chain: ["${file:external/keys/waltid-demo.cert.pem}"]
+            save: { offerUri: "$" }
+
+  # An issuer without an offer API: runs ask the person to get an offer themselves and paste it in.
+  # - id: another-issuer
+  #   name: Another issuer
+  #   credentialIssuer: https://issuer.example.org
+  #   offerPage: https://issuer.example.org/demo
+  #   types:
+  #     - { id: badge, name: Badge, configurationId: Badge_sd_jwt, format: vc+sd-jwt, vct: https://issuer.example.org/badge, claims: [{ name: holderName }] }
+
+verifiers:
+  - id: waltid-verifier
+    name: walt.id Verifier
+    description: An OpenID4VP verifier built on walt.id's verifier API. It writes its own Presentation Exchange request.
+    software: walt.id verifier-api 1.0.0
+    homepage: https://github.com/walt-id/waltid-identity
+    formats: [vc+sd-jwt]
+    # Available here: ${format}, ${vct}, ${typeName}, ${requestedClaims} (claim names) and
+    # ${presentationDefinition} (the run's question as a PE definition). Must save requestUri.
+    request:
+      - title: Create a presentation request (walt.id)
+        method: POST
+        url: http://waltid-verifier:7003/openid4vc/verify
+        headers: { authorizeBaseUrl: "openid4vp://authorize", responseMode: direct_post }
+        body:
+          request_credentials:
+            - { format: "${format}", vct: "${vct}" }
+        save: { requestUri: "$", state: "query:state" }
+    # Retried until it saves `verified` (true means accepted). Everything the request steps saved is available.
+    result:
+      - title: Read the verdict (walt.id)
+        method: GET
+        url: http://waltid-verifier:7003/openid4vc/session/${state}
+        save: { verified: "$.verificationResult", detail: "$.policyResults" }
+    resultTimeoutSeconds: 20
+
+wallets:
+  - id: waltid-wallet
+    name: walt.id Wallet (API)
+    description: A wallet built on walt.id's wallet API, driven by the playground through that API.
+    software: walt.id wallet-api 1.0.0
+    kind: headless
+    homepage: https://github.com/walt-id/waltid-identity
+    formats: [vc+sd-jwt, jwt_vc_json, mso_mdoc]
+    protocols: [OpenID4VCI draft 13, OpenID4VP (Presentation Exchange)]
+    automation:
+      # ${offerUri} and ${txCode} are available.
+      receive:
+        - { title: Create the lab account (once), url: http://waltid-wallet:7001/wallet-api/auth/register, body: { type: email, name: Playground lab, email: lab@example.org, password: playground-lab }, okStatus: [200, 201, 409] }
+        - { title: Log in, url: http://waltid-wallet:7001/wallet-api/auth/login, body: { type: email, email: lab@example.org, password: playground-lab }, save: { token: "$.token" } }
+        - { title: Find the wallet, method: GET, url: http://waltid-wallet:7001/wallet-api/wallet/accounts/wallets, headers: { authorization: "Bearer ${token}" }, save: { walletId: "$.wallets[0].id" } }
+        - { title: Accept the offer, url: "http://waltid-wallet:7001/wallet-api/wallet/${walletId}/exchange/useOfferRequest", headers: { authorization: "Bearer ${token}" }, body: "${offerUri}", bodyType: text }
+      # ${requestUri} is available.
+      present:
+        - { title: Create the lab account (once), url: http://waltid-wallet:7001/wallet-api/auth/register, body: { type: email, name: Playground lab, email: lab@example.org, password: playground-lab }, okStatus: [200, 201, 409] }
+        - { title: Log in, url: http://waltid-wallet:7001/wallet-api/auth/login, body: { type: email, email: lab@example.org, password: playground-lab }, save: { token: "$.token" } }
+        - { title: Find the wallet, method: GET, url: http://waltid-wallet:7001/wallet-api/wallet/accounts/wallets, headers: { authorization: "Bearer ${token}" }, save: { walletId: "$.wallets[0].id" } }
+        # walt.id 1.0's matchCredentialsForPresentationRequest returns [] for requests it resolves fine, so resolve
+        # the request and match on its presentation_definition instead.
+        - { title: Resolve the request, url: "http://waltid-wallet:7001/wallet-api/wallet/${walletId}/exchange/resolvePresentationRequest", headers: { authorization: "Bearer ${token}" }, body: "${requestUri}", bodyType: text, save: { definition: "query:presentation_definition" } }
+        - { title: Find a matching credential, url: "http://waltid-wallet:7001/wallet-api/wallet/${walletId}/exchange/matchCredentialsForPresentationDefinition", headers: { authorization: "Bearer ${token}", content-type: application/json }, body: "${definition}", bodyType: text, save: { credentialId: "$[0].id" } }
+        - { title: Share it, url: "http://waltid-wallet:7001/wallet-api/wallet/${walletId}/exchange/usePresentationRequest", headers: { authorization: "Bearer ${token}" }, body: { presentationRequest: "${requestUri}", selectedCredentials: ["${credentialId}"] } }
+
+  # A phone wallet: listed on the Parties page and offered in the Run builder; a person scans the QR codes.
+  # - id: my-phone-wallet
+  #   name: My phone wallet
+  #   kind: mobile
+  #   install: { android: "https://play.google.com/store/apps/details?id=<package>" }
+  #   formats: [vc+sd-jwt]
+  #   protocols: [OpenID4VCI, OpenID4VP]

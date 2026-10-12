@@ -1,4 +1,5 @@
 import type { TamperPreset } from "@playground/core";
+import type { Recorder } from "../../gateway/recorder.js";
 import type { Store, HeldCredential } from "../../store/types.js";
 import { now, uuid } from "../../util/ids.js";
 import { resolveLocalDid } from "../keys.js";
@@ -16,10 +17,11 @@ export class ReferenceWallet {
   constructor(
     private readonly store: Store,
     private readonly urls: { publicBaseUrl: () => string; selfUrl: string },
+    private readonly recorder?: Recorder,
   ) {}
 
   private http(runId?: string | null) {
-    return walletHttp({ publicBaseUrl: this.urls.publicBaseUrl(), selfUrl: this.urls.selfUrl, runId });
+    return walletHttp({ publicBaseUrl: this.urls.publicBaseUrl(), selfUrl: this.urls.selfUrl, runId, recorder: this.recorder });
   }
 
   /** did:web over HTTPS, with a plain-HTTP fallback for *.localhost so local runs work without a tunnel. */

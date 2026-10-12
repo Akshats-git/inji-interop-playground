@@ -6,17 +6,22 @@
  *   PLAYGROUND_URL=http://host:8080 REPORT=../../docs/interop-report.md pnpm --filter @playground/bff matrix
  *
  * Exit code is non-zero when any journey does not behave as expected, except rows marked as known gaps.
+ *
+ * When the external lab is running (./playground.sh up --external) the X rows add journeys with parties from
+ * infra/parties.yaml: the walt.id issuer, verifier and wallet, mixed with Inji Certify and Inji Verify.
  */
 import { writeFileSync } from "node:fs";
-import type { CredentialType, Run } from "@playground/core";
+import type { CatalogType, CredentialType, Run } from "@playground/core";
 
 const BASE = (process.env.PLAYGROUND_URL ?? "http://127.0.0.1:8080").replace(/\/$/, "");
 const REPORT = process.env.REPORT ?? "interop-report.md";
 
 interface Row {
   id: string;
+  /** A Studio configId, or an external type id ("ext:<issuer>/<type>"). */
   type: string;
-  verifier: "inji-verify" | "reference-verifier";
+  verifier: string;
+  wallet?: string;
   query?: "presentation_exchange" | "dcql";
   mode?: "openid4vp-cross-device" | "direct-share";
   tamper?: string;
@@ -54,6 +59,29 @@ const ROWS: Row[] = [
   { id: "T18", type: FARMER_SD, verifier: "reference-verifier", tamper: "self-signed-sdjwt" },
 ];
 
+const LIB = "ext:waltid-demo/library-card";
+const XDEG = "ext:waltid-demo/university-degree";
+/** Journeys with external parties (walt.id), run when infra/parties.yaml's parties are reachable. */
+const EXTERNAL_ROWS: Row[] = [
+  { id: "X1", type: LIB, verifier: "inji-verify" },
+  { id: "X2", type: LIB, verifier: "inji-verify", mode: "direct-share" },
+  { id: "X3", type: XDEG, verifier: "inji-verify", requested: ["degree"] },
+  { id: "X4", type: LIB, verifier: "reference-verifier" },
+  { id: "X5", type: LIB, verifier: "reference-verifier", query: "dcql" },
+  { id: "X6", type: LIB, verifier: "waltid-verifier" },
+  { id: "X7", type: LIB, wallet: "waltid-wallet", verifier: "inji-verify" },
+  { id: "X8", type: LIB, wallet: "waltid-wallet", verifier: "waltid-verifier" },
+  { id: "X9", type: LIB, wallet: "waltid-wallet", verifier: "reference-verifier", knownGap: "G33" },
+  { id: "X10", type: FARMER_SD, verifier: "waltid-verifier", knownGap: "G32" },
+  { id: "X11", type: FARMER, wallet: "waltid-wallet", verifier: "inji-verify", knownGap: "G30" },
+  { id: "X12", type: FARMER_SD, wallet: "waltid-wallet", verifier: "inji-verify", knownGap: "G30" },
+  { id: "X13", type: LIB, verifier: "inji-verify", tamper: "alter-claim" },
+  { id: "X14", type: LIB, verifier: "inji-verify", tamper: "self-signed-sdjwt", knownGap: "G11" },
+  { id: "X15", type: LIB, verifier: "reference-verifier", tamper: "self-signed-sdjwt" },
+  { id: "X16", type: LIB, verifier: "waltid-verifier", tamper: "wrong-nonce" },
+  { id: "X17", type: LIB, verifier: "waltid-verifier", tamper: "alter-claim" },
+];
+
 const CLAIMS: Record<string, Record<string, unknown>> = {
   [FARMER]: { fullName: "Ramesh Kumar", farmerId: "KA-MND-20931", primaryCropType: "Ragi", landAreaAcres: 3.5, district: "Mandya" },
   [FARMER_SD]: { fullName: "Ramesh Kumar", farmerId: "KA-MND-20931", primaryCropType: "Ragi", landAreaAcres: 3.5, district: "Mandya" },
@@ -89,20 +117,22 @@ async function ensureExpiredType(types: CredentialType[]) {
   });
 }
 
-async function runOne(row: Row, types: CredentialType[]): Promise<Run> {
-  const type = types.find((t) => t.configId === row.type);
+async function runOne(row: Row, types: CredentialType[], catalog: CatalogType[]): Promise<Run> {
+  const external = catalog.find((t) => t.id === row.type);
+  const type = external ?? types.find((t) => t.configId === row.type);
   if (!type) throw new Error(`credential type ${row.type} not found`);
+  const claims = external ? Object.fromEntries(external.fields.map((f) => [f.name, f.sample ?? "Sample"])) : CLAIMS[row.type];
   const run = await api<Run>("/runs", {
     method: "POST",
     body: JSON.stringify({
       typeId: type.id,
-      wallet: "reference-wallet",
+      wallet: row.wallet ?? "reference-wallet",
       verifier: row.verifier,
       query: row.query ?? "presentation_exchange",
       mode: row.mode ?? "openid4vp-cross-device",
       tamper: row.tamper ?? "none",
-      requestedClaims: row.requested ?? (row.type === EXPIRED ? [] : ["primaryCropType"]),
-      claims: CLAIMS[row.type],
+      requestedClaims: row.requested ?? (row.type === EXPIRED ? [] : external ? [external.fields[0]!.name] : ["primaryCropType"]),
+      claims,
     }),
   });
   for (let i = 0; i < 120; i++) {
@@ -131,16 +161,21 @@ async function main() {
   let types = await seededTypes();
   await ensureExpiredType(types);
   types = await api<CredentialType[]>("/types");
+  const catalog = await api<CatalogType[]>("/catalog");
+  const status = await api<{ parties: { configured: number; reachable: number } }>("/status");
+  const withExternal = catalog.some((t) => t.id === LIB) && status.parties.configured > 0 && status.parties.reachable === status.parties.configured;
+  if (!withExternal) console.log("external lab not running: skipping the X rows (./playground.sh up --external to include them)");
+  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : [])];
   const results: { row: Row; run?: Run; error?: string }[] = [];
-  for (const row of ROWS) {
+  for (const row of rows) {
     // Certify fetches W3C contexts over the internet (gap G16), so retry once on a transient issuance error.
     let attempt = 0;
     for (;;) {
       try {
-        const run = await runOne(row, types);
+        const run = await runOne(row, types, catalog);
         if (run.status === "failed" && run.steps[0]?.status === "failed" && attempt++ < 1) continue;
         results.push({ row, run });
-        console.log(`${row.id.padEnd(4)} ${icon(run)} ${run.labels.format.padEnd(9)} ${row.verifier.padEnd(18)} ${(row.tamper ?? "none").padEnd(17)} ${run.result?.verifierOutcome ?? "-"} ${run.result?.errorCode ?? ""}`);
+        console.log(`${row.id.padEnd(4)} ${icon(run)} ${run.labels.format.padEnd(9)} ${(row.wallet ?? "reference-wallet").padEnd(17)} ${row.verifier.padEnd(18)} ${(row.tamper ?? "none").padEnd(17)} ${run.result?.verifierOutcome ?? "-"} ${run.result?.errorCode ?? ""}`);
         break;
       } catch (e) {
         results.push({ row, error: (e as Error).message });
@@ -154,24 +189,24 @@ async function main() {
     "# Interop report",
     "",
     `Generated ${new Date().toISOString()} by \`apps/bff/scripts/matrix.ts\` against ${BASE}.`,
-    "Stack: Inji Certify 0.14.0 · Inji Verify 0.18.2 · Reference Wallet / Reference Verifier (playground).",
+    `Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier${withExternal ? ", and the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0)" : ""}.`,
     "",
     "**Verdict** means *the journey behaved as expected*: honest presentations are accepted; tampered or expired ones are rejected.",
     "Rows marked with a gap id are known upstream problems described in [gaps.md](gaps.md).",
     "",
-    "| # | Credential | Format | Verifier | Query | Mode | Tamper | Expected | Verifier outcome | Status / error | Verdict | Run |",
-    "|---|---|---|---|---|---|---|---|---|---|---|---|",
+    "| # | Credential | Issuer | Format | Wallet | Verifier | Query | Mode | Tamper | Expected | Verifier outcome | Status / error | Verdict | Run |",
+    "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
   ];
   for (const { row, run, error } of results) {
     if (!run) {
-      lines.push(`| ${row.id} | ${row.type} | | ${row.verifier} | | | ${row.tamper ?? "none"} | | | ${error} | ⚠️ | |`);
+      lines.push(`| ${row.id} | ${row.type} | | | ${row.wallet ?? "reference-wallet"} | ${row.verifier} | | | ${row.tamper ?? "none"} | | | ${error} | ⚠️ | |`);
       continue;
     }
     const r = run.result;
-    const q = row.mode === "direct-share" ? "—" : run.spec.query === "dcql" ? "DCQL" : "PE";
+    const q = row.mode === "direct-share" ? "—" : run.labels.external?.verifier ? "own" : run.spec.query === "dcql" ? "DCQL" : "PE";
     const fmt = `${run.labels.format}${run.labels.dataModel ? ` (DM ${run.labels.dataModel})` : ""}`;
     lines.push(
-      `| ${row.id} | ${run.labels.typeName} | ${fmt} | ${run.labels.verifier} | ${q} | ${row.mode === "direct-share" ? "direct share" : "OpenID4VP"} | ${row.tamper ?? "none"} | ${r?.expected === "PASS" ? "accept" : "reject"} | ${r?.verifierOutcome ?? "—"} | ${r?.errorCode ?? r?.credentialStatus ?? ""} | ${icon(run)}${row.knownGap ? ` ${row.knownGap}` : ""} | \`${run.id}\` |`,
+      `| ${row.id} | ${run.labels.typeName} | ${run.labels.issuerName} | ${fmt} | ${run.labels.wallet} | ${run.labels.verifier} | ${q} | ${row.mode === "direct-share" ? "direct share" : "OpenID4VP"} | ${row.tamper ?? "none"} | ${r?.expected === "PASS" ? "accept" : "reject"} | ${r?.verifierOutcome ?? "—"} | ${r?.errorCode ?? r?.credentialStatus ?? ""} | ${icon(run)}${row.knownGap ? ` ${row.knownGap}` : ""} | \`${run.id}\` |`,
     );
   }
   const unexpected = results.filter((x) => !x.run || (x.run.result?.verdict !== "PASS" && !x.row.knownGap));

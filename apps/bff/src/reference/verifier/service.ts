@@ -161,7 +161,7 @@ export class ReferenceVerifier {
     const credentials: CredentialVerdict[] = [];
     if (s.language === "presentation_exchange") checks.push({ name: "presentation_submission present", ok: Boolean(form.presentation_submission) });
     const expectedIds = s.dcqlQuery ? s.dcqlQuery.credentials.map((c) => c.id) : s.presentationDefinition!.input_descriptors.map((d) => d.id);
-    checks.push({ name: "Every requested credential answered", ok: expectedIds.every((id) => tokens.some((t) => t.queryId === id)), detail: `asked for ${expectedIds.join(", ")}` });
+    checks.push({ name: "Every requested credential answered", ok: expectedIds.every((id) => tokens.some((t) => t.queryId === id)), detail: `asked for ${expectedIds.join(", ")}; answered ${tokens.map((t) => t.queryId).join(", ") || "nothing"}${s.language === "presentation_exchange" ? " (descriptor_map ids must be input descriptor ids)" : ""}` });
     for (const t of tokens) {
       if (typeof t.token === "string" && t.token.includes("~")) {
         credentials.push(await verifySdJwtPresentation(this.ctx, t.token, { nonce: s.nonce, aud: s.clientId, requireHolderBinding: s.requireHolderBinding }));

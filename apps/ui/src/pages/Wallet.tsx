@@ -42,6 +42,59 @@ function CollectOffer({ initial, onCollected }: { initial: string; onCollected: 
   );
 }
 
+/** One button per external credential type: ask its issuer (through the parties file's steps) for an offer and collect it. */
+function CollectExternal({ onCollected }: { onCollected: () => void }) {
+  const parties = useQuery({ queryKey: ["parties"], queryFn: api.parties });
+  const m = useMutation({
+    mutationFn: async ({ issuer, type }: { issuer: string; type: string }) => {
+      const { offerUri } = await api.externalOffer(issuer, type);
+      return api.receiveOffer(offerUri);
+    },
+    onSuccess: onCollected,
+  });
+  const issuers = (parties.data?.issuers ?? []).filter((i) => i.types.some((t) => t.canIssue));
+  // Hold the panel's place while the parties load, so the page does not jump when it appears.
+  if (parties.isLoading) return <div className="min-h-48" aria-hidden />;
+  if (!issuers.length) return null;
+  return (
+    <Panel title="Collect from an external issuer" className="border-t-4 border-t-issue">
+      <p className="mb-3 text-sm text-muted">
+        Issuers declared in <code className="font-mono">infra/parties.yaml</code>. The playground asks the issuer for an offer with your sample values, then the Reference Wallet collects it like any other.
+      </p>
+      <ul className="flex flex-col gap-3">
+        {issuers.map((i) => (
+          <li key={i.id}>
+            <p className="font-bold">
+              {i.name}
+              {parties.data!.health[`issuer:${i.id}`]?.ok === false && <span className="font-medium text-fail"> (not reachable)</span>}
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-2">
+              {i.types
+                .filter((t) => t.canIssue)
+                .map((t) => {
+                  const typeId = t.id.split("/")[1]!;
+                  return (
+                    <Button key={t.id} busy={m.isPending && m.variables?.type === typeId} onClick={() => m.mutate({ issuer: i.id, type: typeId })}>
+                      Collect {t.displayName}
+                    </Button>
+                  );
+                })}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {m.error && <div className="mt-3"><Notice tone="error">{errorText(m.error, "The external issuer did not give an offer.")}</Notice></div>}
+      {m.data && (
+        <div className="mt-3">
+          <Notice>
+            Collected <strong>{m.data.title}</strong> from {m.data.issuer}.
+          </Notice>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
 function AnswerRequest({ initial, held }: { initial: string; held: HeldSummary[] }) {
   const [uri, setUri] = useState(initial);
   const [heldId, setHeldId] = useState("");
@@ -234,6 +287,7 @@ export default function WalletPage() {
           </h2>
           <HeldList held={held.data ?? []} loading={held.isLoading} />
         </section>
+        <CollectExternal onCollected={() => void qc.invalidateQueries({ queryKey: ["held"] })} />
       </div>
     </>
   );

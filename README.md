@@ -12,6 +12,8 @@ In it you can:
 - **issue** them through a real Inji Certify;
 - **hold** them in a wallet;
 - **present** them to a real Inji Verify or an independent verifier;
+- **bring in parties that are not Inji** (other issuers, wallets and verifiers) by declaring them in a config
+  file, with no code changes;
 - **watch every protocol message** on the way.
 
 Every journey ends in a PASS/FAIL verdict, and together the verdicts form an interoperability matrix that has
@@ -40,6 +42,8 @@ minutes to boot. Demo issuers and credential types are created on first start.
 ./playground.sh down      # stops everything and keeps your data
 ./playground.sh logs certify   # follows one service's logs
 ./playground.sh reset     # deletes all data (asks first)
+./playground.sh up --external   # also starts a non-Inji issuer, verifier and wallet (walt.id), see below
+./playground.sh restart   # re-reads infra/parties.yaml after you edit it
 ```
 
 ## Your first five minutes
@@ -73,12 +77,40 @@ minutes to boot. Demo issuers and credential types are created on first start.
 | **Compare results** | *Results*: the matrix (latest run per combination) and the full history, filterable. Every run has a Markdown and JSON report with claim values redacted. |
 | **Claimed vs proven** | *Capabilities*: what Certify and Verify advertise, against what runs here have shown. The **QR Lab** measures any credential against Certify's and Inji Verify's QR limits, with and without PixelPass. |
 | **Watch everything** | *Live traffic*: every message through the gateway, as it happens. The **Decoder** takes any JWT, SD-JWT, offer, request or PixelPass string and explains it. |
-| **Run the whole matrix** | `cd apps/bff && npx tsx scripts/matrix.ts` (needs `pnpm install` once): 31 journeys, no human needed. |
+| **Use parties that are not Inji** | *Parties* lists every issuer, wallet and verifier, built in or from `infra/parties.yaml`. Their credential types appear in *Run* and the *Verifier desk*, their wallets and verifiers in *Run*, and *Wallet → Collect from an external issuer* gets a credential from them (next section). |
+| **Run the whole matrix** | `cd apps/bff && npx tsx scripts/matrix.ts` (needs `pnpm install` once): 31 journeys with Inji and the reference parties, plus 17 with external parties when the external lab is running. No human needed. |
 
 | | | |
 |---|---|---|
 | ![Issuer Studio](docs/screenshots/studio.png) | ![Results matrix](docs/screenshots/results.png) | ![Claimed and proven capabilities](docs/screenshots/capabilities.png) |
 | ![Verifier desk](docs/screenshots/verify.png) | ![Live traffic](docs/screenshots/traffic.png) | ![A run on a phone-sized screen](docs/screenshots/run-mobile.png) |
+
+## Adding issuers, wallets and verifiers that are not Inji
+
+External parties are **configuration, not code**. [infra/parties.yaml](infra/parties.yaml) lists each external
+issuer (its OpenID4VCI address, its credential types and the claims they carry), each verifier and each wallet,
+and describes how to talk to them as a few HTTP steps with placeholders (`${claims}`, `${offerUri}`,
+`${requestUri}`…). Edit the file and run `./playground.sh restart`: the *Parties* page, the *Run* builder, the
+*Verifier desk* and the *Wallet* page pick the change up. A broken entry is reported on the *Parties* page and
+skipped; the rest still load.
+
+- **An external issuer's credential, verified by Inji Verify.** Pick its type in *Run* and verifier *Inji
+  Verify*. The playground asks the issuer for an offer (its `offer` steps), the wallet collects it, and Inji
+  Verify requests and checks it like any Certify credential. An issuer without an offer API gets an
+  `offerPage` instead; the run then asks you to paste an offer.
+- **An external wallet.** A phone wallet needs only a name and install links: a person scans the QR codes. A
+  wallet with an API can be driven by the playground (`automation.receive` / `automation.present`).
+- **An external verifier.** Its `request` steps create an `openid4vp://` request and its `result` steps read the
+  verdict; any wallet in the playground can then answer it.
+- **Trust.** The Reference Verifier trusts an external issuer's SD-JWTs only through the certificates or keys the
+  file lists under `trust`.
+
+`./playground.sh up --external` starts a ready-made lab of three such parties from the **walt.id** community
+stack (issuer, verifier and wallet APIs 1.0.0, see [infra/external/README.md](infra/external/README.md)); the
+shipped `parties.yaml` describes them. They run only on the Docker network, so they are for local runs, not for
+phones.
+
+![The Parties page: built-in and external wallets, issuers and verifiers](docs/screenshots/parties.png)
 
 ## Using a phone (Inji Wallet)
 
@@ -105,7 +137,8 @@ tunnel without an account:
 
 The matrix runs **31 journeys** against the real Inji Certify 0.14.0 and Inji Verify 0.18.2. Locally, over a
 tunnel and on fresh volumes, the result is the same: **28 behave as expected, 3 are known gaps and 0 are
-unexpected**.
+unexpected**. With the external lab, **17 more journeys** mix in walt.id's issuer, wallet and verifier: 12 behave
+as expected and 5 are known gaps (48 in all, 0 unexpected).
 
 | | Credential | Inji Verify 0.18.2 | Reference Verifier |
 |---|---|---|---|
@@ -115,9 +148,11 @@ unexpected**.
 | Expired credential | JSON-LD 2.0 | ✅ rejected | ✅ rejected |
 | Altered claim, someone else's credential | both | ✅ rejected | ✅ rejected |
 | Stale nonce, no holder proof, forged SD-JWT | SD-JWT | ❌ **accepted** | ✅ rejected |
+| Honest presentation of an **external issuer's** SD-JWT (walt.id) | SD-JWT | ✅ accepted | ✅ accepted |
+| An **external wallet** (walt.id) presenting | SD-JWT | ✅ accepted | ❌ rejected: its submission ids break PE (G33) |
 
 The full report is [docs/interop-report.md](docs/interop-report.md). [docs/gaps.md](docs/gaps.md) lists
-**28 gaps** with evidence and steps to reproduce. The headlines:
+**34 gaps** with evidence and steps to reproduce. The headlines:
 
 - **The version split is real.** Inji Verify 0.x accepts Presentation Exchange only. A DCQL request (the
   OpenID4VP 1.0 shape that Verify 1.0 uses) fails with a misleading `BOTH_ID_AND_PD_CANNOT_BE_NULL` (G22).
@@ -127,6 +162,9 @@ The full report is [docs/interop-report.md](docs/interop-report.md). [docs/gaps.
   configuration stop every OpenID4VP submission, revocable credentials and pre-authorized issuance (G3, G4,
   G5), and Certify's keys are not persisted (G18). The bundle fixes each one in configuration only.
 - **Certify caps the SD-JWT `vct` at 100 characters** (G24), found by running over a tunnel.
+- **Inji and an independent stack meet halfway.** Inji Verify verifies walt.id's credentials and accepts its
+  wallet, but walt.id's wallet cannot read Certify's issuer metadata (G30) and its verifier cannot read the
+  holder key in Certify's SD-JWTs (G32).
 - **QR codes are tighter than they look.** A credential with a 1 KB face photo already needs QR version 27,
   Inji Verify's camera limit. A Certify SD-JWT is 4.5 KB, three quarters of it certificate chain, and fits no
   QR code at all (G26).
@@ -180,7 +218,9 @@ flowchart LR
 | PixelPass and the Inji Verify React SDK | ✅ |
 | No plaintext PII at rest | ✅ AES-256-GCM sealing and a retention purge |
 | Core services unmodified | ✅ configuration only |
-| A non-Inji, standards-based party | ✅ Reference Wallet and Reference Verifier |
+| A non-Inji, standards-based party | ✅ Reference Wallet and Reference Verifier, plus walt.id's issuer, wallet and verifier in the external lab |
+| External issuers, credential types, wallets and verifiers added by configuration (mentors, AMA 2) | ✅ `infra/parties.yaml` + `./playground.sh restart`, no code changes |
+| A list of wallets (mentors, AMA 2) | ✅ *Parties* page |
 | Replay and tamper | ✅ five presets |
 | History dashboard | ✅ |
 | Automated CI | ✅ CI and a nightly matrix workflow |
@@ -194,6 +234,7 @@ flowchart LR
 | Inji Certify | 0.14.0 (`injistack/inji-certify-with-plugins`) |
 | Inji Verify service / React SDK | 0.18.2 / 0.18.1 |
 | PixelPass | 0.8.0 |
+| External lab (optional) | walt.id issuer-api, verifier-api, wallet-api 1.0.0 |
 | OpenID4VCI / OpenID4VP | draft 13 / draft 23 with PE (Inji Verify); PE and DCQL (Reference parties) |
 
 - **One machine, one person.** The API has no login; it is safe because it is reachable only from this
@@ -203,6 +244,9 @@ flowchart LR
   covers them with the Reference Wallet rather than a physical phone.
 - **Inji Verify 1.0 and Inji Web** are not in the bundle yet, so DCQL is exercised only against the Reference
   Verifier.
+- **External parties** in the lab are reachable only inside Docker, so phone runs use Inji Certify. The parties
+  file can describe internet-facing parties too; their traffic is recorded by the playground, but a phone's
+  own calls to them are not (the run asks you to press *Continue*).
 - At phone width some pages shift as data loads ([test-results.md](docs/test-results.md#ui-checks)).
 
 ## Development

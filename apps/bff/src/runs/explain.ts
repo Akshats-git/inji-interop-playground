@@ -10,7 +10,39 @@ type Input =
   | { kind: "inji-vp"; vp: VerifyResultV2; expected: Verdict; tamper: TamperPreset; walletStatus?: number; walletBody?: unknown }
   | { kind: "inji-direct"; direct: VerifyResultV2["credentialResults"][number]; expected: Verdict; tamper: TamperPreset }
   | { kind: "inji-error"; errorCode: string; errorDetail: string; expected: Verdict; tamper: TamperPreset; walletStatus?: number; walletBody?: unknown }
-  | { kind: "ref"; ref: VerifierResult; expected: Verdict; tamper: TamperPreset };
+  | { kind: "ref"; ref: VerifierResult; expected: Verdict; tamper: TamperPreset }
+  /** An external verifier from the parties file: only its verdict (and whatever detail it returned) is known. */
+  | { kind: "external"; who: string; accepted: boolean; detail?: unknown; expected: Verdict; tamper: TamperPreset };
+
+/**
+ * Named checks inside an external verifier's answer: any object with a policy (or check) name and a success
+ * flag, e.g. walt.id's {"policy": "signature_sd-jwt-vc", "is_success": true, "error": …}.
+ */
+export function externalChecks(detail: unknown): { name: string; ok: boolean; detail?: string }[] {
+  const out: { name: string; ok: boolean; detail?: string }[] = [];
+  const walk = (v: unknown, depth: number) => {
+    if (depth > 6 || !v || typeof v !== "object") return;
+    if (Array.isArray(v)) return v.forEach((x) => walk(x, depth + 1));
+    const o = v as Record<string, unknown>;
+    const name = o.policy ?? o.check ?? o.name;
+    const ok = o.is_success ?? o.success ?? o.valid;
+    if (typeof name === "string" && typeof ok === "boolean") {
+      const err = o.error ?? o.errorMessage;
+      out.push({ name, ok, detail: err ? (typeof err === "string" ? err : JSON.stringify(err)).split("\n")[0]!.slice(0, 300) : undefined });
+      return;
+    }
+    for (const x of Object.values(o)) walk(x, depth + 1);
+  };
+  walk(detail, 0);
+  return out;
+}
+
+/** A short, readable rendering of whatever an external verifier said about the presentation. */
+export function externalDetail(detail: unknown): string | undefined {
+  if (detail === undefined || detail === null) return undefined;
+  const text = typeof detail === "string" ? detail : JSON.stringify(detail);
+  return text.length > 600 ? `${text.slice(0, 600)}…` : text;
+}
 
 /** What common Inji error codes mean, in words a newcomer understands. */
 export const ERROR_MEANING: Record<string, string> = {
@@ -103,6 +135,21 @@ export function explainResult(i: Input): RunResult {
       errorDetail: detail,
       explanation: summarise(false, i.expected, i.tamper, meaning(code, detail), "Inji Verify"),
       checks: [{ name: "Presentation accepted for verification", ok: false, detail: `${code}${detail ? `: ${detail}` : ""}` }],
+    };
+  }
+  if (i.kind === "external") {
+    const named = externalChecks(i.detail);
+    const failed = named.filter((c) => !c.ok);
+    const detail = named.length ? (failed.length ? failed.map((c) => `${c.name}${c.detail ? `: ${c.detail}` : ""}`).join("; ") : undefined) : externalDetail(i.detail);
+    return {
+      verdict: verdictFor(i.accepted, i.expected),
+      expected: i.expected,
+      verifierOutcome: i.accepted ? "ACCEPTED" : "REJECTED",
+      credentialStatus: i.accepted ? "SUCCESS" : "INVALID",
+      errorCode: i.accepted ? undefined : "REJECTED_BY_VERIFIER",
+      errorDetail: i.accepted ? undefined : detail,
+      explanation: summarise(i.accepted, i.expected, i.tamper, detail ? `of its own policy checks (${detail.slice(0, 240)})` : "of its own policy checks", i.who),
+      checks: [{ name: `${i.who} accepted the presentation`, ok: i.accepted, detail: named.length ? `${named.length} polic${named.length === 1 ? "y" : "ies"} run, ${failed.length} failed` : detail }, ...named],
     };
   }
   const r = i.ref;

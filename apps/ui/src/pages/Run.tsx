@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useReducedMotion } from "motion/react";
-import { TAMPER_PRESETS, type EventSummary, type Run, type RunStep } from "@playground/core";
-import { api, reportUrl } from "../lib/api";
+import { isFailedEvent, TAMPER_PRESETS, type EventSummary, type Run, type RunStep } from "@playground/core";
+import { api, ApiError, reportUrl } from "../lib/api";
 import { useLiveFeed } from "../lib/live";
 import { formatLabel, stationOf } from "../lib/format";
 import { TransitLine, type Pulse } from "../components/TransitLine";
 import { Inspector } from "../components/Inspector";
 import { SequenceDiagram } from "../components/SequenceDiagram";
 import { QrCode } from "../components/QrCode";
-import { Button, cx, Notice, Panel, StatusMark, type Mark } from "../components/ui";
+import { Button, cx, Field, Notice, Panel, StatusMark, Tag, Textarea, type Mark } from "../components/ui";
 
 const STEP_LABEL: Record<RunStep["name"], string> = { issue: "Issue", request: "Request", present: "Present", verify: "Verify" };
 const STEP_MARK: Record<RunStep["status"], Mark> = { pending: "pending", running: "running", waiting: "waiting", passed: "pass", failed: "fail", skipped: "skipped" };
@@ -33,17 +33,58 @@ function Steps({ steps }: { steps: RunStep[] }) {
   );
 }
 
-function ActionPanel({ step }: { step: RunStep }) {
+const ACTION_TITLE: Record<NonNullable<RunStep["action"]>["kind"], string> = {
+  "scan-offer": "Scan to collect the credential",
+  "scan-request": "Scan to answer the verifier",
+  "upload-vc": "Share the credential",
+  "paste-offer": "Paste a credential offer",
+  "open-link": "Collect the credential",
+  confirm: "Your turn",
+};
+
+function ActionPanel({ run, step }: { run: Run; step: RunStep }) {
   const a = step.action!;
+  const [offer, setOffer] = useState("");
+  const send = useMutation({ mutationFn: (body: { offerUri?: string; confirm?: boolean }) => api.runInput(run.id, body) });
+  const qr = a.uri && (a.kind === "scan-offer" || a.kind === "scan-request");
   return (
-    <Panel title={a.kind === "scan-offer" ? "Scan to collect the credential" : a.kind === "scan-request" ? "Scan to answer the verifier" : "Share the credential"} className="border-present">
+    <Panel title={ACTION_TITLE[a.kind]} className="border-present">
       <div className="flex flex-col items-center gap-4 md:flex-row md:items-start">
-        {a.uri && <QrCode value={a.uri} label={a.kind === "scan-offer" ? "Credential offer QR code" : "Presentation request QR code"} />}
-        <div className="flex max-w-[52ch] flex-col gap-3">
+        {qr && <QrCode value={a.uri!} label={a.kind === "scan-offer" ? "Credential offer QR code" : "Presentation request QR code"} />}
+        <div className="flex w-full max-w-[60ch] flex-col gap-3">
           <p className="text-[1.05rem] font-bold">{a.hint}</p>
-          <p className="text-sm text-muted">
-            The step moves on by itself as soon as the gateway sees the wallet's traffic. Phones need the playground on a public HTTPS URL; start it with <code className="font-mono">./playground.sh tunnel</code>.
-          </p>
+          {a.uri && !qr && (
+            <a className="font-bold break-all text-issue underline" href={a.uri} target="_blank" rel="noreferrer">
+              {a.uri}
+            </a>
+          )}
+          {a.kind === "paste-offer" && (
+            <form
+              className="flex flex-col gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                send.mutate({ offerUri: offer.trim() });
+              }}
+            >
+              <Field label="Credential offer" hint="An openid-credential-offer:// link from the external issuer.">
+                {(id) => <Textarea id={id} value={offer} onChange={(e) => setOffer(e.target.value)} spellCheck={false} placeholder="openid-credential-offer://?credential_offer_uri=…" className="min-h-20" required />}
+              </Field>
+              <Button tone="primary" type="submit" busy={send.isPending} disabled={!offer.trim()} className="self-start">
+                Give it to the wallet
+              </Button>
+            </form>
+          )}
+          {a.needsConfirm && (
+            <Button tone="primary" busy={send.isPending} onClick={() => send.mutate({ confirm: true })} className="self-start">
+              Continue
+            </Button>
+          )}
+          {send.error && <Notice tone="error">{send.error instanceof ApiError ? send.error.message : "That did not reach the run."}</Notice>}
+          {!a.needsConfirm && a.kind !== "paste-offer" && (
+            <p className="text-sm text-muted">
+              The step moves on by itself as soon as the gateway sees the wallet's traffic. Phones need the playground on a public HTTPS URL; start it with <code className="font-mono">./playground.sh tunnel</code>.
+            </p>
+          )}
           {a.kind === "upload-vc" && (
             <Link to="/verify" className="font-bold text-issue underline">
               Open the Verifier desk to scan or upload
@@ -103,8 +144,8 @@ export function RunPage() {
       if (m.type === "event" && m.event) {
         const e = m.event;
         qc.setQueryData<EventSummary[]>(["run-events", id], (old = []) => (old.some((x) => x.id === e.id) ? old : [...old, e].sort((a, b) => a.at.localeCompare(b.at))));
-        setPulses((p) => [...p.slice(-6), { id: e.id, from: stationOf(e.from), to: stationOf(e.to), ok: e.status < 400, title: e.title }]);
-        if (announce.current) announce.current.textContent = `${e.title}: ${e.status < 400 ? "ok" : `failed with ${e.status}`}`;
+        setPulses((p) => [...p.slice(-6), { id: e.id, from: stationOf(e.from), to: stationOf(e.to), ok: !isFailedEvent(e), title: e.title }]);
+        if (announce.current) announce.current.textContent = `${e.title}: ${!isFailedEvent(e) ? "ok" : `failed with ${e.status}`}`;
       }
       if (m.type === "run" && m.run) qc.setQueryData(["run", id], m.run);
     },
@@ -135,6 +176,13 @@ export function RunPage() {
             {formatLabel(r.labels.format, r.labels.dataModel)}, {r.labels.proofType}. {r.spec.mode === "direct-share" ? "Direct share" : r.spec.query === "dcql" ? "OpenID4VP with DCQL" : "OpenID4VP with Presentation Exchange"}
             {r.spec.tamper !== "none" && <span className="font-bold text-present-ink">. Tamper: {TAMPER_PRESETS[r.spec.tamper].label.toLowerCase()}</span>}.
           </p>
+          {r.labels.external && (
+            <p className="mt-2 flex flex-wrap gap-1.5">
+              {r.labels.external.issuer && <Tag tone="issue">External issuer: {r.labels.issuerName}</Tag>}
+              {r.labels.external.wallet && <Tag>External wallet: {r.labels.wallet}</Tag>}
+              {r.labels.external.verifier && <Tag tone="present">External verifier: {r.labels.verifier}</Tag>}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {live && (
@@ -157,7 +205,7 @@ export function RunPage() {
       <p ref={announce} className="sr-only" aria-live="polite" />
 
       <Steps steps={r.steps} />
-      {waiting && <ActionPanel step={waiting} />}
+      {waiting && <ActionPanel run={r} step={waiting} />}
       {r.result && <ResultPanel run={r} />}
 
       <section aria-labelledby="inspector">

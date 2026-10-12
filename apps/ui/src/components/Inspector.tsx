@@ -4,7 +4,7 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { decodeJwt, decodeSdJwt, looksLikeJwt, looksLikeSdJwt, type EventSummary, type ProtocolEvent } from "@playground/core";
+import { decodeJwt, decodeSdJwt, isFailedEvent, looksLikeJwt, looksLikeSdJwt, type EventSummary, type ProtocolEvent } from "@playground/core";
 import { api } from "../lib/api";
 import { party, stationOf, time } from "../lib/format";
 import { JsonView } from "./JsonView";
@@ -32,7 +32,7 @@ const meaningOf = (title: string) => MEANING.find(([re]) => re.test(title))?.[1]
 
 export function EventRow({ e, selected, onSelect }: { e: EventSummary; selected: boolean; onSelect: () => void }) {
   const lane = e.phase === "presentation" || e.phase === "verification" ? "present" : "issue";
-  const bad = e.status >= 400;
+  const bad = isFailedEvent(e);
   return (
     <li>
       <button

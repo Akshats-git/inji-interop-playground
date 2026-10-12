@@ -1,4 +1,4 @@
-import type { CredentialType, EventSummary, IssuerProfile, ProtocolEvent, Run, RunSpec } from "@playground/core";
+import type { CatalogType, CredentialType, EventSummary, IssuerProfile, ProtocolEvent, Run, RunSpec, VerifierInfo, WalletInfo } from "@playground/core";
 
 export class ApiError extends Error {
   constructor(
@@ -32,6 +32,28 @@ export interface Status {
   services: { certify: boolean; verify: boolean };
   versions: Record<string, string>;
   retentionDays: number;
+  parties: { file: string | null; errors: number; configured: number; reachable: number };
+}
+
+/** The parties registry: built-in and external wallets and verifiers, external issuers with their types. */
+export interface Parties {
+  file: string | null;
+  loadedAt: string;
+  errors: string[];
+  health: Record<string, { ok: boolean; detail: string }>;
+  issuers: {
+    id: string;
+    name: string;
+    description: string;
+    software?: string;
+    homepage?: string;
+    credentialIssuer: string;
+    offerPage?: string;
+    trust: { certificates: number; jwks: number; jwksUri?: string };
+    types: CatalogType[];
+  }[];
+  verifiers: VerifierInfo[];
+  wallets: (WalletInfo & { automated: boolean })[];
 }
 
 export interface HeldSummary {
@@ -86,6 +108,11 @@ export const api = {
   deleteHeld: (id: string) => request<void>(`/wallet/credentials/${id}`, { method: "DELETE" }),
   receiveOffer: (offerUri: string, txCode?: string) => post<HeldSummary>("/wallet/receive", { offerUri, txCode }),
   presentTo: (requestUri: string, heldId?: string, tamper?: string) => post<{ status: number; verifierResponse: unknown; disclosed?: string[]; withheld?: string[]; matches: { queryId: string; credentialId: string; explanation: string }[]; request: { clientId: string; transport: string; language: string; signed?: unknown } }>("/wallet/present", { requestUri, heldId, tamper }),
+
+  parties: () => request<Parties>("/parties"),
+  catalog: () => request<CatalogType[]>("/catalog"),
+  externalOffer: (issuer: string, type: string, body: { claims?: Record<string, unknown>; txCode?: string } = {}) => post<{ offerUri: string }>(`/parties/issuers/${issuer}/types/${type}/offers`, body),
+  runInput: (id: string, body: { offerUri?: string; confirm?: boolean }) => post<void>(`/runs/${id}/input`, body),
 
   matrix: () => request<{ key: string; run: Run }[]>("/matrix"),
   capabilities: () => request<Capabilities>("/capabilities"),

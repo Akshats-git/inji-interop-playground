@@ -9,7 +9,10 @@ export type Party =
   | "verifier-ui"
   | "verifier-backend"
   | "inji-verify"
-  | "reference-verifier";
+  | "reference-verifier"
+  | "external-issuer"
+  | "external-verifier"
+  | "external-wallet";
 
 export const PARTY_LABEL: Record<Party, string> = {
   studio: "Issuer Studio",
@@ -19,6 +22,9 @@ export const PARTY_LABEL: Record<Party, string> = {
   "verifier-backend": "Playground BFF",
   "inji-verify": "Inji Verify",
   "reference-verifier": "Reference Verifier",
+  "external-issuer": "External issuer",
+  "external-verifier": "External verifier",
+  "external-wallet": "External wallet",
 };
 
 export interface HttpMessage {
@@ -54,6 +60,7 @@ export interface ProtocolEvent {
 
 export type EventSummary = Omit<ProtocolEvent, "request" | "response">;
 
+/** Built-in wallets and verifiers. Runs also accept the ids of external ones declared in the parties file. */
 export type WalletId = "reference-wallet" | "inji-wallet" | "inji-web" | "external-wallet";
 export type VerifierId = "inji-verify" | "reference-verifier";
 export type PresentMode = "openid4vp-cross-device" | "openid4vp-same-device" | "direct-share";
@@ -81,13 +88,23 @@ export interface RunStep {
   /** Plain-English line shown under the step. */
   note?: string;
   /** What the user must do (scan this QR…), while the step is waiting on a human. */
-  action?: { kind: "scan-offer" | "scan-request" | "open-link" | "upload-vc"; uri?: string; hint: string };
+  action?: {
+    /** paste-offer: the playground needs an offer the person got from an external issuer; confirm: a person did something the playground cannot observe. */
+    kind: "scan-offer" | "scan-request" | "open-link" | "upload-vc" | "paste-offer" | "confirm";
+    uri?: string;
+    hint: string;
+    /** The playground cannot see this step finish (an external party), so the person presses Continue. */
+    needsConfirm?: boolean;
+  };
 }
 
 export interface RunSpec {
+  /** A Studio type id, or "ext:<issuer>/<type>" for a type from the parties file. */
   typeId: string;
-  wallet: WalletId;
-  verifier: VerifierId;
+  /** A built-in WalletId or an external wallet's id. */
+  wallet: string;
+  /** A built-in VerifierId or an external verifier's id. */
+  verifier: string;
   mode: PresentMode;
   query: QueryLanguage;
   /** Claims the verifier asks for (field names); empty = all. */
@@ -125,6 +142,8 @@ export interface Run {
   spec: RunSpec;
   /** Denormalised for the report and matrix. */
   labels: {
+    /** Which parties came from the parties file. */
+    external?: { issuer?: boolean; wallet?: boolean; verifier?: boolean };
     issuer: string;
     issuerName: string;
     typeName: string;
@@ -152,3 +171,6 @@ export const VERIFIERS: Record<VerifierId, { label: string; accepts: QueryLangua
   "inji-verify": { label: "Inji Verify 0.18.2", accepts: ["presentation_exchange"], note: "MOSIP's verifier service. The 0.x line accepts Presentation Exchange only." },
   "reference-verifier": { label: "Reference Verifier", accepts: ["presentation_exchange", "dcql"], note: "Independent OpenID4VP relying party in the playground. Accepts PE (draft 23) and DCQL (1.0)." },
 };
+
+/** Did this message fail? An error status the parties file allows (409 "account exists") is labelled and does not count. */
+export const isFailedEvent = (e: Pick<EventSummary, "status" | "labels">) => e.status >= 400 && !e.labels.some((l) => l.endsWith("expected here"));

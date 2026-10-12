@@ -1,28 +1,34 @@
 /** Live feed: protocol events and run updates over one WebSocket (/ws?run=<id> or /ws for everything). */
-import { ServerResponse, type IncomingMessage, type Server } from "node:http";
+import { type IncomingMessage, type Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { WebSocketServer, WebSocket } from "ws";
 import type { EventSummary, Run } from "@playground/core";
 import type { Recorder } from "./gateway/recorder.js";
 import type { Orchestrator } from "./runs/orchestrator.js";
 
-export function attachWebSocket(server: Server, recorder: Recorder, orchestrator: Orchestrator, app: (req: IncomingMessage, res: ServerResponse) => void, allowFeed: (req: IncomingMessage) => boolean = () => true) {
+/** The request line and headers again, minus the h2c upgrade (Upgrade, HTTP2-Settings and Connection). */
+export function withoutUpgrade(req: IncomingMessage): Buffer {
+  const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`];
+  for (let i = 0; i < req.rawHeaders.length; i += 2) {
+    const name = req.rawHeaders[i]!;
+    if (["upgrade", "http2-settings", "connection"].includes(name.toLowerCase())) continue;
+    lines.push(`${name}: ${req.rawHeaders[i + 1]}`);
+  }
+  return Buffer.from(`${lines.join("\r\n")}\r\n\r\n`, "latin1");
+}
+
+export function attachWebSocket(server: Server, recorder: Recorder, orchestrator: Orchestrator, allowFeed: (req: IncomingMessage) => boolean = () => true) {
   const wss = new WebSocketServer({ noServer: true });
-  // Java's HttpClient (Certify's and Verify's JSON-LD loaders) sends "Upgrade: h2c" on plain GETs. Node hands
-  // every upgrade to this listener, so anything that is not our WebSocket goes back to the HTTP app.
+  // Java's HttpClient (Certify's and Verify's JSON-LD loaders) and ktor (walt.id) send "Upgrade: h2c" on
+  // ordinary requests, POSTs with bodies included. Node hands every upgrade to this listener and detaches the
+  // body from the request, so anything that is not our WebSocket is rewritten without the upgrade headers and
+  // fed back to the HTTP server, which parses it (body and all) as a normal request.
   server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const isWs = String(req.headers.upgrade ?? "").toLowerCase() === "websocket" && (req.url ?? "").split("?")[0] === "/ws";
     if (isWs && !allowFeed(req)) return void socket.end("HTTP/1.1 404 Not Found\r\nconnection: close\r\n\r\n");
     if (isWs) return void wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
-    delete req.headers.upgrade;
-    const res = new ServerResponse(req);
-    res.assignSocket(socket as never);
-    res.shouldKeepAlive = false;
-    res.on("finish", () => {
-      res.detachSocket(socket as never);
-      socket.end();
-    });
-    app(req, res);
+    socket.unshift(Buffer.concat([withoutUpgrade(req), head]));
+    server.emit("connection", socket);
   });
   const subs = new Map<WebSocket, string | null>();
   wss.on("connection", (ws, req) => {

@@ -2,9 +2,9 @@
  * Sequence diagram generated from the recorded events, so it always matches what really happened.
  * Lifelines are the parties that took part; arrows are messages, coloured by lane, red when they failed.
  */
-import { PARTY_LABEL, type EventSummary, type Party } from "@playground/core";
+import { isFailedEvent, PARTY_LABEL, type EventSummary, type Party } from "@playground/core";
 
-const ORDER: Party[] = ["studio", "certify", "wallet", "verifier-ui", "verifier-backend", "inji-verify", "reference-verifier"];
+const ORDER: Party[] = ["studio", "certify", "external-issuer", "wallet", "external-wallet", "verifier-ui", "verifier-backend", "inji-verify", "reference-verifier", "external-verifier"];
 
 export function SequenceDiagram({ events, onSelect }: { events: EventSummary[]; onSelect?: (id: string) => void }) {
   const parties = ORDER.filter((p) => events.some((e) => e.from === p || e.to === p));
@@ -36,7 +36,7 @@ export function SequenceDiagram({ events, onSelect }: { events: EventSummary[]; 
         ))}
         {events.map((e, i) => {
           const y = top + i * rowH + 12;
-          const lane = e.status >= 400 ? "fail" : e.phase === "issuance" || e.phase === "setup" ? "issue" : "present";
+          const lane = isFailedEvent(e) ? "fail" : e.phase === "issuance" || e.phase === "setup" ? "issue" : "present";
           const x1 = x(e.from);
           const x2 = x(e.to);
           const self = x1 === x2;

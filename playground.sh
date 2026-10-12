@@ -2,6 +2,8 @@
 # Inji Interoperability Playground: one command to run the whole bundle.
 #
 #   ./playground.sh up              start locally on http://localhost:8080
+#   ./playground.sh up --external   also start non-Inji parties (walt.id issuer, verifier, wallet); --no-external stops them
+#   ./playground.sh restart         restart the playground, e.g. after editing infra/parties.yaml
 #   ./playground.sh tunnel [URL]    start with a public HTTPS URL so a phone wallet can connect
 #   ./playground.sh doctor          check the machine, the containers and (in tunnel mode) the public URL
 #   ./playground.sh down            stop everything, keeping data
@@ -24,6 +26,8 @@ warn() { printf '  %s!%s %s\n' "$Y" "$N" "$*"; }
 die() { printf '%sError:%s %s\n' "$R" "$N" "$*" >&2; exit 1; }
 
 compose() { docker compose --project-name "$PROJECT" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"; }
+# Every profile, for commands that must also reach optional services (down, logs, status).
+compose_all() { compose --profile tunnel --profile external "$@"; }
 
 # --- .env handling ---------------------------------------------------------------------------------
 
@@ -59,6 +63,36 @@ ensure_env() {
 }
 
 port() { local p; p="$(get_env PLAYGROUND_PORT)"; echo "${p:-8080}"; }
+
+external_on() { [[ "$(get_env EXTERNAL_LAB)" == true ]]; }
+
+# --external / --no-external choose whether the walt.id lab runs; the choice is remembered in .env.
+parse_external_flag() {
+  local a
+  for a in "$@"; do
+    case "$a" in
+      --external) set_env EXTERNAL_LAB true ;;
+      --no-external) set_env EXTERNAL_LAB false ;;
+      *) die "Unknown option $a" ;;
+    esac
+  done
+}
+
+# The demo external issuer's signing key and certificate (its x5c), made once and kept out of git.
+ensure_lab_keys() {
+  local dir="$ROOT/infra/external/keys"
+  [[ -f "$dir/waltid-demo.key.pem" && -f "$dir/waltid-demo.cert.pem" ]] && return
+  command -v openssl >/dev/null || die "openssl is needed once to make the external lab's demo issuer key. Install it, or run without --external."
+  openssl ecparam -name prime256v1 -genkey -noout -out "$dir/waltid-demo.key.pem" 2>/dev/null
+  openssl req -new -x509 -key "$dir/waltid-demo.key.pem" -out "$dir/waltid-demo.cert.pem" -days 730 \
+    -subj "/CN=walt.id demo issuer (Inji Interop Playground lab)/O=Inji Interop Playground/C=IN" 2>/dev/null
+  # The playground container runs as an unprivileged user; this demo key protects nothing real.
+  chmod 644 "$dir/waltid-demo.key.pem" "$dir/waltid-demo.cert.pem"
+  say "Generated the external lab's demo issuer key and certificate in infra/external/keys/."
+}
+
+# Profiles for this start: the external lab when it is switched on.
+lab_profile() { if external_on; then echo "--profile external"; fi; }
 
 # Plain HTTP on this machine. did:web needs HTTPS, so issuers and Certify sign with URL-based keys.
 local_identity() {
@@ -100,14 +134,23 @@ banner() {
 
 start() {
   say "Building the playground and starting Postgres, Inji Certify and Inji Verify."
+  if external_on; then
+    ensure_lab_keys
+    say "Also starting the external lab: walt.id issuer, verifier and wallet (see infra/external/README.md)."
+  else
+    # Leave the lab off cleanly if it was on.
+    compose --profile external rm -sf waltid-issuer waltid-verifier waltid-wallet >/dev/null 2>&1 || true
+  fi
   say "${D}The first start downloads about 2 GB of images and can take several minutes; Certify needs 1–3 minutes to boot.${N}"
   local started=$SECONDS
-  compose "$@" up -d --build --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT" && return
+  # shellcheck disable=SC2046
+  compose $(lab_profile) "$@" up -d --build --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT" && return
   # A failure within seconds is almost always a download that was cut off (Docker Hub, npm); try once more.
   if (( SECONDS - started < 60 )); then
     warn "Starting failed early, usually a dropped download. Trying once more."
     sleep 5
-    compose "$@" up -d --build --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT" && return
+    # shellcheck disable=SC2046
+    compose $(lab_profile) "$@" up -d --build --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT" && return
     die "The bundle did not start; the messages above say why. Check your network, then run this command again."
   fi
   die "Not every service became healthy within ${WAIT_TIMEOUT}s. Run ./playground.sh doctor, or ./playground.sh logs certify."
@@ -118,6 +161,7 @@ start() {
 cmd_up() {
   require_docker
   ensure_env
+  parse_external_flag "$@"
   local_identity
   # Leave tunnel mode cleanly if it was on.
   compose --profile tunnel rm -sf tunnel >/dev/null 2>&1 || true
@@ -127,6 +171,20 @@ cmd_up() {
 
 # The newest URL cloudflared announced (api.trycloudflare.com is its own API, seen in error lines).
 quick_tunnel_url() { { compose --profile tunnel logs tunnel 2>/dev/null || true; } | grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' | grep -v '^https://api\.' | tail -n1 || true; }
+
+# Re-read infra/parties.yaml (and .env) without touching Certify, Verify or the data.
+cmd_restart() {
+  require_docker
+  [[ -f "$ENV_FILE" ]] || die ".env is missing: run ./playground.sh up first."
+  if external_on; then ensure_lab_keys; fi
+  say "Restarting the playground; it reads infra/parties.yaml again."
+  # shellcheck disable=SC2046
+  compose $(lab_profile) up -d --no-deps --force-recreate --wait --wait-timeout 120 playground
+  local errors
+  errors="$(http_get "http://localhost:$(port)/api/parties" | grep -o '"errors":\[[^]]*\]' || true)"
+  if [[ -n "$errors" && "$errors" != '"errors":[]' ]]; then warn "The parties file has problems; see the Parties page (or /api/parties): ${errors:9:400}"
+  else ok "Parties file loaded. The Parties page lists what it declares."; fi
+}
 
 cmd_tunnel() {
   require_docker
@@ -154,7 +212,7 @@ cmd_tunnel() {
 cmd_down() {
   require_docker
   [[ -f "$ENV_FILE" ]] || touch "$ENV_FILE"
-  compose --profile tunnel down --remove-orphans
+  compose_all down --remove-orphans
   say "Stopped. Data is kept; ./playground.sh up starts again where you left off."
 }
 
@@ -164,14 +222,14 @@ cmd_reset() {
   say "${B}This deletes every credential type, run, recorded message, held credential and Certify signing key.${N}"
   read -r -p "Type 'reset' to continue: " answer
   [[ "$answer" == reset ]] || die "Nothing was deleted."
-  compose --profile tunnel down --volumes --remove-orphans
+  compose_all down --volumes --remove-orphans
   # A new database gets a new password on the next start.
   if [[ -f "$ENV_FILE" ]]; then grep -v '^POSTGRES_PASSWORD=' "$ENV_FILE" >"$ENV_FILE.tmp" || true; mv "$ENV_FILE.tmp" "$ENV_FILE"; fi
   say "All data deleted. Run ./playground.sh up for a fresh start."
 }
 
-cmd_logs() { require_docker; compose --profile tunnel logs -f --tail 200 "$@"; }
-cmd_status() { require_docker; compose --profile tunnel ps; }
+cmd_logs() { require_docker; compose_all logs -f --tail 200 "$@"; }
+cmd_status() { require_docker; compose_all ps; }
 
 http_ok() { curl -fsS --max-time "${2:-8}" -o /dev/null "$1" 2>/dev/null; }
 http_get() { curl -fsS --max-time "${2:-8}" "$1" 2>/dev/null; }
@@ -221,6 +279,35 @@ cmd_doctor() {
     [[ "$status" == *'"verify":true'* ]] && ok "Inji Verify is reachable through the playground" || bad "Inji Verify is not reachable yet"
   fi
 
+  say "${B}External parties${N}"
+  if external_on; then
+    for svc in waltid-issuer waltid-verifier waltid-wallet; do
+      state="$(docker inspect -f '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{end}}' "${PROJECT}-${svc}-1" 2>/dev/null || echo missing)"
+      case "$state" in
+        "running healthy") ok "$svc is healthy" ;;
+        missing) bad "$svc is not running: ./playground.sh up --external" ;;
+        *) bad "$svc is $state: ./playground.sh logs $svc" ;;
+      esac
+    done
+  else
+    ok "The external lab is off (./playground.sh up --external starts walt.id's issuer, verifier and wallet)"
+  fi
+  if status="$(http_get "$base/api/status")"; then
+    local configured reachable perrors
+    configured="$(printf '%s' "$status" | grep -o '"configured":[0-9]*' | cut -d: -f2)"
+    reachable="$(printf '%s' "$status" | grep -o '"reachable":[0-9]*' | cut -d: -f2)"
+    perrors="$(printf '%s' "$status" | grep -o '"errors":[0-9]*' | cut -d: -f2)"
+    if [[ "${perrors:-0}" == 0 ]]; then ok "infra/parties.yaml loads without problems"
+    # Without the lab its demo issuer's key does not exist yet, so that entry is skipped: expected, not broken.
+    elif external_on; then bad "infra/parties.yaml has ${perrors} problem(s); the Parties page lists them"
+    else warn "infra/parties.yaml has ${perrors} problem(s), expected while the external lab has never been started; the Parties page lists them"; fi
+    if [[ -n "$configured" ]]; then
+      if [[ "$reachable" == "$configured" ]]; then ok "All ${configured} external parties are reachable"
+      elif external_on; then bad "${reachable:-0} of ${configured} external parties are reachable"
+      else warn "${reachable:-0} of ${configured} external parties are reachable (the lab is off)"; fi
+    fi
+  fi
+
   if [[ "$(get_env PLAYGROUND_MODE)" == tunnel ]]; then
     local pub; pub="$(get_env PUBLIC_BASE_URL)"
     say "${B}Public URL (for phones)${N}"
@@ -244,10 +331,11 @@ cmd_doctor() {
   if (( FAILED )); then say "${R}Some checks failed.${N}"; exit 1; else say "${G}Everything looks fine.${N}"; fi
 }
 
-usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
 
 case "${1:-help}" in
   up) shift; cmd_up "$@" ;;
+  restart) shift; cmd_restart ;;
   tunnel) shift; cmd_tunnel "$@" ;;
   down) shift; cmd_down ;;
   reset) shift; cmd_reset ;;

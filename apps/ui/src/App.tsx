@@ -12,12 +12,14 @@ const WalletPage = lazy(() => import("./pages/Wallet"));
 const ResultsPage = lazy(() => import("./pages/Results"));
 const CapabilitiesPage = lazy(() => import("./pages/Capabilities"));
 const TrafficPage = lazy(() => import("./pages/Traffic"));
+const PartiesPage = lazy(() => import("./pages/Parties"));
 
 const NAV = [
   { to: "/", label: "Run" },
   { to: "/studio", label: "Issuer Studio" },
   { to: "/verify", label: "Verifier desk" },
   { to: "/wallet", label: "Wallet" },
+  { to: "/parties", label: "Parties" },
   { to: "/results", label: "Results" },
   { to: "/capabilities", label: "Capabilities" },
   { to: "/traffic", label: "Live traffic" },
@@ -52,6 +54,11 @@ function SystemStatus() {
       <span className="flex items-center gap-1.5" title="Inji Verify 0.18.2">
         {dot(s?.services.verify)} Verify
       </span>
+      {s && s.parties.configured > 0 && (
+        <NavLink to="/parties" className="hidden items-center gap-1.5 sm:flex" title={`${s.parties.reachable} of ${s.parties.configured} external parties reachable`}>
+          {dot(s.parties.reachable === s.parties.configured)} External {s.parties.reachable}/{s.parties.configured}
+        </NavLink>
+      )}
       {s && (
         <span className="hidden rounded bg-sunken px-2 py-0.5 md:inline" title={s.publicBaseUrl}>
           {s.mode === "public" ? "Public URL: phones can connect" : "Local only"}
@@ -129,6 +136,7 @@ export function App() {
             <Route path="/studio" element={<StudioPage />} />
             <Route path="/verify" element={<VerifyDeskPage />} />
             <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/parties" element={<PartiesPage />} />
             <Route path="/results" element={<ResultsPage />} />
             <Route path="/capabilities" element={<CapabilitiesPage />} />
             <Route path="/traffic" element={<TrafficPage />} />

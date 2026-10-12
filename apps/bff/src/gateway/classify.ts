@@ -5,7 +5,7 @@
  */
 import { decodeJwt, decodeSdJwt, looksLikeJwt, looksLikeSdJwt, type Party, type ProtocolEvent } from "@playground/core";
 
-export type Upstream = "certify" | "verify" | "reference-verifier" | "studio";
+export type Upstream = "certify" | "verify" | "reference-verifier" | "studio" | "external";
 
 export interface Exchange {
   upstream: Upstream;
@@ -16,6 +16,8 @@ export interface Exchange {
   responseBody?: unknown;
   status: number;
   actorHeader?: string;
+  /** External exchanges (parties file steps, or the Reference Wallet calling an external party) say who and what themselves. */
+  external?: { title?: string; phase?: ProtocolEvent["phase"]; from: Party; to: Party; labels?: string[] };
 }
 
 type Classified = Pick<ProtocolEvent, "title" | "phase" | "labels" | "from" | "to">;
@@ -56,7 +58,27 @@ function walletIs(actor?: string): Party {
   return "wallet";
 }
 
+/** The Reference Wallet (or the BFF) talking to a party outside the playground: name the step from the path and bodies. */
+function classifyExternal(x: Exchange): Classified {
+  const e = x.external!;
+  const base = { from: e.from, to: e.to, labels: ["external party", ...(e.labels ?? [])] };
+  if (e.title) return { ...base, title: e.title, phase: e.phase ?? "issuance" };
+  const p = x.path;
+  const req = obj(x.requestBody);
+  const res = obj(x.responseBody);
+  if (p.includes("/.well-known/openid-credential-issuer")) return { ...base, title: "Issuer metadata", phase: "issuance", labels: [...base.labels, "discovery", `${Object.keys(obj(res.credential_configurations_supported)).length} credential configurations`] };
+  if (p.includes("/.well-known/oauth-authorization-server") || p.includes("/.well-known/openid-configuration")) return { ...base, title: "Authorization server metadata", phase: "issuance", labels: [...base.labels, "discovery"] };
+  if (/credential[_-]?offer/i.test(p) && x.method === "GET") return { ...base, title: "Fetch credential offer", phase: "issuance", labels: [...base.labels, "by reference"] };
+  if (req.grant_type) return { ...base, title: "Token request", phase: "issuance", labels: [...base.labels, req.grant_type === PRE_AUTH ? "pre-authorized_code" : String(req.grant_type)] };
+  if (obj(req.proof).proof_type || /\/credential$/.test(p)) return { ...base, title: "Credential request", phase: "issuance", labels: [...base.labels, String(req.format ?? "credential")] };
+  if (req.vp_token !== undefined || req.error !== undefined) return { ...base, title: "Submit presentation", phase: "presentation", labels: [...base.labels, "direct_post", ...formatLabels(req.vp_token)] };
+  if (/\/pd\/|presentation[_-]definition/i.test(p)) return { ...base, title: "Fetch presentation definition", phase: "presentation", labels: [...base.labels, "presentation_definition_uri"] };
+  if (/\/request/.test(p) && x.method === "GET") return { ...base, title: "Fetch request object", phase: "presentation", labels: [...base.labels, "request_uri"] };
+  return { ...base, title: `${x.method} ${p}`, phase: e.phase ?? "issuance" };
+}
+
 export function classify(x: Exchange): Classified {
+  if (x.upstream === "external") return classifyExternal(x);
   const p = x.path.replace(/^\/v1\/certify/, "").replace(/^\/v1\/verify/, "");
   const req = obj(x.requestBody);
   const res = obj(x.responseBody);
@@ -160,6 +182,7 @@ export function actorFrom(headers: Record<string, string | string[] | undefined>
   const ua = String(headers["user-agent"] ?? "");
   if (/okhttp|Dalvik|Android/i.test(ua)) return "Android app (e.g. Inji Wallet)";
   if (/CFNetwork|Darwin/i.test(ua)) return "iOS app (e.g. Inji Wallet)";
+  if (/ktor-client/i.test(ua)) return "Kotlin client (e.g. walt.id wallet)";
   if (/Mozilla/i.test(ua)) return "Browser";
   if (ua) return ua.slice(0, 40);
   return undefined;

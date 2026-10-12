@@ -50,13 +50,14 @@ flowchart LR
 
 | Piece | Where | What it does |
 |---|---|---|
-| UI | [apps/ui](../apps/ui) | React 18 + Vite + Tailwind, Motion for animation. Pages: Run, Run detail (transit line, inspector, sequence diagram), Issuer Studio, Verifier desk, Wallet, Results, Capabilities (with the QR Lab), Live traffic. Built into `apps/ui/dist` and served by the BFF. |
+| UI | [apps/ui](../apps/ui) | React 18 + Vite + Tailwind, Motion for animation. Pages: Run, Run detail (transit line, inspector, sequence diagram), Issuer Studio, Verifier desk, Wallet, Parties, Results, Capabilities (with the QR Lab), Live traffic. Built into `apps/ui/dist` and served by the BFF. |
 | BFF API | [apps/bff/src/api](../apps/bff/src/api) | Express routes under `/api/*`: Studio, runs and events, Reference Wallet, insights. See [api.md](api.md). |
 | Recording gateway | [apps/bff/src/gateway](../apps/bff/src/gateway) | Reverse proxy for `/pub/certify/*` and `/pub/verify/*`. An allow-list passes only wallet-facing endpoints; every exchange is classified (who → whom, which protocol step) and recorded. |
 | Public documents | [apps/bff/src/public](../apps/bff/src/public) | `/pub/issuers/*` (DID documents, keys, issuer profiles, logos, SD-JWT type metadata) and `/pub/contexts/*` (JSON-LD contexts for Studio types). |
 | Issuer Studio | [apps/bff/src/studio](../apps/bff/src/studio) | Turns an issuer profile and a credential type into a Certify credential configuration (template, context, display, signing suite) and pushes it through `/credential-configurations`. Reconciles Certify with the store at start-up and seeds demo content on a fresh install. |
 | Reference Wallet | [apps/bff/src/reference/wallet](../apps/bff/src/reference/wallet) | An independent OpenID4VCI + OpenID4VP holder (below). |
 | Reference Verifier | [apps/bff/src/reference/verifier](../apps/bff/src/reference/verifier) | An independent OpenID4VP relying party with PE and DCQL (below). |
+| Parties | [apps/bff/src/parties](../apps/bff/src/parties), [core/parties.ts](../packages/core/src/parties.ts) | Reads [infra/parties.yaml](../infra/parties.yaml) at start-up into a registry of external issuers (with their credential types), verifiers and wallets next to the built-in ones, runs the HTTP steps the file describes, records each exchange, checks reachability and supplies external issuers' trust anchors to the Reference Verifier (below). |
 | Run orchestrator | [apps/bff/src/runs](../apps/bff/src/runs) | Drives a run through issue → request → present → verify, waits for a human wallet when needed, applies tamper presets, decides PASS/FAIL against the expectation and writes the plain-English explanation and report. |
 | Core | [packages/core](../packages/core) | Shared types and pure logic: the Studio model, PE and DCQL builders and matcher, SD-JWT/JWT/offer decoders, secret masking. Used by both the BFF and the UI. |
 | Inji Certify | `injistack/inji-certify-with-plugins:0.14.0` | Issuer. Configuration only: [infra/certify](../infra/certify). |
@@ -120,6 +121,51 @@ The Reference Wallet calls Certify and Verify **through the gateway**, like any 
 is recorded the same way a phone's is. Tamper presets (alter a claim, stale nonce, drop the holder proof, someone
 else's credential, a forged SD-JWT with a self-signed `x5c`) are applied inside the Reference Wallet just before
 it answers.
+
+## External parties
+
+The mentors asked that issuers and credential types from other systems be added **by configuration, then a
+restart**, with Inji Verify able to verify them, and that the UI be driven by that configuration rather than by
+code changes. The playground does it with one file, [infra/parties.yaml](../infra/parties.yaml):
+
+```mermaid
+flowchart LR
+  file["infra/parties.yaml<br/>issuers, types, verifiers, wallets"] -->|read at start-up| reg["Parties registry<br/>(BFF)"]
+  reg --> catalog["/api/catalog<br/>Studio + external types"]
+  reg --> list["/api/parties<br/>wallets, verifiers, health"]
+  catalog & list --> ui["Run builder, Verifier desk,<br/>Wallet, Parties page"]
+  reg --> steps["Step runner<br/>templated HTTP calls"]
+  steps -->|offer steps| xi["External issuer"]
+  steps -->|request and result steps| xv["External verifier"]
+  steps -->|automation steps| xw["External wallet (API)"]
+  steps -->|every exchange| rec["Recorder"]
+  reg -->|trust anchors| refv["Reference Verifier"]
+```
+
+- **Nothing vendor-specific is in code.** An entry says where a party is and how to talk to it as a short list of
+  HTTP steps: method, URL, headers and body templates (`${claims}`, `${offerUri}`, `${requestUri}`, `${vct}`…),
+  and `save` rules that pick values out of a response (a JSON path, a header, or a query parameter of a returned
+  URI) for later steps. Values that should not live in the file come from `${file:…}`, `${jwk:…}` (a PEM key as
+  a JWK) and `${env:…}`, resolved once at load.
+- **A run with external parties** uses the same four steps. *Issue* runs the issuer's offer steps (or asks the
+  person to paste an offer when the issuer has no API); *request* runs the verifier's request steps, or Inji
+  Verify / the Reference Verifier ask for the external type by its `vct` or `typeName`; *present* drives an
+  API wallet through its automation steps, or waits for a person; *verify* polls the external verifier's result
+  steps until it gives a verdict, and lists its own policy results as checks.
+- **Trust.** Inji Verify 0.18.2 checks an SD-JWT against the `x5c` certificate in the token itself (G11), so an
+  external issuer that signs with `x5c` verifies there with no configuration. The Reference Verifier trusts an
+  external issuer only through the certificates, JWKs or JWKS URL its entry lists under `trust`.
+- **What a person cannot be watched doing.** External parties are not behind the gateway, so a phone talking to
+  one directly is invisible to the playground; those steps wait for *Continue*. Everything the playground itself
+  sends to an external party (and everything the Reference Wallet sends) is recorded and shown in the inspector
+  with an *external party* label.
+- **Robust loading.** Each entry is validated on its own (zod schemas in `core/parties.ts`); a broken one is
+  listed on the Parties page and in `/api/parties` and skipped. Step definitions never leave the server, because
+  their bodies may hold an issuer key or a wallet password.
+- **The external lab.** `./playground.sh up --external` adds the `external` Compose profile: walt.id's
+  issuer-api, verifier-api and wallet-api 1.0.0 with the configuration in
+  [infra/external](../infra/external/README.md). The demo issuer's P-256 key and self-signed certificate are
+  generated on first start and kept out of git.
 
 ## A run, end to end
 
@@ -222,6 +268,7 @@ flowchart TB
     verify["verify-service<br/>inji-verify-service:0.18.2 · 640 MB"]
     playground["playground<br/>inji-interop-playground:local · 512 MB<br/>alias playground.localhost"]
     tunnel["tunnel (profile: tunnel)<br/>cloudflared 2025.8.1"]
+    walt["waltid-issuer, waltid-verifier, waltid-wallet<br/>(profile: external) · 512–640 MB each"]
   end
   host(("127.0.0.1:8080")) --> playground
   certify --> postgres
@@ -232,6 +279,8 @@ flowchart TB
   certify -. "contexts, status lists, keys via playground.localhost" .-> playground
   verify -. "DID documents, keys, status lists" .-> playground
   tunnel --> playground
+  playground -. "parties.yaml steps" .-> walt
+  walt -. "the wallet collects from Certify via playground.localhost" .-> playground
   postgres --- v1[("volume pgdata")]
   certify --- v2[("volume certify-keys")]
 ```
@@ -239,7 +288,8 @@ flowchart TB
 - `postgres`, `certify` and `verify-service` publish no ports. The playground waits for Postgres to be
   healthy; Certify and Verify have health checks (Certify's is its public issuer metadata, because its
   `/actuator/health` answers 200 even when it fails, G6).
-- The bundle needs about 3 GB of memory with the limits above, plus about 2 GB of images on first start.
+- The bundle needs about 3 GB of memory with the limits above, plus about 2 GB of images on first start. The
+  external lab adds about 1.7 GB of limits and 1.5 GB of images.
 - The playground image ([infra/playground.Dockerfile](../infra/playground.Dockerfile)) is a multi-stage build
   on `node:22-alpine`: build the UI and the BFF (an esbuild bundle), `pnpm deploy --prod` the runtime
   dependencies, then copy both into a slim image that runs as `node` with a health check on `/api/health`.
@@ -255,4 +305,5 @@ flowchart TB
 | Inji Verify service | 0.18.2 | OpenID4VP with Presentation Exchange; no DCQL (that arrives in 1.0) |
 | Inji Verify React SDK | 0.18.1 | the latest SDK release for the 0.18 line |
 | PixelPass | 0.8.0 | used by the QR Lab and direct share |
+| walt.id issuer-api, verifier-api, wallet-api | 1.0.0 | optional external lab; OpenID4VCI draft 13, OpenID4VP with PE |
 | Node.js | 22 | BFF runtime |

@@ -2,6 +2,7 @@
 #
 #   docker compose -f infra/compose.yml up -d                     # core: postgres, Certify, Verify, playground
 #   docker compose -f infra/compose.yml --profile tunnel up -d    # + public HTTPS tunnel for a phone wallet
+#   docker compose -f infra/compose.yml --profile external up -d  # + walt.id issuer, verifier and wallet (non-Inji parties)
 #
 # Inji services run as released images, unmodified; only their configuration is supplied here.
 # Nothing but the playground gateway is published on the host: wallets reach Certify and Verify
@@ -114,6 +115,11 @@ services:
       RETENTION_DAYS: ${RETENTION_DAYS:-7}
       # The tunnel only exposes the wallet-facing gateway (/pub/*) unless this is "true".
       PUBLIC_UI: ${PUBLIC_UI:-false}
+      # External issuers, verifiers and wallets. Read at start-up: edit infra/parties.yaml, then ./playground.sh restart.
+      PARTIES_FILE: /app/config/parties.yaml
+    volumes:
+      - ./parties.yaml:/app/config/parties.yaml:ro
+      - ./external/keys:/app/config/external/keys:ro
     # This computer only: the API is unauthenticated. Phones reach the gateway through the tunnel instead.
     ports:
       - "127.0.0.1:${PLAYGROUND_PORT:-8080}:8080"
@@ -137,6 +143,59 @@ services:
     networks: [inji]
     depends_on: [playground]
 
+  # Optional: parties that are not Inji, from the walt.id community stack. The playground knows them only
+  # through infra/parties.yaml. Their hostnames exist only on this network, so they are for local runs.
+  waltid-issuer:
+    profiles: [external]
+    image: waltid/issuer-api:1.0.0
+    restart: unless-stopped
+    environment:
+      JAVA_TOOL_OPTIONS: -Xmx256m -XX:+UseSerialGC
+    volumes:
+      - ./external/waltid/issuer:/waltid-issuer-api/config:ro
+    networks: [inji]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7002/draft13/.well-known/openid-credential-issuer >/dev/null"]
+      interval: 5s
+      start_period: 30s
+      retries: 30
+    mem_limit: 512m
+
+  waltid-verifier:
+    profiles: [external]
+    image: waltid/verifier-api:1.0.0
+    restart: unless-stopped
+    environment:
+      JAVA_TOOL_OPTIONS: -Xmx256m -XX:+UseSerialGC
+    volumes:
+      - ./external/waltid/verifier:/waltid-verifier-api/config:ro
+    networks: [inji]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7003/livez >/dev/null"]
+      interval: 5s
+      start_period: 30s
+      retries: 30
+    mem_limit: 512m
+
+  waltid-wallet:
+    profiles: [external]
+    image: waltid/wallet-api:1.0.0
+    restart: unless-stopped
+    environment:
+      SERVICE_HOST: waltid-wallet
+      WALLET_BACKEND_PORT: "7001"
+      JAVA_TOOL_OPTIONS: -Xmx320m -XX:+UseSerialGC
+    volumes:
+      - ./external/waltid/wallet:/waltid-wallet-api/config:ro
+      - waltid-wallet-data:/waltid-wallet-api/data
+    networks: [inji]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:7001/livez >/dev/null"]
+      interval: 5s
+      start_period: 30s
+      retries: 30
+    mem_limit: 640m
+
 networks:
   inji:
     name: inji-playground
@@ -144,3 +203,4 @@ networks:
 volumes:
   pgdata:
   certify-keys:
+  waltid-wallet-data:

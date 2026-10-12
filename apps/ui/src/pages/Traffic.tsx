@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { sniff, type EventSummary, type Sniffed } from "@playground/core";
+import { isFailedEvent, sniff, type EventSummary, type Sniffed } from "@playground/core";
 import { api } from "../lib/api";
 import { useLiveFeed } from "../lib/live";
 import { Decoded, Inspector } from "../components/Inspector";
@@ -37,7 +37,7 @@ function LiveFeed() {
   // Pausing freezes what is on screen; new messages keep arriving underneath.
   useEffect(() => setFrozen(paused ? (q.data ?? []) : null), [paused]); // eslint-disable-line react-hooks/exhaustive-deps
   const all = frozen ?? q.data ?? [];
-  const shown = useMemo(() => all.filter((e) => phases.has(e.phase) && (!failuresOnly || e.status >= 400)), [all, phases, failuresOnly]);
+  const shown = useMemo(() => all.filter((e) => phases.has(e.phase) && (!failuresOnly || isFailedEvent(e))), [all, phases, failuresOnly]);
   const behind = frozen ? (q.data?.length ?? 0) - frozen.length : 0;
 
   return (

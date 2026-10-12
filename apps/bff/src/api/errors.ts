@@ -1,6 +1,8 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import { ZodError } from "zod";
 import { log } from "../log.js";
+import { PartyError } from "../parties/service.js";
+import { RunError } from "../runs/orchestrator.js";
 import { StudioError } from "../studio/service.js";
 import { HttpError } from "../util/http.js";
 
@@ -28,6 +30,14 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   }
   if (err instanceof StudioError || err instanceof ApiError) {
     res.status(err.status).json({ error: err.code, message: err.message, detail: err.detail });
+    return;
+  }
+  if (err instanceof RunError) {
+    res.status(err.code.startsWith("unknown_") ? 404 : 400).json({ error: err.code, message: err.message, detail: err.detail });
+    return;
+  }
+  if (err instanceof PartyError) {
+    res.status(err.code === "config_error" ? 400 : 502).json({ error: err.code, message: err.message, detail: err.detail });
     return;
   }
   if (err instanceof HttpError) {

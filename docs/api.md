@@ -30,7 +30,11 @@ Every `/api` error has the same shape:
 | 400 | `invalid_request`, `invalid_offer` | A required field is missing |
 | 404 | `not_found`, `run_not_found`, `event_not_found` | Unknown id (events may have been purged) |
 | 409 | `type_exists`, … | A Studio conflict, e.g. a type name already used by that issuer |
+| 400 | `unsupported`, `invalid_claims` | A run combination that cannot work, or claim values that do not fit an external type |
+| 404 | `unknown_type`, `unknown_wallet`, `unknown_verifier` | A run names something neither built in nor in the parties file |
+| 409 | `not_waiting` | `/api/runs/:id/input` for a run that is not waiting |
 | 502 | upstream code or `upstream_error` | Certify or Verify answered with an error; `detail` carries their body |
+| 502 | `step_failed`, `unreachable` | An external party's step answered an unexpected status or could not be reached; `detail` carries its answer |
 | 500 | `internal_error` | A bug; the log has the details |
 
 An unknown `/api` path answers `404 {"error":"not_found"}`.
@@ -105,15 +109,16 @@ verifier should do.
 | POST | `/api/runs/:id/cancel` | — | 202 |
 | DELETE | `/api/runs/:id` | — | 204, the run and its events |
 | GET | `/api/runs/:id/events` | — | Event summaries, in order |
+| POST | `/api/runs/:id/input` | `{ offerUri }` or `{ confirm: true }` | 202. Hands a waiting step what it asked for: a pasted offer (`paste-offer`) or *Continue* (steps marked `needsConfirm`, which an external party completes out of the playground's sight). 400 for something that is not an offer, 409 when the run is not waiting |
 | GET | `/api/runs/:id/report` | `?format=json`, `?redact=false` | A download: Markdown report (default) or `{ run, events }` JSON. Claim values and `tx_code` are redacted unless `redact=false` |
 
 **`RunSpecInput`**
 
 | Field | Values | Default |
 |---|---|---|
-| `typeId` | a credential type id | required |
-| `wallet` | `reference-wallet`, `inji-wallet`, `inji-web`, `external-wallet` | `reference-wallet` |
-| `verifier` | `inji-verify`, `reference-verifier` | `inji-verify` |
+| `typeId` | a Studio credential type id, or `ext:<issuer>/<type>` from the parties file (see `/api/catalog`) | required |
+| `wallet` | `reference-wallet`, `inji-wallet`, `external-wallet`, or a wallet id from the parties file (`inji-web` is refused: no offer support) | `reference-wallet` |
+| `verifier` | `inji-verify`, `reference-verifier`, or a verifier id from the parties file | `inji-verify` |
 | `mode` | `openid4vp-cross-device`, `openid4vp-same-device`, `direct-share` | `openid4vp-cross-device` |
 | `query` | `presentation_exchange`, `dcql` | `presentation_exchange` |
 | `requestedClaims` | claim names to ask for (SD-JWT: the ones to disclose) | `[]` |
@@ -122,6 +127,10 @@ verifier should do.
 | `tamper` | `none`, `alter-claim`, `wrong-nonce`, `no-holder-proof`, `foreign-holder`, `self-signed-sdjwt` | `none` |
 | `heldCredentialId` | present an already-held credential | none |
 | `skipIssuance` | with `heldCredentialId` | `false` |
+
+Combinations that cannot work are refused with 400 and the reason: tampering with any wallet but the Reference
+Wallet, direct share with a verifier other than Inji Verify or with an API-driven wallet, an external verifier
+asked for a format it is not configured for.
 
 With `wallet` other than `reference-wallet`, the run pauses at `waiting` and its step carries an `action` (an
 offer or request URI to show as a QR code) until a person's wallet responds or 10 minutes pass.
@@ -176,12 +185,22 @@ keys: `access_token`, `refresh_token`, `pre-authorized_code`, `tx_code`, `author
 | POST | `/api/wallet/present` | `{ requestUri, heldId?, tamper? }` | `{ status, verifierResponse, disclosed, withheld, matches, request: { clientId, transport, signed, language } }`. Answers any OpenID4VP request: Inji Verify's, the Reference Verifier's or an external verifier's |
 | GET | `/api/ref-verifier/sessions/:id` | — | A Reference Verifier session with its result and every check |
 
+## Parties (external issuers, wallets and verifiers)
+
+Declared in `infra/parties.yaml` (the container reads `PARTIES_FILE`) and loaded at start-up.
+
+| Method | Path | Body / query | Returns |
+|---|---|---|---|
+| GET | `/api/parties` | — | `{ file, loadedAt, errors, health, issuers, verifiers, wallets }`. `wallets` and `verifiers` include the built-in ones (`origin: builtin` or `external`); `issuers` are the external ones with their `types`. `health` maps `issuer:<id>`, `verifier:<id>`, `wallet:<id>` to `{ ok, detail }`. Step definitions are **not** returned: their bodies can hold an issuer's signing key or a wallet password |
+| GET | `/api/catalog` | — | Every credential type a run can use, Studio and external, as `CatalogType` (`id`, `origin`, `issuerId`, `issuerName`, `displayName`, `format`, `typeName`/`vct`, `proof`, `fields`, `canIssue`, `configurationId`) |
+| POST | `/api/parties/issuers/:issuer/types/:type/offers` | `{ claims?, txCode? }` | 201, `{ offerUri }`, from the issuer's offer steps (missing claims take the file's samples). 400 when the issuer has no offer steps, 502 when it fails |
+
 ## Insights
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | `/api/health` | — | `{ ok: true }` (liveness; touches nothing else) |
-| GET | `/api/status` | — | `{ publicBaseUrl, mode: local\|public, phoneReady, identifiers, services: { certify, verify }, versions, retentionDays }` |
+| GET | `/api/status` | — | `{ publicBaseUrl, mode: local\|public, phoneReady, identifiers, services: { certify, verify }, versions, retentionDays, parties: { file, errors, configured, reachable } }` |
 | GET | `/api/matrix` | — | `[{ key, run }]`: the latest finished run per credential × format × wallet × verifier × mode × query × tamper |
 | GET | `/api/capabilities` | — | `{ claimed: { issuer, verifier }, proven: [{ verifier, format, proof, mode, query, accepted, rejected, lastRun }], studioTypes }`: what Certify and Verify advertise against what honest runs showed |
 | POST | `/api/qr-lab` | `{ heldId }` or `{ credential }`, `stripPhoto?` | A QR measurement (below) |

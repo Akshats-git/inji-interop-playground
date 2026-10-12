@@ -22,3 +22,19 @@ describe("run verdicts", () => {
     expect(expectationFor({ tamper: "foreign-holder" }, { expiresAt: "" })).toBe("FAIL");
   });
 });
+
+describe("external verifier verdicts", () => {
+  const detail = { results: [{ credential: "eyJ…", policyResults: [{ policy: "signature_sd-jwt-vc", is_success: false, error: "holder key binding could not be verified\n\tat …" }, { policy: "expired", is_success: true }] }] };
+  it("lists the verifier's own policies as checks and keeps the credential out of them", async () => {
+    const { explainResult, externalChecks } = await import("../src/runs/explain.js");
+    expect(externalChecks(detail)).toEqual([
+      { name: "signature_sd-jwt-vc", ok: false, detail: "holder key binding could not be verified" },
+      { name: "expired", ok: true, detail: undefined },
+    ]);
+    const r = explainResult({ kind: "external", who: "walt.id Verifier", accepted: false, detail, expected: "PASS", tamper: "none" });
+    expect(r.verifierOutcome).toBe("REJECTED");
+    expect(r.errorDetail).toBe("signature_sd-jwt-vc: holder key binding could not be verified");
+    expect(r.checks.map((c) => c.name)).toEqual(["walt.id Verifier accepted the presentation", "signature_sd-jwt-vc", "expired"]);
+    expect(JSON.stringify(r)).not.toContain("eyJ");
+  });
+});

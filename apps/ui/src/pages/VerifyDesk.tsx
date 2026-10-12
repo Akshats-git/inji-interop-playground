@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { OpenID4VPVerification, QRCodeVerification } from "@injistack/react-inji-verify-sdk";
-import { explainMapping, vctFor, toDcql, toPresentationDefinition, validateDcql, type CredentialType, type PeDialect, type QuerySpec } from "@playground/core";
+import { explainMapping, toDcql, toPresentationDefinition, validateDcql, type CatalogType, type PeDialect, type QuerySpec } from "@playground/core";
 import { api } from "../lib/api";
 import { formatLabel } from "../lib/format";
 import { JsonView } from "../components/JsonView";
@@ -12,13 +12,13 @@ import { Button, cx, Empty, Field, Notice, PageHeader, Panel, Select, StatusMark
 const VERIFY_SERVICE_URL = "/pub/verify/v1/verify";
 const CLIENT_ID = "inji-playground";
 
-function specFor(t: CredentialType, claims: string[]): QuerySpec {
+function specFor(t: CatalogType, claims: string[]): QuerySpec {
   return {
-    id: `${t.issuerSlug}-${t.typeName}`.toLowerCase(),
+    id: `${t.issuerId}-${t.typeName ?? t.configurationId}`.toLowerCase().replace(/[^a-z0-9-]+/g, "-"),
     purpose: `Show your ${t.displayName}`,
     format: t.format,
     typeName: t.typeName,
-    vct: vctFor(t.syncedBaseUrl, t),
+    vct: t.vct,
     claims,
     requireHolderBinding: true,
   };
@@ -57,16 +57,21 @@ function Results({ results }: { results: SdkResult[] }) {
   );
 }
 
-function RequestBuilder({ types, type, setTypeId, claims, setClaims }: { types: CredentialType[]; type?: CredentialType; setTypeId: (id: string) => void; claims: string[]; setClaims: (c: string[]) => void }) {
+function RequestBuilder({ types, type, setTypeId, claims, setClaims }: { types: CatalogType[]; type?: CatalogType; setTypeId: (id: string) => void; claims: string[]; setClaims: (c: string[]) => void }) {
+  const groups = [...new Set(types.map((t) => t.issuerId))].map((issuerId) => types.filter((t) => t.issuerId === issuerId));
   return (
     <div className="grid gap-4 md:grid-cols-[minmax(0,20rem)_1fr]">
-      <Field label="Ask for" hint={type ? formatLabel(type.format, type.format === "ldp_vc" ? type.dataModel : undefined) : undefined}>
+      <Field label="Ask for" hint={type ? `${formatLabel(type.format, type.dataModel)}${type.origin === "external" ? `, issued by ${type.issuerName} (external)` : ""}` : undefined}>
         {(id) => (
           <Select id={id} value={type?.id ?? ""} onChange={(e) => setTypeId(e.target.value)}>
-            {types.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.displayName}
-              </option>
+            {groups.map((g) => (
+              <optgroup key={g[0]!.issuerId} label={g[0]!.origin === "external" ? `${g[0]!.issuerName} (external)` : g[0]!.issuerName}>
+                {g.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.displayName}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </Select>
         )}
@@ -147,6 +152,66 @@ function LiveRequest({ spec }: { spec: QuerySpec }) {
   );
 }
 
+type Check = { name: string; ok: boolean; detail?: string };
+
+/** Inji Verify's v2 answer, check by check (the SDK only passes on the first error's message). */
+function checksOf(body: Record<string, unknown>): Check[] {
+  const err = (e: unknown) => (e && typeof e === "object" ? `${String((e as Record<string, unknown>).errorCode ?? "")}: ${String((e as Record<string, unknown>).errorMessage ?? "")}` : undefined);
+  const sig = body.schemaAndSignatureCheck as { valid?: boolean; error?: unknown } | undefined;
+  const exp = body.expiryCheck as { valid?: boolean } | null | undefined;
+  const status = (body.statusCheck as { purpose?: string; valid?: boolean; error?: unknown }[] | undefined) ?? [];
+  return [
+    ...(sig ? [{ name: "Issuer signature and schema", ok: Boolean(sig.valid), detail: sig.error ? err(sig.error) : undefined }] : []),
+    ...(exp ? [{ name: "Not expired", ok: Boolean(exp.valid) }] : []),
+    ...status.map((st) => ({ name: `Status (${st.purpose ?? "revocation"})`, ok: Boolean(st.valid), detail: st.error ? err(st.error) : undefined })),
+  ];
+}
+
+/**
+ * When the SDK reports an error, Inji Verify has often still answered with a full result (for example: signature
+ * valid, but the status list could not be fetched). The gateway recorded that answer, so show it check by check.
+ */
+function DirectShareError({ message }: { message: string }) {
+  const [checks, setChecks] = useState<Check[] | null>(null);
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      const recent = await api.events("?limit=20").catch(() => []);
+      const hit = recent.find((e) => e.title.startsWith("Verify credential") && Date.now() - new Date(e.at).getTime() < 60_000);
+      if (!hit) return;
+      const ev = await api.event(hit.id).catch(() => undefined);
+      const body = ev?.response?.body;
+      if (live && body && typeof body === "object") setChecks(checksOf(body as Record<string, unknown>));
+    })();
+    return () => {
+      live = false;
+    };
+  }, [message]);
+  return (
+    <Notice tone="error">
+      <span className="block">The SDK reported: {message}</span>
+      {checks?.length ? (
+        <>
+          <span className="mt-2 block font-bold">Inji Verify's own answer, check by check:</span>
+          <ul className="mt-1 flex flex-col gap-1">
+            {checks.map((c) => (
+              <li key={c.name} className="flex gap-2">
+                <span className={cx("font-black", c.ok ? "text-pass" : "text-fail")} aria-label={c.ok ? "passed" : "failed"}>
+                  {c.ok ? "✓" : "✕"}
+                </span>
+                <span>
+                  {c.name}
+                  {c.detail && <span className="block break-all text-muted">{c.detail}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </Notice>
+  );
+}
+
 function DirectShare() {
   const [results, setResults] = useState<SdkResult[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +241,7 @@ function DirectShare() {
           {camera ? "Stop the camera" : "Scan with the camera"}
         </Button>
       </div>
-      {error && <Notice tone="error">Inji Verify could not read this code: {error}</Notice>}
+      {error && <DirectShareError message={error} />}
       {results && (
         <>
           <Results results={results} />
@@ -269,7 +334,7 @@ function QueryCompare({ spec }: { spec: QuerySpec }) {
 }
 
 export default function VerifyDeskPage() {
-  const types = useQuery({ queryKey: ["types"], queryFn: api.types });
+  const types = useQuery({ queryKey: ["catalog"], queryFn: api.catalog });
   const [typeId, setTypeId] = useState("");
   const [claims, setClaims] = useState<string[]>([]);
   const type = types.data?.find((t) => t.id === typeId);
@@ -287,7 +352,7 @@ export default function VerifyDeskPage() {
       {types.isLoading ? (
         <p className="text-muted">Loading credential types…</p>
       ) : !types.data?.length || !spec ? (
-        <Empty title="No credential types to ask for">Design one in the Issuer Studio first; the verifier needs to know what it is asking for.</Empty>
+        <Empty title="No credential types to ask for">Design one in the Issuer Studio, or declare an external issuer in infra/parties.yaml; the verifier needs to know what it is asking for.</Empty>
       ) : (
         <div className="flex flex-col gap-6">
           <Panel title="What the verifier asks for">
