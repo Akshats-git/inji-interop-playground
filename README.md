@@ -273,4 +273,13 @@ cd apps/ui && npx vite                                                          
 ## Licence
 
 [MPL-2.0](LICENSE), the same licence as Inji. Inji Certify, Inji Verify, the Inji Verify SDK and PixelPass are
-MOSIP projects, used here as released.
+MOSIP projects (MPL-2.0), used here as released.
+
+Third-party parts, all under OSI-approved licences and unmodified:
+
+| Part | Licence |
+|---|---|
+| walt.id issuer-api, verifier-api, wallet-api 1.0.0 (optional external lab) | Apache-2.0 |
+| cloudflared (tunnel mode only) | Apache-2.0 |
+| PostgreSQL 15 | PostgreSQL License |
+| npm dependencies (`pnpm licenses list --prod`) | MIT, BSD, ISC, Apache-2.0, MPL-2.0, 0BSD, Zlib; Overpass fonts under OFL-1.1; jszip used under its MIT option |
