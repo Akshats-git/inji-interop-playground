@@ -159,9 +159,14 @@ export function publicUrlsFor(baseUrl: string, t: Pick<CredentialTypeInput, "iss
   };
 }
 
+const vocabOf = (baseUrl: string, issuerSlug: string) => `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuerSlug}/vocab#`;
+
+/** The type's expanded IRI under its generated context: what DCQL's type_values must hold for it. */
+export const typeIriFor = (baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName">) => `${vocabOf(baseUrl, t.issuerSlug)}${t.typeName}`;
+
 /** A JSON-LD context for the type: its terms map into an issuer-specific vocabulary. */
 export function buildContextDocument(baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName" | "fields">) {
-  const vocab = `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${t.issuerSlug}/vocab#`;
+  const vocab = vocabOf(baseUrl, t.issuerSlug);
   // Only the type's own terms: VCDM terms (id, type, name, description…) are protected by the base context.
   const terms: Record<string, unknown> = { [t.typeName]: `${vocab}${t.typeName}` };
   for (const f of t.fields) terms[f.name] = `${vocab}${f.name}`;

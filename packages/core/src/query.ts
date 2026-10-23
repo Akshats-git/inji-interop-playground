@@ -4,16 +4,22 @@
  * - Presentation Exchange 2.0 (`presentation_definition`), spoken by OpenID4VP drafts 21–23 and Inji 0.x.
  * - DCQL (`dcql_query`), spoken by OpenID4VP 1.0 and Inji 1.0-alpha.
  *
- * The PE → DCQL mapping follows Inji Verify's "Transition from PEX to DCQL" guide.
+ * Both have a dialect question for W3C credentials. PE: Inji filters `$.type` with a regex pattern, the spec with
+ * JSON Schema (gap G13). DCQL: OpenID4VP 1.0 evaluates claim paths from the credential's root
+ * (`["credentialSubject", "x"]`, Appendix B.1.2), while Inji's "Transition from PEX to DCQL" guide and Inji Verify
+ * 1.0 evaluate them from credentialSubject (`["x"]`, gap G36). Spec style is the default; Inji style reproduces
+ * what Inji Verify 1.0 expects.
  */
-import type { Format } from "./studio.js";
+import type { CredentialFormat } from "./model.js";
 
 export interface QuerySpec {
   id: string;
   purpose: string;
-  format: Format;
+  format: CredentialFormat;
   /** ldp_vc: the credential's type (e.g. KarnatakaFarmerCard). */
   typeName?: string;
+  /** ldp_vc: the type's expanded IRI, for DCQL's type_values (the short name is used when it is unknown). */
+  typeIri?: string;
   /** SD-JWT: the exact vct value. */
   vct?: string;
   /** Claim names under credentialSubject (ldp_vc) or top level (SD-JWT). Empty = whole credential. */
@@ -32,6 +38,9 @@ export interface QuerySpec {
  * - "spec": `{type: "array", contains: {const: "X"}}`, the JSON Schema way the PE spec examples use.
  */
 export type PeDialect = "inji" | "spec";
+
+/** Where DCQL claim paths start for W3C credentials: the credential's root (OpenID4VP 1.0) or credentialSubject (Inji). */
+export type DcqlPathStyle = "spec" | "inji";
 
 export interface PresentationDefinition {
   id: string;
@@ -99,9 +108,10 @@ export const W3C_VC_TYPE_IRI = "https://www.w3.org/2018/credentials#VerifiableCr
 
 /**
  * DCQL for the same question. `type_values` must hold *expanded* type IRIs; the caller passes the
- * credential type's IRI (from its JSON-LD context) when it knows it.
+ * credential type's IRI (from its JSON-LD context) when it knows it. SD-JWT queries name the credential's own
+ * media type (vc+sd-jwt or dc+sd-jwt) unless told otherwise.
  */
-export function toDcql(spec: QuerySpec, opts: { format?: "vc+sd-jwt" | "dc+sd-jwt"; typeIri?: string } = {}): DcqlQuery {
+export function toDcql(spec: QuerySpec, opts: { format?: "vc+sd-jwt" | "dc+sd-jwt"; typeIri?: string; pathStyle?: DcqlPathStyle } = {}): DcqlQuery {
   const id = `${spec.id}-credential`;
   if (spec.format === "ldp_vc") {
     return {
@@ -109,8 +119,8 @@ export function toDcql(spec: QuerySpec, opts: { format?: "vc+sd-jwt" | "dc+sd-jw
         {
           id,
           format: "ldp_vc",
-          meta: { type_values: [[W3C_VC_TYPE_IRI, opts.typeIri ?? spec.typeName ?? ""]] },
-          claims: spec.claims.map((c) => ({ path: ["credentialSubject", c] })),
+          meta: { type_values: [[W3C_VC_TYPE_IRI, opts.typeIri ?? spec.typeIri ?? spec.typeName ?? ""]] },
+          claims: spec.claims.map((c) => ({ path: opts.pathStyle === "inji" ? [c] : ["credentialSubject", c] })),
           require_cryptographic_holder_binding: spec.requireHolderBinding,
         },
       ],
@@ -120,7 +130,7 @@ export function toDcql(spec: QuerySpec, opts: { format?: "vc+sd-jwt" | "dc+sd-jw
     credentials: [
       {
         id,
-        format: opts.format ?? "dc+sd-jwt",
+        format: opts.format ?? (spec.format === "vc+sd-jwt" ? "vc+sd-jwt" : "dc+sd-jwt"),
         meta: { vct_values: [spec.vct ?? ""] },
         claims: spec.claims.map((c) => ({ path: [c] })),
         require_cryptographic_holder_binding: spec.requireHolderBinding,
@@ -159,7 +169,10 @@ export function explainMapping(spec: QuerySpec): { pe: string; dcql: string; not
     rows.push({
       pe: spec.format === "ldp_vc" ? `$.credentialSubject.${c}` : `$.${c}`,
       dcql: JSON.stringify(spec.format === "ldp_vc" ? ["credentialSubject", c] : [c]),
-      note: "JSONPath strings become path arrays.",
+      note:
+        spec.format === "ldp_vc"
+          ? `JSONPath strings become path arrays, from the credential's root (OpenID4VP 1.0, B.1.2). Inji's guide and Inji Verify 1.0 drop "credentialSubject" instead: ${JSON.stringify([c])} (gap G36).`
+          : "JSONPath strings become path arrays.",
     });
   rows.push({ pe: "acceptVPWithoutHolderProof (Inji config)", dcql: "require_cryptographic_holder_binding", note: "Holder binding becomes part of the query." });
   return rows;

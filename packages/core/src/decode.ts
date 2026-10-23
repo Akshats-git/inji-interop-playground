@@ -107,6 +107,20 @@ export function parseCredentialOffer(uri: string): ParsedOffer | null {
   return null;
 }
 
+/**
+ * An issuer-initiated offer for the authorization code flow, by value: the wallet reads the issuer and the
+ * credential from the QR code, then signs the holder in at the issuer's authorization server (eSignet) itself.
+ * This is how an authorization-code issuer (every MOSIP Collab issuer) becomes a QR code a wallet can scan.
+ */
+export function authorizationCodeOffer(credentialIssuer: string, configurationIds: string[], authorizationServer?: string): string {
+  const offer = {
+    credential_issuer: credentialIssuer,
+    credential_configuration_ids: configurationIds,
+    grants: { authorization_code: authorizationServer ? { authorization_server: authorizationServer } : {} },
+  };
+  return `openid-credential-offer://?credential_offer=${encodeURIComponent(JSON.stringify(offer))}`;
+}
+
 /** openid4vp://?client_id=…&request_uri=… (or inline parameters). */
 export function parseAuthorizationRequest(uri: string): Record<string, string> | null {
   const q = uri.indexOf("?");
@@ -144,7 +158,7 @@ export function sniff(input: string): Sniffed {
   }
 }
 
-const SECRET_KEYS = new Set(["access_token", "refresh_token", "pre-authorized_code", "tx_code", "authorization", "cookie", "set-cookie", "code", "response_code"]);
+const SECRET_KEYS = new Set(["access_token", "refresh_token", "pre-authorized_code", "tx_code", "authorization", "cookie", "set-cookie", "code", "response_code", "code_verifier", "client_assertion", "x-xsrf-token", "oauth-details-hash"]);
 
 /** Replace secret-looking values with a fingerprint so the inspector can show structure without leaking. */
 export function maskSecrets<T>(value: T, reveal = false): T {

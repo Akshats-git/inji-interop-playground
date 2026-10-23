@@ -7,7 +7,8 @@
  * response (a JSON path, or a query parameter of a URI the response returned) for later steps.
  */
 import { z } from "zod";
-import { FieldKind, signingAlgOf, vctFor, type CredentialType, type Format } from "./studio.js";
+import type { CredentialFormat } from "./model.js";
+import { FieldKind, signingAlgOf, typeIriFor, vctFor, type CredentialType } from "./studio.js";
 
 const ID = /^[a-z][a-z0-9-]{1,40}$/;
 const id = z.string().regex(ID, "lowercase letters, digits and dashes, starting with a letter");
@@ -136,11 +137,92 @@ export const ExternalWalletInput = z.object({
 });
 export type ExternalWalletInput = z.infer<typeof ExternalWalletInput>;
 
+// --- Hosted Inji environments --------------------------------------------------------------------------------
+
+/** A demo identity a hosted environment publishes for testing, e.g. a mock UIN on MOSIP Collab. */
+export const TestIdentity = z.object({
+  id: z.string().trim().min(1).max(40),
+  label: z.string().trim().min(1).max(60),
+  /** Authorization servers where it can sign in; all of the environment's when omitted. */
+  authorizationServers: z.array(z.string().url()).optional(),
+});
+export type TestIdentity = z.infer<typeof TestIdentity>;
+
+const ApiFormat = z.enum(["ldp_vc", "vc+sd-jwt", "dc+sd-jwt", "mso_mdoc"]);
+
+/**
+ * A hosted Inji deployment, such as MOSIP's Collab sandbox: real Inji Certify issuers listed by its Mimoto, an
+ * Inji Verify, and the OAuth client the Reference Wallet signs in with. The playground runs locally and connects
+ * to it over the internet.
+ */
+export const EnvironmentInput = z.object({
+  id,
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(400).default(""),
+  homepage: z.string().url().optional(),
+  /** The Inji release line it runs, for reports, e.g. "1.0.0-alpha.1". */
+  version: z.string().trim().max(40).optional(),
+  /** Mimoto, Inji Wallet's backend: its issuer list is where the playground finds the environment's issuers. */
+  mimoto: z
+    .object({
+      url: z.string().url(),
+      /** Only these issuers (Mimoto's issuer_id); every enabled OpenID4VCI issuer when omitted. */
+      issuers: z.array(z.string()).optional(),
+      /** Leave these issuers out (Mimoto's issuer_id). */
+      exclude: z.array(z.string()).default([]),
+    })
+    .optional(),
+  /** Issuers to use that Mimoto does not list, by their OpenID4VCI credential_issuer. */
+  issuers: z.array(z.object({ id, name: z.string().trim().min(2).max(80), credentialIssuer: z.string().url() })).default([]),
+  /** An Inji Verify deployment the playground can send presentation requests to. */
+  verify: z
+    .object({
+      /** Base of its API, ending in /v1/verify. */
+      url: z.string().url(),
+      name: z.string().trim().min(2).max(80).optional(),
+      /** client_id for its requests. Its own DID makes it sign them (a small request_uri QR). */
+      clientId: z.string().min(1),
+      /** What it accepts: the 1.0 line takes DCQL only, the 0.x line Presentation Exchange only. */
+      queryLanguages: z.array(z.enum(["presentation_exchange", "dcql"])).min(1).default(["dcql"]),
+      formats: z.array(ApiFormat).default(["ldp_vc", "vc+sd-jwt", "dc+sd-jwt"]),
+      version: z.string().trim().max(40).optional(),
+    })
+    .optional(),
+  /**
+   * The OAuth client the Reference Wallet uses at the environment's authorization servers (eSignet) for the
+   * authorization code flow: registered there with this redirect URI, authenticating with private_key_jwt.
+   */
+  client: z
+    .object({
+      clientId: z.string().min(1),
+      redirectUri: z.string().url(),
+      /** PEM private key, relative to the parties file. Without it the wallet cannot sign in by itself. */
+      privateKeyFile: z.string().min(1),
+      /** Authorization servers where this client is registered. */
+      authorizationServers: z.array(z.string().url()).min(1),
+      acrValues: z.string().default("mosip:idp:acr:generated-code"),
+    })
+    .optional(),
+  /** Test data shown next to authorization-code offers, and used when the Reference Wallet signs in by itself. */
+  testData: z
+    .object({
+      otp: z.string().trim().max(12).optional(),
+      identities: z.array(TestIdentity).default([]),
+      /** Extra notes for one issuer (Mimoto issuer_id) or all, e.g. the insurance policy to sign in with. */
+      notes: z.array(z.object({ issuer: z.string().optional(), text: z.string().trim().min(1).max(400) })).default([]),
+      /** Where a person can get their own identity (it arrives by email). */
+      selfRegistration: z.string().url().optional(),
+    })
+    .default({}),
+});
+export type EnvironmentInput = z.infer<typeof EnvironmentInput>;
+
 export const PartiesFile = z.object({
   version: z.literal(1).default(1),
   issuers: z.array(ExternalIssuerInput).default([]),
   verifiers: z.array(ExternalVerifierInput).default([]),
   wallets: z.array(ExternalWalletInput).default([]),
+  environments: z.array(EnvironmentInput).default([]),
 });
 export type PartiesFile = z.infer<typeof PartiesFile>;
 
@@ -157,6 +239,11 @@ export function partiesProblems(p: PartiesFile): string[] {
   dup("issuer", p.issuers.map((i) => i.id));
   dup("verifier", p.verifiers.map((v) => v.id));
   dup("wallet", p.wallets.map((w) => w.id));
+  dup("environment", p.environments.map((e) => e.id));
+  for (const e of p.environments) {
+    if (!e.mimoto && !e.issuers.length && !e.verify) out.push(`environment ${e.id}: give it a mimoto or issuers (where its issuers are), a verify (its verifier), or both.`);
+    if (e.verify && p.verifiers.some((v) => v.id === hostedVerifierId(e.id))) out.push(`environment ${e.id}: its verifier id "${hostedVerifierId(e.id)}" is also used in verifiers.`);
+  }
   for (const i of p.issuers) {
     dup(`type (issuer ${i.id})`, i.types.map((t) => t.id));
     for (const t of i.types) {
@@ -183,30 +270,54 @@ export interface CatalogField {
   selectivelyDisclosable: boolean;
 }
 
-/** A credential type a run can use: designed in the Studio (issued by Inji Certify) or declared in the parties file. */
+/**
+ * A credential type a run can use: designed in the Studio (issued by the bundled Inji Certify), declared in the
+ * parties file, or offered by an issuer of a hosted Inji environment (found through its Mimoto).
+ */
 export interface CatalogType {
-  /** Studio type id, or "ext:<issuer>/<type>". */
+  /** Studio type id, "ext:<issuer>/<type>" or "hosted:<environment>/<issuer>/<configuration>". */
   id: string;
-  origin: "studio" | "external";
+  origin: "studio" | "external" | "hosted";
   issuerId: string;
   issuerName: string;
   displayName: string;
   description: string;
-  format: Format;
+  format: CredentialFormat;
   dataModel?: "1.1" | "2.0";
   typeName?: string;
+  /** ldp_vc: the type's expanded IRI, which DCQL's type_values need (when it is known). */
+  typeIri?: string;
   vct?: string;
   /** What signs it, for reports: "Ed25519Signature2020", "SD-JWT ES256"… */
   proof: string;
   fields: CatalogField[];
-  /** True when the playground can make the issuer create an offer by itself. */
+  /** True when the playground can get the credential by itself (an offer API, or an automatic sign-in). */
   canIssue: boolean;
   /** External only: where to get an offer by hand. */
   offerPage?: string;
   configurationId: string;
   /** Studio only: a hard-coded expiry (runs expect such a credential to be rejected once it has passed). */
   expiresAt?: string;
+  /** Hosted only: the environment, the issuer's address, the OAuth scope and the server a holder signs in at. */
+  hosted?: {
+    environmentId: string;
+    environmentName: string;
+    credentialIssuer: string;
+    scope?: string;
+    authorizationServer?: string;
+    /** Which OpenID4VCI shape it speaks: "1.0" (a nonce endpoint, credential_configuration_id) or "draft 13". */
+    protocol: "1.0" | "draft 13";
+    /** The Reference Wallet can sign in here by itself (its client is registered at this server). */
+    autoLogin: boolean;
+    /** The claims come from the identity that signs in, not from values the playground sends. */
+    claimsFromIdentity: true;
+  };
 }
+
+export const hostedTypeId = (environmentId: string, issuerId: string, configurationId: string) => `hosted:${environmentId}/${issuerId}/${encodeURIComponent(configurationId)}`;
+export const isHostedTypeId = (id: string) => id.startsWith("hosted:");
+/** The verifier id an environment's Inji Verify gets in runs and the registry. */
+export const hostedVerifierId = (environmentId: string) => `${environmentId}-verify`;
 
 /** A Studio type (issued by the playground's Inji Certify) as a catalog entry. */
 export function catalogFromStudio(t: CredentialType, issuerName: string): CatalogType {
@@ -221,6 +332,7 @@ export function catalogFromStudio(t: CredentialType, issuerName: string): Catalo
     dataModel: t.format === "ldp_vc" ? t.dataModel : undefined,
     typeName: t.typeName,
     vct: t.format === "vc+sd-jwt" ? vctFor(t.syncedBaseUrl, t) : undefined,
+    typeIri: t.format === "ldp_vc" ? typeIriFor(t.syncedBaseUrl, t) : undefined,
     proof: t.format === "ldp_vc" ? t.ldpSuite : `SD-JWT ${signingAlgOf(t)}`,
     fields: t.fields.map((f) => ({ name: f.name, label: f.label, kind: f.kind, options: f.options, sample: f.example, selectivelyDisclosable: f.selectivelyDisclosable })),
     canIssue: true,
@@ -258,7 +370,10 @@ export interface WalletInfo {
 export interface VerifierInfo {
   id: string;
   label: string;
-  origin: "builtin" | "external";
+  /** hosted: an Inji Verify deployed elsewhere (e.g. MOSIP Collab), which the playground drives through its API. */
+  origin: "builtin" | "external" | "hosted";
+  /** Hosted only: the environment it belongs to. */
+  environmentId?: string;
   /** Query languages the playground can ask it to use; external verifiers write their own requests. */
   accepts: ("presentation_exchange" | "dcql")[];
   /** External verifiers choose their own query language. */
