@@ -408,6 +408,8 @@ export default function StudioPage() {
       <PageHeader title="Issuer Studio" lede="Create issuers and design their credential types. Saving pushes the design to Inji Certify through its credential-configuration API, and Certify starts issuing it straight away." />
       <div className="grid gap-6 lg:grid-cols-[20rem_1fr]">
         <aside className="flex flex-col gap-4" aria-label="Issuers">
+          {/* Reserve the list's height while it loads, so the designer below does not jump on a phone. */}
+          {issuers.isLoading && <div className="min-h-[34rem] lg:min-h-0" aria-hidden />}
           {issuers.data?.map((i) => (
             <section key={i.slug} className="overflow-hidden rounded-[10px] border border-hairline bg-surface">
               <div className="flex items-center gap-3 px-3 py-3" style={{ borderTop: `6px solid ${i.backgroundColor}` }}>
@@ -458,7 +460,7 @@ export default function StudioPage() {
               <IssuePanel key={issuing.id} type={issuing} />
             </Panel>
           )}
-          <Panel title="Design a credential type">{issuers.data?.length ? <TypeDesigner issuers={issuers.data} initialIssuer={designFor} /> : <Empty title="Create an issuer first" />}</Panel>
+          <Panel title="Design a credential type">{issuers.data?.length ? <TypeDesigner issuers={issuers.data} initialIssuer={designFor} /> : issuers.isLoading ? <div className="min-h-40" aria-hidden /> : <Empty title="Create an issuer first" />}</Panel>
         </div>
       </div>
     </>
