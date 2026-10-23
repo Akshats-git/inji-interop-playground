@@ -116,15 +116,18 @@ verifier should do.
 
 | Field | Values | Default |
 |---|---|---|
-| `typeId` | a Studio credential type id, or `ext:<issuer>/<type>` from the parties file (see `/api/catalog`) | required |
+| `typeId` | a Studio credential type id, `ext:<issuer>/<type>` from the parties file, or `hosted:<environment>/<issuer>/<configuration id>` for a MOSIP Collab credential (see `/api/catalog`) | required |
 | `wallet` | `reference-wallet`, `inji-wallet`, `external-wallet`, or a wallet id from the parties file (`inji-web` is refused: no offer support) | `reference-wallet` |
-| `verifier` | `inji-verify`, `reference-verifier`, or a verifier id from the parties file | `inji-verify` |
+| `verifier` | `inji-verify`, `reference-verifier`, `collab-verify` (Inji Verify 1.0 on MOSIP Collab, DCQL only), or a verifier id from the parties file | `inji-verify` |
 | `mode` | `openid4vp-cross-device`, `openid4vp-same-device`, `direct-share` | `openid4vp-cross-device` |
 | `query` | `presentation_exchange`, `dcql` | `presentation_exchange` |
 | `requestedClaims` | claim names to ask for (SD-JWT: the ones to disclose) | `[]` |
 | `claims` | the values to issue | `{}` (must satisfy the type's required fields) |
 | `txCode` | a transaction code the wallet must enter | none |
 | `tamper` | `none`, `alter-claim`, `wrong-nonce`, `no-holder-proof`, `foreign-holder`, `self-signed-sdjwt` | `none` |
+| `verifyRequest` | Inji Verify only: `signed` (`client_id` = Verify's DID, signed request object by `request_uri`) or `by-value` (`client_id` = `inji-playground`, the request in the URI) | `signed` |
+| `login` | Collab issuers only: `{ mode: "auto" \| "interactive", individualId? }`. `auto`: the Reference Wallet signs in at eSignet with a demo UIN (default: the environment's first) and the static OTP. `interactive`: the run pauses at a `login` step and the person signs in in a browser tab | `{ mode: "auto" }` |
+| `dcqlPaths` | DCQL claim paths for W3C credentials: `spec` (from the credential's root, OpenID4VP 1.0 B.1.2) or `inji` (from `credentialSubject`, what Inji Verify 1.0 reads; gap G36) | `spec` |
 | `heldCredentialId` | present an already-held credential | none |
 | `skipIssuance` | with `heldCredentialId` | `false` |
 
@@ -195,12 +198,30 @@ Declared in `infra/parties.yaml` (the container reads `PARTIES_FILE`) and loaded
 | GET | `/api/catalog` | — | Every credential type a run can use, Studio and external, as `CatalogType` (`id`, `origin`, `issuerId`, `issuerName`, `displayName`, `format`, `typeName`/`vct`, `proof`, `fields`, `canIssue`, `configurationId`) |
 | POST | `/api/parties/issuers/:issuer/types/:type/offers` | `{ claims?, txCode? }` | 201, `{ offerUri }`, from the issuer's offer steps (missing claims take the file's samples). 400 when the issuer has no offer steps, 502 when it fails |
 
+## Hosted environments (MOSIP Collab)
+
+Declared in the `environments:` section of `infra/parties.yaml`. The BFF reads each one's Mimoto issuer list, every
+issuer's OpenID4VCI metadata and its verifier's health at start-up and on refresh. Their credential types appear in
+`/api/catalog` with `origin: hosted`, and Collab's Inji Verify 1.0 is the verifier `collab-verify`.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| GET | `/api/hosted` | — | `{ environments, health }`. Each environment: `id`, `name`, `version`, `mimoto`, `issuers` (with their credential types and who can collect them), `verifier`, `client` (client id, redirect URI, `ready`, and why not), `testData` (demo identities, the static OTP, notes per issuer, how to register a UIN). The client's key is never returned |
+| POST | `/api/hosted/refresh` | — | Re-reads Mimoto and the issuers' metadata; same shape as GET |
+| POST | `/api/hosted/collect` | `{ typeId, login? }` (`login` as in a run) | 202, a job `{ id, status: signing-in \| waiting-login \| collecting \| done \| failed, loginUrl?, held?, error? }`. The Reference Wallet collects the credential outside a run. An automatic sign-in finishes in seconds; an interactive one answers once eSignet's page is known (`loginUrl`) |
+| GET | `/api/hosted/collect/:id` | — | The job (kept 30 minutes) |
+
+**Redirect app (port 3004).** MOSIP's `wallet-demo` client allows only `http://localhost:3004/redirect`, so the BFF
+serves a second tiny app on `127.0.0.1:3004` (`OAUTH_REDIRECT_PORT`). `GET /redirect?code=…&state=…` hands the code
+to the run or collection waiting for that `state` and shows a "Signed in" page. Any other path, and any `state` the
+playground did not start, gets a 404 or 400. It is not reachable through the tunnel.
+
 ## Insights
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | GET | `/api/health` | — | `{ ok: true }` (liveness; touches nothing else) |
-| GET | `/api/status` | — | `{ publicBaseUrl, mode: local\|public, phoneReady, identifiers, services: { certify, verify }, versions, retentionDays, parties: { file, errors, configured, reachable } }` |
+| GET | `/api/status` | — | `{ hosted: [{ id, name, reachable, issuers, types }], publicBaseUrl, mode: local\|public, phoneReady, identifiers, services: { certify, verify }, versions, verifyClientIds: { signed, byValue }, retentionDays, parties: { file, errors, configured, reachable } }` |
 | GET | `/api/matrix` | — | `[{ key, run }]`: the latest finished run per credential × format × wallet × verifier × mode × query × tamper |
 | GET | `/api/capabilities` | — | `{ claimed: { issuer, verifier }, proven: [{ verifier, format, proof, mode, query, accepted, rejected, lastRun }], studioTypes }`: what Certify and Verify advertise against what honest runs showed |
 | POST | `/api/qr-lab` | `{ heldId }` or `{ credential }`, `stripPhoto?` | A QR measurement (below) |

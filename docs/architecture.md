@@ -58,6 +58,7 @@ flowchart LR
 | Reference Wallet | [apps/bff/src/reference/wallet](../apps/bff/src/reference/wallet) | An independent OpenID4VCI + OpenID4VP holder (below). |
 | Reference Verifier | [apps/bff/src/reference/verifier](../apps/bff/src/reference/verifier) | An independent OpenID4VP relying party with PE and DCQL (below). |
 | Parties | [apps/bff/src/parties](../apps/bff/src/parties), [core/parties.ts](../packages/core/src/parties.ts) | Reads [infra/parties.yaml](../infra/parties.yaml) at start-up into a registry of external issuers (with their credential types), verifiers and wallets next to the built-in ones, runs the HTTP steps the file describes, records each exchange, checks reachability and supplies external issuers' trust anchors to the Reference Verifier (below). |
+| Hosted environments | [apps/bff/src/hosted](../apps/bff/src/hosted), [api/hosted.ts](../apps/bff/src/api/hosted.ts) | MOSIP Collab: reads Mimoto's issuer list and each issuer's OpenID4VCI metadata into hosted credential types, signs the Reference Wallet in at eSignet (automatically with a demo UIN and the static OTP, or through the person's browser and the redirect app on port 3004), and creates DCQL requests at Collab's Inji Verify 1.0. Declared under `environments:` in the parties file. See [Hosted environments](#hosted-environments-mosip-collab). |
 | Run orchestrator | [apps/bff/src/runs](../apps/bff/src/runs) | Drives a run through issue → request → present → verify, waits for a human wallet when needed, applies tamper presets, decides PASS/FAIL against the expectation and writes the plain-English explanation and report. |
 | Core | [packages/core](../packages/core) | Shared types and pure logic: the Studio model, PE and DCQL builders and matcher, SD-JWT/JWT/offer decoders, secret masking. Used by both the BFF and the UI. |
 | Inji Certify | `injistack/inji-certify-with-plugins:0.14.0` | Issuer. Configuration only: [infra/certify](../infra/certify). |
@@ -166,6 +167,33 @@ flowchart LR
   issuer-api, verifier-api and wallet-api 1.0.0 with the configuration in
   [infra/external](../infra/external/README.md). The demo issuer's P-256 key and self-signed certificate are
   generated on first start and kept out of git.
+
+## Hosted environments (MOSIP Collab)
+
+The playground runs locally and connects *out* to MOSIP Collab; nothing is deployed there. For a Collab issuer
+the Reference Wallet uses OpenID4VCI **authorization code** instead of the pre-authorized code:
+
+```mermaid
+sequenceDiagram
+  participant W as Reference Wallet
+  participant E as eSignet (Collab)
+  participant C as Inji Certify 1.0 (Collab)
+  participant V as Inji Verify 1.0 (Collab)
+  W->>C: issuer metadata
+  W->>E: authorization request (PKCE S256)
+  Note over W,E: auto: demo UIN + OTP 111111 through eSignet's API<br/>interactive: the person signs in; eSignet redirects to localhost:3004/redirect
+  E-->>W: authorization code
+  W->>E: token request (private_key_jwt, wallet-demo key)
+  W->>C: nonce, then credential request with a proof JWT
+  C-->>W: credential (ldp_vc, dc+sd-jwt or mso_mdoc)
+  W->>V: signed DCQL request fetched by request_uri, then the submission
+```
+
+Everything goes through the same recorder as local traffic (marked *hosted Inji*), so the inspector, report and
+sequence diagram work unchanged. Details that differ from the local lane: the proof algorithm is chosen from
+the issuer's advertised list (`Ed25519` or `EdDSA`, gap G39); mDoc proofs carry a `jwk` header; Verify 1.0 takes
+DCQL only. If Collab or the test key is unavailable, hosted types are listed as not collectable and the local
+bundle is unaffected.
 
 ## A run, end to end
 
