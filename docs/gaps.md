@@ -87,6 +87,8 @@ rows as expected, 8 known gaps (T6, T10, T17, and X9 = G33, X10 = G32, X11 and X
 On 19 Oct 2026 runs switched to Inji Verify's **signed** requests by default (its did:web as `client_id`, the
 request fetched by `request_uri`); M14, M15 and X7 keep the by-value form. The matrix has 51 rows: 42 as
 expected, 9 known gaps (the eight above plus X18 = G35) and 0 unexpected.
+On 23 Oct 2026, with MOSIP Collab added (20 C rows): 71 rows, 58 as expected, 13 known gaps (the nine above plus
+C3 = G36, C7 = G41, C15 = G15 and C18 = G11) and 0 unexpected.
 
 ## Responsible disclosure
 
