@@ -11,6 +11,7 @@ In it you can:
 - **design** your own issuer and credential types;
 - **issue** them through a real Inji Certify;
 - **hold** them in a wallet;
+- **connect to MOSIP Collab**, MOSIP's hosted sandbox: its issuers, eSignet and Inji Verify 1.0;
 - **present** them to a real Inji Verify or an independent verifier;
 - **bring in parties that are not Inji** (other issuers, wallets and verifiers) by declaring them in a config
   file, with no code changes;
@@ -52,9 +53,10 @@ minutes to boot. Demo issuers and credential types are created on first start.
    add fields, and choose a format (W3C JSON-LD with VCDM 1.1 or 2.0, or IETF SD-JWT VC) and a signature suite.
    The panel on the right shows exactly what Inji Certify will receive. Save: the playground pushes it to
    Certify's credential-configuration API, and Certify advertises it straight away.
-2. **Run → Start run.** Choose your type, the **Reference Wallet** and **Inji Verify**. The transit line fills as
-   the credential is issued (OpenID4VCI, pre-authorized code), requested (OpenID4VP with Presentation Exchange),
-   presented and verified.
+2. **Run → Start run.** Pick the three parties in the **Issuer → Wallet → Verifier** columns: your type, the
+   **Reference Wallet** and **Inji Verify**. The transit line fills as the credential is issued (OpenID4VCI,
+   pre-authorized code), requested (OpenID4VP with Presentation Exchange, signed by Inji Verify), presented and
+   verified, and the result says **Valid**, **Invalid** or **Valid but expired** (try *Library Pass (expired)*).
 3. **Open the protocol inspector** on the run page. Every message is there in order, decoded and labelled. You
    can see the credential offer, the token exchange, the proof JWT over `c_nonce`, the issued credential, the
    presentation definition, the `vp_token` and Verify's result. Secrets are masked; *Reveal tokens* works on
@@ -69,16 +71,16 @@ minutes to boot. Demo issuers and credential types are created on first start.
 | **Design an issuer and credential types** | *Issuer Studio*. JSON-LD (VCDM 1.1 / 2.0, eight signature suites) or SD-JWT (ES256, EdDSA, RS256, ES256K), with optional revocation, selective disclosure per field, a hard-coded expiry, and branding. |
 | **Issue to the Reference Wallet** | *Run* with wallet *Reference Wallet*, or *Wallet → Collect a credential* with any `openid-credential-offer://` link (also from other issuers). |
 | **Issue to a phone** | *Run* with wallet *Inji Wallet (mobile)* in tunnel mode (below): scan the offer QR, or tap *Open in wallet app* on a phone. |
-| **Present with OpenID4VP** | *Run* → *How the holder presents: OpenID4VP request*, with *Query language* Presentation Exchange or DCQL and *Ask only for* to limit the claims. |
+| **Present with OpenID4VP** | *Run* → *How the holder presents: OpenID4VP request*, with *Query language* Presentation Exchange or DCQL and *The verifier asks only for* to limit the claims. With Inji Verify, *Signed, by reference* (default: Verify's did:web as `client_id`, a small `request_uri` QR) or *Unsigned, by value* (gap G25). |
 | **Present by direct share** | *Run* → *Direct share*: the credential is compressed with PixelPass, as in a QR code, and checked by Inji Verify. |
-| **Verify with Inji's own SDK** | *Verifier desk → Ask a wallet*: Inji Verify's React SDK shows a request QR for any wallet; *Check a credential's QR code* scans or uploads one. *One question, two query languages* shows the same request as PE and DCQL side by side. |
+| **Verify with Inji's own SDK** | *Verifier desk → Ask a wallet*: Inji Verify's React SDK shows a request QR for any wallet (cross-device); opened on a phone, the SDK's same-device button opens the wallet app through an `openid4vp://` deep link. *Check a credential's QR code* scans or uploads one. *One question, two query languages* shows the same request as PE and DCQL side by side. |
 | **Answer any verifier** | *Wallet → Answer a verifier*: paste an `openid4vp://` request from Inji Verify, the Reference Verifier or another verifier. |
 | **Tamper on purpose** | *Make the wallet misbehave*: alter a claim, answer with a stale nonce, drop the holder proof, present someone else's credential, or forge an SD-JWT with a self-signed certificate. A correct verifier rejects all five. |
-| **Compare results** | *Results*: the matrix (latest run per combination) and the full history, filterable. Every run has a Markdown and JSON report with claim values redacted. |
+| **Compare results** | *Results*: the matrix (latest run per credential, wallet, verifier and presentation style; documented upstream gaps are marked with their id) and the full history, filterable. Every run has a Markdown and JSON report with claim values redacted. |
 | **Claimed vs proven** | *Capabilities*: what Certify and Verify advertise, against what runs here have shown. The **QR Lab** measures any credential against Certify's and Inji Verify's QR limits, with and without PixelPass. |
 | **Watch everything** | *Live traffic*: every message through the gateway, as it happens. The **Decoder** takes any JWT, SD-JWT, offer, request or PixelPass string and explains it. |
 | **Use parties that are not Inji** | *Parties* lists every issuer, wallet and verifier, built in or from `infra/parties.yaml`. Their credential types appear in *Run* and the *Verifier desk*, their wallets and verifiers in *Run*, and *Wallet → Collect from an external issuer* gets a credential from them (next section). |
-| **Run the whole matrix** | `cd apps/bff && npx tsx scripts/matrix.ts` (needs `pnpm install` once): 31 journeys with Inji and the reference parties, plus 17 with external parties when the external lab is running. No human needed. |
+| **Run the whole matrix** | `cd apps/bff && npx tsx scripts/matrix.ts` (needs `pnpm install` once): 33 journeys with Inji and the reference parties, plus 18 with external parties when the external lab is running. No human needed. |
 
 | | | |
 |---|---|---|
@@ -112,6 +114,34 @@ phones.
 
 ![The Parties page: built-in and external wallets, issuers and verifiers](docs/screenshots/parties.png)
 
+## Connecting to MOSIP Collab
+
+MOSIP's hosted sandbox, **Collab**, is the playground's primary target (AMA 4): the playground runs on your
+machine and connects to Collab's Inji Certify issuers, eSignet, Mimoto and **Inji Verify 1.0**. The local bundle
+is what adds pre-authorized issuance, tampering and CI. Nothing needs configuring: `./playground.sh up` fetches
+MOSIP's published test client key (`wallet-demo`) into `infra/collab/keys/`, and the **Collab** dot in the header
+turns green when the sandbox is reachable.
+
+- **Run → "MOSIP Collab, end to end"** (or pick any *MOSIP Collab* issuer and *Inji Verify 1.0 (MOSIP Collab)*).
+  Collab only issues with the **authorization code flow**, so the Reference Wallet signs in at eSignet itself with
+  one of MOSIP's public demo UINs and the static OTP `111111`, then collects and presents the credential. Choose
+  *I'll sign in myself* to do the eSignet step in your own browser instead (redirect `http://localhost:3004`).
+- **Wallet → Collect from MOSIP Collab** collects any Collab credential (Mock VC in VCDM 1.1 and 2.0 and SD-JWT,
+  Farmer, Land registry, the mDL as `mso_mdoc`, and more). Next to every sign-in, the **test data** panel lists
+  the demo UINs, the OTP and how to register your own UIN.
+- **Phone:** Collab's issuers need no tunnel. Install **Inji Wallet 1.0.0-alpha.1**
+  ([Android APK](https://drive.google.com/drive/folders/1gBjFSdpjxU4bsZi7-xS59W1-EIFKrkS8),
+  [iOS TestFlight](https://testflight.apple.com/join/7FTAdjLe)), choose the issuer in the app, sign in with a demo
+  UIN and OTP `111111`, then present to Collab's Inji Verify. This is the path Swati described at AMA 4; the playground's automated runs use the Reference Wallet instead, and a physical phone run is still to be recorded.
+- **What it found there:** Collab's Verify 1.0 fixes G19 and G20 but still accepts a forged SD-JWT (G11), and
+  reads DCQL claim paths differently from OpenID4VP 1.0 (G36); Collab's Land registry credentials cannot be
+  verified by anyone (G41). See [docs/gaps.md](docs/gaps.md) (G36–G41).
+- Inji Verify 1.0 speaks **DCQL only**, and **does not support `mso_mdoc`** (AMA 4).
+![A run from Collab's mock issuer through the Reference Wallet to Collab's Inji Verify 1.0](docs/screenshots/collab-run.png)
+
+- Collab is shared and can change at any time. Findings are dated 23 Oct 2026 and name the versions seen. With no
+  internet, the matrix skips the C rows and everything local still works.
+
 ## Using a phone (Inji Wallet)
 
 A phone wallet needs a public HTTPS URL to reach your computer. The playground can open a Cloudflare quick
@@ -122,9 +152,10 @@ tunnel without an account:
 ./playground.sh doctor                         # checks the public URL too
 ```
 
-- Install **Inji Wallet** on an Android phone. The APK is in the
-  [MOSIP Collab guide's folder](https://drive.google.com/drive/folders/1SRHhFxQBNfOc-cdPU8VlKecIdc-WkuGZ);
-  GitHub releases do not include one. Note the version you install.
+- Install **Inji Wallet 1.0.0-alpha.1**, the version MOSIP points to at collab.mosip.net: the
+  [Android APK](https://drive.google.com/drive/folders/1gBjFSdpjxU4bsZi7-xS59W1-EIFKrkS8) or the
+  [iOS TestFlight](https://testflight.apple.com/join/7FTAdjLe). GitHub releases do not include one. Whether this
+  alpha can collect a credential from the bundled Certify 0.14 has not been tested on a physical phone.
 - Start a run with wallet *Inji Wallet (mobile)* and scan the offer QR with the app, then the presentation
   request QR. The run waits up to 10 minutes for the phone and attributes its messages to the run, so the
   inspector fills just as it does for the Reference Wallet.
@@ -135,10 +166,10 @@ tunnel without an account:
 
 ## What it found
 
-The matrix runs **31 journeys** against the real Inji Certify 0.14.0 and Inji Verify 0.18.2. Locally, over a
-tunnel and on fresh volumes, the result is the same: **28 behave as expected, 3 are known gaps and 0 are
-unexpected**. With the external lab, **17 more journeys** mix in walt.id's issuer, wallet and verifier: 12 behave
-as expected and 5 are known gaps (48 in all, 0 unexpected).
+The matrix runs **71 journeys**: 33 against the real Inji Certify 0.14.0 and Inji Verify 0.18.2, 18 more that mix in
+walt.id's issuer, wallet and verifier (the external lab), and 20 against **MOSIP Collab** (Inji 1.0.0-alpha.1).
+**58 behave as expected, 13 are known gaps and 0 are unexpected** (23 Oct 2026). The first 31 local rows also gave
+the same verdicts over a tunnel and on fresh volumes (11 Oct).
 
 | | Credential | Inji Verify 0.18.2 | Reference Verifier |
 |---|---|---|---|
@@ -149,15 +180,30 @@ as expected and 5 are known gaps (48 in all, 0 unexpected).
 | Altered claim, someone else's credential | both | ✅ rejected | ✅ rejected |
 | Stale nonce, no holder proof, forged SD-JWT | SD-JWT | ❌ **accepted** | ✅ rejected |
 | Honest presentation of an **external issuer's** SD-JWT (walt.id) | SD-JWT | ✅ accepted | ✅ accepted |
-| An **external wallet** (walt.id) presenting | SD-JWT | ✅ accepted | ❌ rejected: its submission ids break PE (G33) |
+| An **external wallet** (walt.id) presenting | SD-JWT | ✅ accepted by value; ❌ cannot fetch a signed request (G35) | ❌ rejected: its submission ids break PE (G33) |
+
+On **MOSIP Collab** (Inji Verify 1.0.0-alpha.1, DCQL only):
+
+| | Credential | Result |
+|---|---|---|
+| Honest presentation of Collab's own credentials | JSON-LD 1.1 / 2.0, SD-JWT, Farmer | ✅ accepted |
+| Presentation Exchange request | JSON-LD | ✅ refused (`UNKNOWN_FIELD`): the mirror of the 0.18.2 gap G22 |
+| DCQL claim path written as OpenID4VP 1.0 says | JSON-LD | ❌ **rejected** (G36); Inji's own path style is accepted |
+| Stale nonce, no holder proof, altered claim, someone else's credential | SD-JWT, JSON-LD | ✅ rejected (G19 and G20 are fixed) |
+| SD-JWT re-signed with a self-signed certificate | SD-JWT | ❌ **accepted** (G11 is still there) |
+| Collab's Land registry credential | JSON-LD 2.0 | ❌ cannot be verified: its signing key is not in its DID document (G41) |
+| Collab credentials at the bundled Verify 0.18.2, and the bundled Certify 0.14 SD-JWT at Collab's Verify | both | ✅ accepted |
 
 The full report is [docs/interop-report.md](docs/interop-report.md). [docs/gaps.md](docs/gaps.md) lists
-**34 gaps** with evidence and steps to reproduce. The headlines:
+**41 gaps** with evidence and steps to reproduce. The headlines:
 
 - **The version split is real.** Inji Verify 0.x accepts Presentation Exchange only. A DCQL request (the
   OpenID4VP 1.0 shape that Verify 1.0 uses) fails with a misleading `BOTH_ID_AND_PD_CANNOT_BE_NULL` (G22).
 - **Three SD-JWT verification weaknesses in Inji Verify 0.18.2** (G11, G19, G20), each reproducible with one
-  tamper preset. They are being reported to MOSIP privately.
+  tamper preset. The 1.0.0-alpha.1 on Collab fixes two and still has G11. They are being reported to MOSIP
+  privately.
+- **Collab's Verify 1.0 reads DCQL claim paths differently from OpenID4VP 1.0** (G36), so a spec-written request
+  rejects honest presentations.
 - **The reference setups do not work out of the box.** At the released tags, broken database scripts and
   configuration stop every OpenID4VP submission, revocable credentials and pre-authorized issuance (G3, G4,
   G5), and Certify's keys are not persisted (G18). The bundle fixes each one in configuration only.
@@ -203,13 +249,15 @@ flowchart LR
 
 | PS2 task | Status |
 |---|---|
-| Run the Inji stack end to end in one Docker Compose bundle | ✅ Certify + Verify + playground; Mimoto / Inji Web not bundled |
+| **Connect to the MOSIP Collab services (the primary target, AMA 4)** | ✅ Collab's Certify issuers, eSignet and Inji Verify 1.0 as parties; Collab's Mimoto supplies the issuer list. [Section above](#connecting-to-mosip-collab) |
+| Run the Inji stack end to end in one Docker Compose bundle (the add-on) | ✅ Certify + Verify + playground; Mimoto / Inji Web not bundled (Collab's are used) |
 | Reverse proxy so a phone can reach it | ✅ one recording gateway, `./playground.sh tunnel` |
-| Issuer → Wallet → Verifier UI, implementation chosen per section | ✅ |
+| Issuer → Wallet → Verifier UI, implementation chosen per section | ✅ three columns on the *Run* page |
 | Create your own issuer and credential types | ✅ Issuer Studio, live in Certify |
-| Issue over OpenID4VCI: offer QR on desktop, deep link on a phone | ✅ |
+| Issue over OpenID4VCI: offer QR on desktop, deep link on a phone | ✅ pre-authorized code (bundled Certify) |
+| **Both** pre-authorized and authorization-code issuance, with the test data next to the sign-in (AMA 4) | ✅ authorization code (PKCE, `private_key_jwt`) against Collab, with the demo UINs and OTP beside it |
 | Wallet-initiated issuance (Inji Web) | ☐ not yet |
-| Present over OpenID4VP; Valid / Invalid / Valid-but-expired | ✅ cross-device QR (with a tappable `openid4vp://` link on a phone); PE and DCQL. A dedicated same-device mode is not in the UI yet |
+| Present over OpenID4VP; Valid / Invalid / Valid-but-expired | ✅ cross-device QR, signed by Inji Verify; same-device deep link from the Verifier desk on a phone (Inji Verify SDK) and a tappable `openid4vp://` link on run pages; PE and DCQL. The result names the state: Valid, Invalid, Valid but expired |
 | Direct share with PixelPass | ✅ |
 | Protocol inspector with raw payloads, QR contents and the mechanism used | ✅ plus a live sequence diagram |
 | Two formats end to end: W3C JSON-LD (VCDM 1.1 and 2.0) and IETF SD-JWT VC | ✅ |
@@ -225,7 +273,8 @@ flowchart LR
 | History dashboard | ✅ |
 | Automated CI | ✅ CI and a nightly matrix workflow |
 | Gap write-up | ✅ [gaps.md](docs/gaps.md); public issues to be linked |
-| mDoc / mDL, deployment to Collab | ☐ not planned for this round |
+| mDoc / mDL | ◐ Collab's mDL issuer's `mso_mdoc` is collected by the Reference Wallet; no verifier here can check an mDoc (Inji Verify does not support it) |
+| Deployment to Collab | ✅ not needed: the playground connects *to* Collab |
 
 ## Versions and known limitations
 
@@ -234,20 +283,27 @@ flowchart LR
 | Inji Certify | 0.14.0 (`injistack/inji-certify-with-plugins`) |
 | Inji Verify service / React SDK | 0.18.2 / 0.18.1 |
 | PixelPass | 0.8.0 |
+| MOSIP Collab (hosted, checked 23 Oct 2026) | Inji Verify 1.0.0-alpha.1; Certify issuers on the 1.0 line and the 0.x line; eSignet and Mimoto |
 | External lab (optional) | walt.id issuer-api, verifier-api, wallet-api 1.0.0 |
-| OpenID4VCI / OpenID4VP | draft 13 / draft 23 with PE (Inji Verify); PE and DCQL (Reference parties) |
+| OpenID4VCI / OpenID4VP | draft 13 / draft 23 with PE (bundled Inji Verify); 1.0 / 1.0 with DCQL (Collab); both (Reference parties) |
 
 - **One machine, one person.** The API has no login; it is safe because it is reachable only from this
   computer. See [security-privacy.md](docs/security-privacy.md) before hosting it anywhere else.
 - **Use synthetic data only.** Nothing here is built for real identities.
 - **Phone runs** are wired end to end (tunnel, did:web, attribution of the phone's messages), but the matrix
   covers them with the Reference Wallet rather than a physical phone.
-- **Inji Verify 1.0 and Inji Web** are not in the bundle yet, so DCQL is exercised only against the Reference
-  Verifier.
+- **Inji Verify 1.0 and Inji Web** are not in the local bundle (no 1.0 image is released); DCQL runs against
+  Collab's Verify 1.0 and the Reference Verifier.
+- **Collab is shared and can change.** Its findings are dated 23 Oct 2026; the C rows need internet and skip
+  themselves without it. The Reference Wallet signs in with MOSIP's public demo UINs, never real identities.
+- **A phone run with Inji Wallet 1.0.0-alpha.1 has not been recorded yet.** As far as we could tell, Collab has no client for
+  authorization-code offers scanned from outside its own app, so the playground shows the sign-in link, QR and
+  test data rather than a scannable offer for Collab issuers.
+- **mDoc** can be collected but not verified (no verifier supports `mso_mdoc`).
 - **External parties** in the lab are reachable only inside Docker, so phone runs use Inji Certify. The parties
   file can describe internet-facing parties too; their traffic is recorded by the playground, but a phone's
   own calls to them are not (the run asks you to press *Continue*).
-- At phone width some pages shift as data loads ([test-results.md](docs/test-results.md#ui-checks)).
+- Layout shift is below 0.01 on every page at 390 px and 1440 px ([test-results.md](docs/test-results.md#ui-checks)).
 
 ## Development
 
@@ -264,7 +320,7 @@ the playground container first, since both use port 8080):
 docker stop inji-playground-playground-1
 docker compose --env-file .env -f infra/compose.yml -f infra/compose.dev.yml up -d   # Postgres, Certify, Verify on 127.0.0.1
 cd apps/bff && DATABASE_URL=postgres://postgres:<POSTGRES_PASSWORD from .env>@127.0.0.1:5434/playground \
-  EVENT_ENCRYPTION_KEY=<from .env> npx tsx src/main.ts                               # API + gateway on :8080
+  EVENT_ENCRYPTION_KEY=<from .env> VERIFY_DID=<from .env> npx tsx src/main.ts                               # API + gateway on :8080
 cd apps/ui && npx vite                                                               # UI with hot reload, proxied to :8080
 ```
 
