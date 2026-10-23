@@ -1,6 +1,7 @@
 import express from "express";
 import { catalogFromStudio, externalTypeId, type CatalogType } from "@playground/core";
 import type { Recorder } from "../gateway/recorder.js";
+import type { HostedService } from "../hosted/service.js";
 import type { PartiesService } from "../parties/service.js";
 import type { Orchestrator } from "../runs/orchestrator.js";
 import type { Store } from "../store/types.js";
@@ -10,16 +11,17 @@ import { ApiError, h } from "./errors.js";
  * The parties registry, as the UI reads it. Step definitions are left out on purpose: their bodies can hold
  * an external issuer's signing key or a wallet password from the parties file.
  */
-export function partiesApi(parties: PartiesService, store: Store, orchestrator: Orchestrator, recorder: Recorder) {
+export function partiesApi(parties: PartiesService, store: Store, orchestrator: Orchestrator, recorder: Recorder, hosted: HostedService) {
   const r = express.Router();
 
   r.get("/parties", h(async (_req, res) => {
     const { file, loadedAt, errors, data } = parties.loaded;
+    const [partyHealth, hostedHealth] = await Promise.all([parties.health(), hosted.health()]);
     res.json({
       file,
       loadedAt,
       errors,
-      health: await parties.health(),
+      health: { ...partyHealth, ...hostedHealth },
       issuers: data.issuers.map((i) => ({
         id: i.id,
         name: i.name,
@@ -31,16 +33,17 @@ export function partiesApi(parties: PartiesService, store: Store, orchestrator: 
         trust: { certificates: i.trust.certificates.length, jwks: i.trust.jwks.length, jwksUri: i.trust.jwksUri },
         types: parties.catalog().filter((t) => t.issuerId === i.id),
       })),
-      verifiers: parties.verifiers(),
+      verifiers: [...parties.verifiers(), ...hosted.verifiers()],
       wallets: parties.wallets().map((w) => ({ ...w, automated: w.origin === "external" && !w.interactive })),
+      environments: hosted.summary(),
     });
   }));
 
-  /** Every credential type a run can use: Studio types (issued by Inji Certify) and external ones. */
+  /** Every credential type a run can use: Studio types (the bundled Certify), external ones, and hosted Inji issuers' types. */
   r.get("/catalog", h(async (_req, res) => {
     const issuers = new Map((await store.listIssuers()).map((i) => [i.slug, i.name]));
     const studio: CatalogType[] = (await store.listTypes()).map((t) => catalogFromStudio(t, issuers.get(t.issuerSlug) ?? t.issuerSlug));
-    res.json([...studio, ...parties.catalog()]);
+    res.json([...studio, ...parties.catalog(), ...hosted.catalog()]);
   }));
 
   /** An offer from an external issuer, outside any run (the Wallet page's "collect" buttons). */

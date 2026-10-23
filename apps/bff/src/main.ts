@@ -8,6 +8,7 @@ import { Sealer } from "./util/sealed.js";
 import { attachWebSocket } from "./ws.js";
 import { isPublicHostRequest } from "./gateway/exposure.js";
 import { seedDemo } from "./studio/seed.js";
+import { redirectApp } from "./api/hosted.js";
 
 const config = loadConfig();
 let sealer: Sealer;
@@ -20,11 +21,20 @@ else {
 const store = config.databaseUrl ? new PgStore(config.databaseUrl, sealer) : new MemoryStore();
 await store.init();
 
-const { app, studio, recorder, orchestrator, certify } = createApp(config, store);
+const { app, studio, recorder, orchestrator, certify, hosted } = createApp(config, store);
 const server = createServer(app);
 // The live feed carries every recorded message title, so like the API it stays off the public URL.
 attachWebSocket(server, recorder, orchestrator, (req) => config.publicUi || !isPublicHostRequest(config, req));
 server.listen(config.port, config.host, () => log.info({ port: config.port, publicBaseUrl: config.publicBaseUrl, store: config.databaseUrl ? "postgres" : "memory" }, "playground listening"));
+
+// Hosted Inji environments (MOSIP Collab): discover their issuers in the background, and listen for eSignet's redirect.
+hosted.start();
+let redirectServer: ReturnType<typeof createServer> | undefined;
+if (config.oauthRedirectPort && hosted.environments.length) {
+  redirectServer = createServer(redirectApp(hosted));
+  redirectServer.on("error", (e) => log.warn({ err: (e as Error).message, port: config.oauthRedirectPort }, "the OAuth redirect port is unavailable; signing in yourself at eSignet will not return to the playground"));
+  redirectServer.listen(config.oauthRedirectPort, config.host, () => log.info({ port: config.oauthRedirectPort }, "listening for eSignet's redirect"));
+}
 
 // Once Certify is reachable: seed demo content on a fresh install, then make Certify match our store.
 void (async () => {
@@ -45,6 +55,8 @@ setInterval(purge, 3600_000).unref();
 
 const shutdown = () => {
   server.close();
+  redirectServer?.close();
+  hosted.stop();
   void store.close().finally(() => process.exit(0));
 };
 process.on("SIGTERM", shutdown);

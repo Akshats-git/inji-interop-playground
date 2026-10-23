@@ -49,12 +49,13 @@ export function publicRoutes(studio: StudioService, store: Store) {
   // SD-JWT VC type metadata, at the type's vct URL (readable form, or the short form used on long hosts).
   const typeMetadata = (t: CredentialType) => ({ vct: vctFor(t.syncedBaseUrl, t), name: t.displayName, description: t.description, claims: t.fields.map((f) => ({ path: [f.name], display: [{ lang: "en", label: f.label }] })) });
   r.get("/pub/issuers/:slug/types/:type", async (req, res) => {
-    const t = (await store.listTypes(req.params.slug)).find((x) => x.typeName === req.params.type);
+    // A type name can exist as JSON-LD and as SD-JWT; only the SD-JWT one has a vct.
+    const t = (await store.listTypes(req.params.slug)).filter((x) => x.typeName === req.params.type).sort((a, b) => Number(b.format === "vc+sd-jwt") - Number(a.format === "vc+sd-jwt"))[0];
     if (!t) return void res.sendStatus(404);
     res.json(typeMetadata(t));
   });
   r.get("/pub/vct/:id", async (req, res) => {
-    const t = (await store.listTypes()).find((x) => shortTypeId(x.issuerSlug, x.typeName) === req.params.id);
+    const t = (await store.listTypes()).filter((x) => shortTypeId(x.issuerSlug, x.typeName) === req.params.id).sort((a, b) => Number(b.format === "vc+sd-jwt") - Number(a.format === "vc+sd-jwt"))[0];
     if (!t) return void res.sendStatus(404);
     res.json(typeMetadata(t));
   });

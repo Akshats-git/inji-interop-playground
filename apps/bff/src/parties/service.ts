@@ -10,6 +10,7 @@ import YAML from "yaml";
 import type { z } from "zod";
 import type { JWK } from "jose";
 import {
+  EnvironmentInput,
   ExternalIssuerInput,
   ExternalVerifierInput,
   ExternalWalletInput,
@@ -78,7 +79,7 @@ export interface LoadedParties {
   errors: string[];
 }
 
-const EMPTY: PartiesFile = { version: 1, issuers: [], verifiers: [], wallets: [] };
+const EMPTY: PartiesFile = { version: 1, issuers: [], verifiers: [], wallets: [], environments: [] };
 
 /**
  * Read the parties file. Each issuer, verifier and wallet is checked on its own, so one broken entry (a typo,
@@ -98,7 +99,7 @@ export function loadPartiesFile(file: string | undefined, env: NodeJS.ProcessEnv
   const errors: string[] = [];
   const top = PartiesFile.pick({ version: true }).safeParse({ version: raw.version });
   if (!top.success) errors.push(`version: ${top.error.issues[0]?.message}`);
-  const section = <T,>(key: "issuers" | "verifiers" | "wallets", schema: z.ZodType<T, z.ZodTypeDef, unknown>): T[] => {
+  const section = <T,>(key: "issuers" | "verifiers" | "wallets" | "environments", schema: z.ZodType<T, z.ZodTypeDef, unknown>): T[] => {
     const list = raw[key] ?? [];
     if (!Array.isArray(list)) {
       errors.push(`${key}: must be a list.`);
@@ -117,15 +118,21 @@ export function loadPartiesFile(file: string | undefined, env: NodeJS.ProcessEnv
     });
     return out;
   };
-  const data: PartiesFile = { version: 1, issuers: section("issuers", ExternalIssuerInput), verifiers: section("verifiers", ExternalVerifierInput), wallets: section("wallets", ExternalWalletInput) };
+  const data: PartiesFile = {
+    version: 1,
+    issuers: section("issuers", ExternalIssuerInput),
+    verifiers: section("verifiers", ExternalVerifierInput),
+    wallets: section("wallets", ExternalWalletInput),
+    environments: section("environments", EnvironmentInput),
+  };
   return { file, loadedAt, data, errors: [...errors, ...partiesProblems(data)] };
 }
 
 /** The built-in wallets, in the shape the registry lists. */
 export const BUILTIN_WALLETS: WalletInfo[] = [
   { id: "reference-wallet", label: WALLETS["reference-wallet"].label, origin: "builtin", kind: "headless", interactive: false, supportsTamper: true, supportsDirectShare: true, runnable: true, note: "Automatic, no phone needed.", description: WALLETS["reference-wallet"].note, formats: ["ldp_vc", "vc+sd-jwt"], protocols: ["OpenID4VCI draft 13 (pre-authorized code)", "OpenID4VP draft 23 (PE)", "OpenID4VP 1.0 (DCQL)"] },
-  { id: "inji-wallet", label: WALLETS["inji-wallet"].label, origin: "builtin", kind: "mobile", interactive: true, supportsTamper: false, supportsDirectShare: true, runnable: true, note: "Scan with the Inji app; needs a public URL.", description: WALLETS["inji-wallet"].note, software: "Inji Wallet (MOSIP)", homepage: "https://docs.inji.io/inji-wallet/inji-mobile", install: { android: "https://drive.google.com/drive/folders/1SRHhFxQBNfOc-cdPU8VlKecIdc-WkuGZ" }, formats: ["ldp_vc", "vc+sd-jwt", "mso_mdoc"], protocols: ["OpenID4VCI", "OpenID4VP (PE)"] },
-  { id: "inji-web", label: WALLETS["inji-web"].label, origin: "builtin", kind: "web", interactive: true, supportsTamper: false, supportsDirectShare: true, runnable: false, note: "Wallet-initiated issuance only; not part of runs.", description: WALLETS["inji-web"].note, software: "Inji Web + Mimoto (MOSIP)", homepage: "https://docs.inji.io/inji-wallet/inji-web", formats: ["ldp_vc", "vc+sd-jwt"], protocols: ["OpenID4VCI (authorization code)"] },
+  { id: "inji-wallet", label: WALLETS["inji-wallet"].label, origin: "builtin", kind: "mobile", interactive: true, supportsTamper: false, supportsDirectShare: true, runnable: true, note: "Scan with the Inji app. Bundled parties need a public URL; MOSIP Collab's do not.", description: WALLETS["inji-wallet"].note, software: "Inji Wallet 1.0.0-alpha.1 (MOSIP)", homepage: "https://docs.inji.io/inji-wallet/inji-mobile/functional-overview/sandbox-details/inji-setup-guide", install: { android: "https://drive.google.com/drive/folders/1gBjFSdpjxU4bsZi7-xS59W1-EIFKrkS8", ios: "https://testflight.apple.com/join/7FTAdjLe" }, formats: ["ldp_vc", "vc+sd-jwt", "dc+sd-jwt", "mso_mdoc"], protocols: ["OpenID4VCI (pre-authorized and authorization code)", "OpenID4VP (PE and DCQL)"] },
+  { id: "inji-web", label: WALLETS["inji-web"].label, origin: "builtin", kind: "web", interactive: true, supportsTamper: false, supportsDirectShare: true, runnable: false, note: "Wallet-initiated issuance only; not part of runs.", description: WALLETS["inji-web"].note, software: "Inji Web 1.0.0-alpha.1 + Mimoto on MOSIP Collab", homepage: "https://docs.inji.io/inji-wallet/inji-web/overview", install: { web: "https://injiweb.collab.mosip.net/" }, formats: ["ldp_vc", "vc+sd-jwt", "dc+sd-jwt"], protocols: ["OpenID4VCI (authorization code)", "OpenID4VP"] },
   { id: "external-wallet", label: WALLETS["external-wallet"].label, origin: "builtin", kind: "mobile", interactive: true, supportsTamper: false, supportsDirectShare: false, runnable: true, note: "Any OpenID4VCI wallet that scans offers.", description: WALLETS["external-wallet"].note, protocols: ["OpenID4VCI", "OpenID4VP"] },
 ];
 
@@ -161,6 +168,11 @@ export class PartiesService {
 
   get issuers() {
     return this.loaded.data.issuers;
+  }
+
+  /** Hosted Inji deployments (e.g. MOSIP Collab); the HostedService discovers their issuers. */
+  get environments() {
+    return this.loaded.data.environments;
   }
 
   // --- registry ----------------------------------------------------------------------------------------------
