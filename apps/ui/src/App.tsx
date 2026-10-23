@@ -54,6 +54,11 @@ function SystemStatus() {
       <span className="flex items-center gap-1.5" title="Inji Verify 0.18.2">
         {dot(s?.services.verify)} Verify
       </span>
+      {s?.hosted.map((h) => (
+        <NavLink key={h.id} to="/parties#hosted" className="hidden items-center gap-1.5 sm:flex" title={`${h.name}: ${h.issuers} issuers, ${h.types} credential types${h.reachable ? "" : " (not reachable)"}`}>
+          {dot(h.reachable)} {h.name.replace(/^MOSIP /, "")}
+        </NavLink>
+      ))}
       {s && s.parties.configured > 0 && (
         <NavLink to="/parties" className="hidden items-center gap-1.5 sm:flex" title={`${s.parties.reachable} of ${s.parties.configured} external parties reachable`}>
           {dot(s.parties.reachable === s.parties.configured)} External {s.parties.reachable}/{s.parties.configured}
@@ -128,7 +133,8 @@ export function App() {
           </ul>
         </nav>
       </header>
-      <main id="main" tabIndex={-1} className="mx-auto max-w-[1320px] px-4 py-6 outline-none sm:px-6 sm:py-8">
+      {/* At least a screen tall, so the footer starts below the fold and content arriving never shoves it around. */}
+      <main id="main" tabIndex={-1} className="mx-auto min-h-svh max-w-[1320px] px-4 py-6 outline-none sm:px-6 sm:py-8">
         <Suspense fallback={<p className="text-muted">Loading…</p>}>
           <Routes>
             <Route path="/" element={<RunBuilderPage />} />

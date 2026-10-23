@@ -9,7 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "echo \"ui: covered by Playwright e2e\"",
+    "test": "echo \"ui: no unit tests; see docs/test-results.md#ui-checks for the browser checks\"",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { OpenID4VPVerification, QRCodeVerification } from "@injistack/react-inji-verify-sdk";
-import { explainMapping, toDcql, toPresentationDefinition, validateDcql, type CatalogType, type PeDialect, type QuerySpec } from "@playground/core";
+import { explainMapping, toDcql, toPresentationDefinition, validateDcql, type CatalogType, type DcqlPathStyle, type PeDialect, type QuerySpec } from "@playground/core";
 import { api } from "../lib/api";
 import { formatLabel } from "../lib/format";
 import { JsonView } from "../components/JsonView";
@@ -11,6 +11,8 @@ import { Button, cx, Empty, Field, Notice, PageHeader, Panel, Select, StatusMark
 /** The SDK talks to Inji Verify through the playground's recording gateway, so every call shows up in Live traffic. */
 const VERIFY_SERVICE_URL = "/pub/verify/v1/verify";
 const CLIENT_ID = "inji-playground";
+/** The SDK's same-device flow opens openid4vp:// on this device; on a desktop it would need a web wallet. */
+const IS_PHONE = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 function specFor(t: CatalogType, claims: string[]): QuerySpec {
   return {
@@ -18,6 +20,7 @@ function specFor(t: CatalogType, claims: string[]): QuerySpec {
     purpose: `Show your ${t.displayName}`,
     format: t.format,
     typeName: t.typeName,
+    typeIri: t.typeIri,
     vct: t.vct,
     claims,
     requireHolderBinding: true,
@@ -99,6 +102,10 @@ function LiveRequest({ spec }: { spec: QuerySpec }) {
   const [error, setError] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
   const pd = useMemo(() => toPresentationDefinition(spec, "inji"), [spec]);
+  const status = useQuery({ queryKey: ["status"], queryFn: api.status });
+  const [style, setStyle] = useState<"signed" | "by-value">("signed");
+  const didClientId = status.data?.verifyClientIds.signed ?? null;
+  const clientId = style === "signed" && didClientId ? didClientId : CLIENT_ID;
   const restart = () => {
     setResults(null);
     setError(null);
@@ -110,13 +117,31 @@ function LiveRequest({ spec }: { spec: QuerySpec }) {
       <p className="text-sm text-muted">
         This uses MOSIP's own <code className="font-mono">@injistack/react-inji-verify-sdk</code> against the bundled Inji Verify, exactly as a relying party's website would. Scan the QR code with Inji Wallet, or copy the request into the <Link to="/wallet" className="text-issue underline">Reference Wallet</Link>.
       </p>
+      <div role="radiogroup" aria-label="How Inji Verify sends its request" className="flex flex-wrap gap-1 self-start rounded-md bg-sunken p-1 text-sm">
+        {(
+          [
+            ["signed", "Signed, by reference"],
+            ["by-value", "Unsigned, by value"],
+          ] as const
+        ).map(([v, l]) => (
+          <button key={v} type="button" role="radio" aria-checked={style === v} disabled={v === "signed" && !didClientId} onClick={() => setStyle(v)} className={cx("rounded px-2.5 py-0.5 font-bold disabled:opacity-50", style === v ? "bg-surface shadow-sm" : "text-muted hover:text-ink")}>
+            {l}
+          </button>
+        ))}
+      </div>
+      <p className="-mt-2 text-sm text-muted">
+        {style === "signed" && didClientId
+          ? `client_id is Inji Verify's DID, so it signs the request and the QR only carries a request_uri: small enough for any phone camera.`
+          : `client_id "${CLIENT_ID}" is not a DID, so Inji Verify puts the whole request in the QR, unsigned and dense (gap G25).`}
+        {IS_PHONE ? " On this phone, the SDK's same-device button opens your wallet app directly." : ""}
+      </p>
       <div className="flex min-h-72 flex-col items-center justify-center gap-3 rounded-md bg-sunken p-4 [&_button]:cursor-pointer">
         <OpenID4VPVerification
-          key={`${attempt}-${pd.id}-${spec.claims.join(",")}`}
+          key={`${attempt}-${pd.id}-${spec.claims.join(",")}-${clientId}`}
           verifyServiceUrl={VERIFY_SERVICE_URL}
-          clientId={CLIENT_ID}
+          clientId={clientId}
           presentationDefinition={pd as never}
-          isSameDeviceFlowEnabled={false}
+          isSameDeviceFlowEnabled={IS_PHONE}
           qrCodeStyles={{ size: 220, level: "M", fgColor: "#16233F", bgColor: "#FFFFFF", margin: 8, borderRadius: 8 }}
           triggerElement={<Button tone="primary">Create presentation request</Button>}
           onVPProcessed={(r) => setResults(r as unknown as SdkResult[])}
@@ -262,8 +287,9 @@ function DirectShare() {
 
 function QueryCompare({ spec }: { spec: QuerySpec }) {
   const [dialect, setDialect] = useState<PeDialect>("inji");
+  const [paths, setPaths] = useState<DcqlPathStyle>("spec");
   const pe = useMemo(() => toPresentationDefinition(spec, dialect), [spec, dialect]);
-  const dcql = useMemo(() => toDcql(spec), [spec]);
+  const dcql = useMemo(() => toDcql(spec, { pathStyle: paths }), [spec, paths]);
   const problems = validateDcql(dcql);
   const mapping = explainMapping(spec);
   const hl = (k: string) => ["path", "filter", "type_values", "vct_values", "require_cryptographic_holder_binding", "limit_disclosure"].includes(k);
@@ -292,10 +318,32 @@ function QueryCompare({ spec }: { spec: QuerySpec }) {
           <JsonView value={pe} highlight={hl} maxHeight="30rem" openDepth={10} />
         </section>
         <section aria-labelledby="dcql-title" className="flex min-w-0 flex-col gap-2">
-          <h3 id="dcql-title" className="text-base">
-            DCQL <Tag tone="present">OpenID4VP 1.0, Inji 1.0 line</Tag>
-          </h3>
-          <p className="text-sm text-muted">The same question in DCQL. Paths become arrays, and the type is matched by {spec.format === "ldp_vc" ? "expanded JSON-LD type IRIs" : "an exact vct string"}.</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="dcql-title" className="text-base">
+              DCQL <Tag tone="present">OpenID4VP 1.0, Inji 1.0 line</Tag>
+            </h3>
+            {spec.format === "ldp_vc" && (
+              <div role="radiogroup" aria-label="Claim path style" className="flex gap-1 rounded-md bg-sunken p-1 text-sm">
+                {(
+                  [
+                    ["spec", "Spec style"],
+                    ["inji", "Inji 1.0 style"],
+                  ] as const
+                ).map(([d, l]) => (
+                  <button key={d} role="radio" aria-checked={paths === d} onClick={() => setPaths(d)} className={cx("rounded px-2.5 py-0.5 font-bold", paths === d ? "bg-surface shadow-sm" : "text-muted hover:text-ink")}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-sm text-muted">
+            The same question in DCQL. Paths become arrays, and the type is matched by {spec.format === "ldp_vc" ? "expanded JSON-LD type IRIs" : "an exact vct string"}.
+            {spec.format === "ldp_vc" &&
+              (paths === "spec"
+                ? " OpenID4VP 1.0 reads claim paths from the credential's root, so they start with credentialSubject."
+                : " Inji's PEX-to-DCQL guide drops credentialSubject, and Inji Verify 1.0 only accepts that form (gap G36).")}
+          </p>
           <JsonView value={dcql} highlight={hl} maxHeight="30rem" openDepth={10} />
           {problems.length > 0 && (
             <Notice tone="warn">

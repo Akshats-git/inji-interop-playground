@@ -9,11 +9,22 @@ export const ago = (iso: string) => {
   return new Date(iso).toLocaleDateString();
 };
 export const party = (p: Party) => PARTY_LABEL[p] ?? p;
-export const formatLabel = (f: string, dm?: string) => (f === "ldp_vc" ? `W3C JSON-LD${dm ? `, VCDM ${dm}` : ""}` : f === "vc+sd-jwt" || f === "dc+sd-jwt" ? "IETF SD-JWT VC" : f);
+export const formatLabel = (f: string, dm?: string) =>
+  f === "ldp_vc" ? `W3C JSON-LD${dm ? `, VCDM ${dm}` : ""}` : f === "vc+sd-jwt" ? "IETF SD-JWT VC" : f === "dc+sd-jwt" ? "IETF SD-JWT VC (dc+sd-jwt)" : f === "mso_mdoc" ? "ISO mDoc (mso_mdoc)" : f;
 
 /** Which station on the transit line a party sits at. */
 export type Station = "issuer" | "wallet" | "verifier";
-export const stationOf = (p: Party): Station => (p === "studio" || p === "certify" || p === "external-issuer" ? "issuer" : p === "wallet" || p === "external-wallet" ? "wallet" : "verifier");
+export const stationOf = (p: Party): Station =>
+  p === "studio" || p === "certify" || p === "external-issuer" || p === "hosted-certify" || p === "esignet" ? "issuer" : p === "wallet" || p === "external-wallet" ? "wallet" : "verifier";
+
+/** "esignet-mock.collab.mosip.net" from a URL, for short labels. */
+export const hostOf = (url?: string) => {
+  try {
+    return url ? new URL(url).host : "";
+  } catch {
+    return url ?? "";
+  }
+};
 
 export function bytes(n: number) {
   return n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`;

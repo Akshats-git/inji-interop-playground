@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api, type Parties } from "../lib/api";
-import { formatLabel } from "../lib/format";
+import { api, type HostedEnvironment, type Parties } from "../lib/api";
+import { ago, formatLabel, hostOf } from "../lib/format";
+import { TestData } from "../components/TestData";
 import { cx, Empty, Notice, PageHeader, Tag } from "../components/ui";
 
 const KIND: Record<string, string> = {
@@ -240,7 +241,7 @@ function Verifiers({ p }: { p: Parties }) {
           <Row
             key={v.id}
             title={v.label}
-            origin={v.origin === "external"}
+            origin={v.origin !== "builtin"}
             meta={[
               v.software,
               v.ownQuery
@@ -252,6 +253,7 @@ function Verifiers({ p }: { p: Parties }) {
             aside={
               <>
                 {v.origin === "external" && <Reach h={p.health[`verifier:${v.id}`]} />}
+                {v.origin === "hosted" && <Reach h={p.health[`hosted:${v.environmentId}:verify`]} />}
                 {v.supportsDirectShare && (
                   <span className="text-muted">Also checks a credential's own QR code</span>
                 )}
@@ -269,6 +271,111 @@ function Verifiers({ p }: { p: Parties }) {
         ))}
       </ul>
     </section>
+  );
+}
+
+/** One hosted Inji deployment: its Mimoto, its Inji Verify, the wallet's OAuth client there, and every issuer found. */
+function HostedEnv({ e, health }: { e: HostedEnvironment; health: Parties["health"] }) {
+  const types = e.issuers.reduce((n, i) => n + i.types.length, 0);
+  return (
+    <div className="flex flex-col gap-4">
+      <ul className="divide-y divide-hairline rounded-[10px] border border-hairline bg-surface">
+        <li className="grid gap-x-6 gap-y-2 px-4 py-4 md:grid-cols-[minmax(0,1fr)_15rem]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-base">{e.name}</h3>
+              <Tag tone="issue">From parties.yaml</Tag>
+              {e.version && <Tag>Inji {e.version}</Tag>}
+            </div>
+            <p className="mt-1 max-w-[75ch] text-sm">{e.description}</p>
+            <p className="mt-1 text-sm text-muted">
+              {e.issuers.length} issuers and {types} credential types found{e.refreshedAt ? `, ${ago(e.refreshedAt)}` : ""}. The playground runs here and talks to {e.name} over the internet.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5 text-sm md:items-end md:text-right">
+            {e.homepage && (
+              <a className={link} href={e.homepage} target="_blank" rel="noreferrer">
+                Open {e.name}
+              </a>
+            )}
+          </div>
+        </li>
+        {e.mimoto && (
+          <Row title={`Mimoto, ${hostOf(e.mimoto.url)}`} origin meta="Inji Wallet's backend: its issuer list is where the playground finds the issuers" aside={<Reach h={health[`hosted:${e.id}:mimoto`]} />}>
+            <p className="text-muted">{e.mimoto.detail}</p>
+          </Row>
+        )}
+        {e.verifier && (
+          <Row title={e.verifier.label} origin meta={e.verifier.software} aside={<Reach h={health[`hosted:${e.id}:verify`]} />}>
+            <p className="max-w-[72ch]">{e.verifier.description}</p>
+            <Chips items={[...e.verifier.accepts.map((a) => (a === "dcql" ? "DCQL only" : "Presentation Exchange")), ...e.verifier.formats.map((f) => formatLabel(f))]} />
+          </Row>
+        )}
+        {e.client && (
+          <Row
+            title={`OAuth client "${e.client.clientId}"`}
+            origin
+            meta={`How the Reference Wallet signs holders in, at ${e.client.authorizationServers.map(hostOf).join(", ")}`}
+            aside={
+              <span className={cx("inline-flex items-center gap-1.5", e.client.ready ? "text-pass" : "text-fail")}>
+                <span className={cx("inline-block size-2 rounded-full", e.client.ready ? "bg-pass" : "bg-fail")} aria-hidden />
+                {e.client.ready ? "Key ready" : "Key missing"}
+              </span>
+            }
+          >
+            <p className="max-w-[72ch]">
+              MOSIP's documented test client for wallets built against Collab's eSignet; redirect URI <code className="font-mono">{e.client.redirectUri}</code>. {e.client.problem ?? "Its published key is in infra/collab/keys/ (git-ignored)."}
+            </p>
+          </Row>
+        )}
+      </ul>
+      <div className="overflow-x-auto rounded-[10px] border border-hairline bg-surface">
+        <table className="w-full min-w-[46rem] text-left text-sm">
+          <caption className="px-4 pt-3 text-left font-bold">Issuers on {e.name}</caption>
+          <thead className="text-muted">
+            <tr>
+              <th className="px-4 py-2 font-semibold">Issuer</th>
+              <th className="px-2 py-2 font-semibold">OpenID4VCI</th>
+              <th className="px-2 py-2 font-semibold">Credential types</th>
+              <th className="px-4 py-2 font-semibold">Who can collect</th>
+            </tr>
+          </thead>
+          <tbody>
+            {e.issuers.map((i) => (
+              <tr key={i.id} className="border-t border-hairline align-top">
+                <td className="px-4 py-2">
+                  <span className="block font-bold">{i.name}</span>
+                  <span className="block font-mono text-xs break-all text-muted">{hostOf(i.credentialIssuer)}</span>
+                  {i.listedBy === "parties file" && <span className="block text-xs text-muted">Not in Mimoto's list; named in parties.yaml</span>}
+                  {i.note && <span className="mt-1 block text-xs text-present-ink">{i.note}</span>}
+                  {i.error && <span className="mt-1 block text-xs text-fail">{i.error}</span>}
+                </td>
+                <td className="px-2 py-2 whitespace-nowrap">{i.protocol === "1.0" ? "1.0 (nonce endpoint)" : "draft 13"}</td>
+                <td className="px-2 py-2">
+                  <ul className="flex flex-col gap-0.5">
+                    {i.types.map((t) => (
+                      <li key={t.id}>
+                        {t.displayName} <span className="text-muted">({t.format})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </td>
+                <td className="px-4 py-2">
+                  {i.types.some((t) => t.canIssue) ? (
+                    <span>
+                      Reference Wallet (signs in at {hostOf(i.authorizationServer)}) and Inji Wallet
+                    </span>
+                  ) : (
+                    <span>Inji Wallet on a phone ({hostOf(i.authorizationServer) || "its own sign-in"})</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <TestData environment={e.id} />
+    </div>
   );
 }
 
@@ -312,7 +419,7 @@ export default function PartiesPage() {
               {p.file ? (
                 <>
                   {" "}
-                  (read from <code className="font-mono">{p.file}</code> at{" "}
+                  (read from <code className="font-mono break-all">{p.file}</code> at{" "}
                   {new Date(p.loadedAt).toLocaleTimeString()})
                 </>
               ) : (
@@ -350,6 +457,12 @@ export default function PartiesPage() {
               </p>
             </details>
           </section>
+          {p.environments.map((e) => (
+            <section key={e.id} id="hosted" aria-labelledby={`env-${e.id}`} className="scroll-mt-4">
+              <StationHead id={`env-${e.id}`} title={`Hosted Inji: ${e.name}`} line="present" />
+              <HostedEnv e={e} health={p.health} />
+            </section>
+          ))}
           <Wallets p={p} />
           <Issuers p={p} studioTypes={types.data?.length ?? 0} />
           <Verifiers p={p} />

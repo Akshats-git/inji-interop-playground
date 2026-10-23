@@ -1,12 +1,15 @@
 /**
  * Sequence diagram generated from the recorded events, so it always matches what really happened.
  * Lifelines are the parties that took part; arrows are messages, coloured by lane, red when they failed.
+ * New arrows fade in as the live feed delivers them; selecting one opens it in the inspector.
  */
+import { motion, useReducedMotion } from "motion/react";
 import { isFailedEvent, PARTY_LABEL, type EventSummary, type Party } from "@playground/core";
 
-const ORDER: Party[] = ["studio", "certify", "external-issuer", "wallet", "external-wallet", "verifier-ui", "verifier-backend", "inji-verify", "reference-verifier", "external-verifier"];
+const ORDER: Party[] = ["studio", "certify", "hosted-certify", "esignet", "external-issuer", "wallet", "external-wallet", "verifier-ui", "verifier-backend", "inji-verify", "hosted-verify", "reference-verifier", "external-verifier"];
 
-export function SequenceDiagram({ events, onSelect }: { events: EventSummary[]; onSelect?: (id: string) => void }) {
+export function SequenceDiagram({ events, onSelect, selected }: { events: EventSummary[]; onSelect?: (id: string) => void; selected?: string | null }) {
+  const reduce = useReducedMotion();
   const parties = ORDER.filter((p) => events.some((e) => e.from === p || e.to === p));
   if (!events.length || parties.length < 2) return null;
   const colW = 150;
@@ -40,18 +43,33 @@ export function SequenceDiagram({ events, onSelect }: { events: EventSummary[]; 
           const x1 = x(e.from);
           const x2 = x(e.to);
           const self = x1 === x2;
+          const isSelected = selected === e.id;
           return (
-            <g key={e.id} className={onSelect ? "cursor-pointer" : undefined} onClick={() => onSelect?.(e.id)}>
+            <motion.g
+              key={e.id}
+              initial={reduce ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={onSelect ? "cursor-pointer" : undefined}
+              onClick={() => onSelect?.(e.id)}
+              onKeyDown={(k) => (k.key === "Enter" || k.key === " ") && (k.preventDefault(), onSelect?.(e.id))}
+              tabIndex={onSelect ? 0 : undefined}
+              role={onSelect ? "button" : undefined}
+              aria-label={onSelect ? `${e.seq}. ${e.title}, ${e.status}. Open in the inspector` : undefined}
+              aria-pressed={onSelect ? isSelected : undefined}
+            >
               <title>{`${e.seq}. ${e.title} (${e.status})`}</title>
+              {/* A wide transparent band makes the thin arrow easy to hit. */}
+              <rect x={Math.min(x1, x2) - 6} y={y - 20} width={Math.abs(x2 - x1) + (self ? 150 : 12)} height={rowH - 4} rx={4} fill={isSelected ? "var(--issue-soft)" : "transparent"} />
               {self ? (
-                <path d={`M${x1},${y} h28 v10 h-26`} fill="none" stroke={`var(--${lane})`} strokeWidth="2" markerEnd={`url(#arrow-${lane})`} />
+                <path d={`M${x1},${y} h28 v10 h-26`} fill="none" stroke={`var(--${lane})`} strokeWidth={isSelected ? 3 : 2} markerEnd={`url(#arrow-${lane})`} />
               ) : (
-                <line x1={x1} x2={x2 + (x2 > x1 ? -4 : 4)} y1={y} y2={y} stroke={`var(--${lane})`} strokeWidth="2" markerEnd={`url(#arrow-${lane})`} />
+                <line x1={x1} x2={x2 + (x2 > x1 ? -4 : 4)} y1={y} y2={y} stroke={`var(--${lane})`} strokeWidth={isSelected ? 3 : 2} markerEnd={`url(#arrow-${lane})`} />
               )}
-              <text x={self ? x1 + 34 : (x1 + x2) / 2} y={y - 6} textAnchor={self ? "start" : "middle"} fontSize="11.5" fill="var(--ink)">
+              <text x={self ? x1 + 34 : (x1 + x2) / 2} y={y - 6} textAnchor={self ? "start" : "middle"} fontSize="11.5" fontWeight={isSelected ? 700 : 400} fill="var(--ink)">
                 {`${e.seq}. ${e.title}`}
               </text>
-            </g>
+            </motion.g>
           );
         })}
       </svg>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useReducedMotion } from "motion/react";
-import { isFailedEvent, TAMPER_PRESETS, type EventSummary, type Run, type RunStep } from "@playground/core";
+import { credentialStatusLabel, isFailedEvent, KNOWN_GAPS, knownGapOf, TAMPER_PRESETS, type EventSummary, type Run, type RunStep } from "@playground/core";
 import { api, ApiError, reportUrl } from "../lib/api";
 import { useLiveFeed } from "../lib/live";
 import { formatLabel, stationOf } from "../lib/format";
@@ -10,6 +10,7 @@ import { TransitLine, type Pulse } from "../components/TransitLine";
 import { Inspector } from "../components/Inspector";
 import { SequenceDiagram } from "../components/SequenceDiagram";
 import { QrCode } from "../components/QrCode";
+import { TestData } from "../components/TestData";
 import { Button, cx, Field, Notice, Panel, StatusMark, Tag, Textarea, type Mark } from "../components/ui";
 
 const STEP_LABEL: Record<RunStep["name"], string> = { issue: "Issue", request: "Request", present: "Present", verify: "Verify" };
@@ -19,14 +20,14 @@ function Steps({ steps }: { steps: RunStep[] }) {
   return (
     <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {steps.map((s, i) => (
-        <li key={s.name} className={cx("rounded-md border px-3 py-2.5", s.status === "failed" ? "border-fail/50" : s.status === "waiting" ? "border-present" : "border-hairline", "bg-surface")}>
+        <li key={s.name} className={cx("min-w-0 rounded-md border px-3 py-2.5", s.status === "failed" ? "border-fail/50" : s.status === "waiting" ? "border-present" : "border-hairline", "bg-surface")}>
           <div className="flex items-center justify-between gap-2">
             <span className="font-bold">
               {i + 1}. {STEP_LABEL[s.name]}
             </span>
             <StatusMark mark={STEP_MARK[s.status]}>{s.status}</StatusMark>
           </div>
-          {s.note && <p className="mt-1.5 text-sm break-words text-muted">{s.note}</p>}
+          {s.note && <p className="mt-1.5 text-sm [overflow-wrap:anywhere] text-muted">{s.note}</p>}
         </li>
       ))}
     </ol>
@@ -40,6 +41,7 @@ const ACTION_TITLE: Record<NonNullable<RunStep["action"]>["kind"], string> = {
   "paste-offer": "Paste a credential offer",
   "open-link": "Collect the credential",
   confirm: "Your turn",
+  login: "Sign in at eSignet",
 };
 
 function ActionPanel({ run, step }: { run: Run; step: RunStep }) {
@@ -47,17 +49,24 @@ function ActionPanel({ run, step }: { run: Run; step: RunStep }) {
   const [offer, setOffer] = useState("");
   const send = useMutation({ mutationFn: (body: { offerUri?: string; confirm?: boolean }) => api.runInput(run.id, body) });
   const qr = a.uri && (a.kind === "scan-offer" || a.kind === "scan-request");
+  const issuerId = run.labels.issuer;
   return (
     <Panel title={ACTION_TITLE[a.kind]} className="border-present">
       <div className="flex flex-col items-center gap-4 md:flex-row md:items-start">
         {qr && <QrCode value={a.uri!} label={a.kind === "scan-offer" ? "Credential offer QR code" : "Presentation request QR code"} />}
         <div className="flex w-full max-w-[60ch] flex-col gap-3">
           <p className="text-[1.05rem] font-bold">{a.hint}</p>
-          {a.uri && !qr && (
+          {a.kind === "login" && a.uri && (
+            <a className="inline-flex min-h-12 items-center self-start rounded-md bg-ink px-5 font-bold text-paper hover:bg-issue" href={a.uri} target="_blank" rel="noreferrer">
+              Open eSignet in a new tab
+            </a>
+          )}
+          {a.uri && !qr && a.kind !== "login" && (
             <a className="font-bold break-all text-issue underline" href={a.uri} target="_blank" rel="noreferrer">
               {a.uri}
             </a>
           )}
+          {a.environment && <TestData environment={a.environment} issuerId={issuerId} />}
           {a.kind === "paste-offer" && (
             <form
               className="flex flex-col gap-2"
@@ -80,9 +89,15 @@ function ActionPanel({ run, step }: { run: Run; step: RunStep }) {
             </Button>
           )}
           {send.error && <Notice tone="error">{send.error instanceof ApiError ? send.error.message : "That did not reach the run."}</Notice>}
-          {!a.needsConfirm && a.kind !== "paste-offer" && (
+          {a.kind === "login" && (
             <p className="text-sm text-muted">
-              The step moves on by itself as soon as the gateway sees the wallet's traffic. Phones need the playground on a public HTTPS URL; start it with <code className="font-mono">./playground.sh tunnel</code>.
+              eSignet sends your browser back to <code className="font-mono">http://localhost:3004/redirect</code>, where the playground picks up the authorization code; the run then carries on by itself.
+            </p>
+          )}
+          {!a.needsConfirm && a.kind !== "paste-offer" && a.kind !== "login" && (
+            <p className="text-sm text-muted">
+              The step moves on by itself as soon as the {run.labels.hosted?.verifier ? "hosted verifier receives the answer" : "gateway sees the wallet's traffic"}.
+              {run.labels.hosted?.verifier ? "" : <> Phones need the playground on a public HTTPS URL; start it with <code className="font-mono">./playground.sh tunnel</code>.</>}
             </p>
           )}
           {a.kind === "upload-vc" && (
@@ -99,15 +114,26 @@ function ActionPanel({ run, step }: { run: Run; step: RunStep }) {
 function ResultPanel({ run }: { run: Run }) {
   const r = run.result!;
   const asExpected = r.verdict === "PASS";
+  const gap = knownGapOf(run);
+  const status = r.verifierOutcome === "NOT_REACHED" ? undefined : credentialStatusLabel(r.credentialStatus);
   return (
-    <section aria-labelledby="result" className={cx("rounded-[10px] border-2 bg-surface p-4 sm:p-5", asExpected ? "border-pass" : "border-fail")}>
+    <section aria-labelledby="result" className={cx("rounded-[10px] border-2 bg-surface p-4 sm:p-5", asExpected ? "border-pass" : gap ? "border-present" : "border-fail")}>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 id="result" className="text-xl">
+        <h2 id="result" className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xl">
           {r.verifierOutcome === "ACCEPTED" ? "Verifier accepted" : r.verifierOutcome === "REJECTED" ? "Verifier rejected" : r.verifierOutcome === "NOT_REACHED" ? "Journey stopped early" : "Verifier error"}
-          {r.credentialStatus && r.credentialStatus !== "UNKNOWN" && <span className="font-medium text-muted"> ({r.credentialStatus.toLowerCase()})</span>}
+          {status && (
+            <span className={cx("rounded-md px-2 py-0.5 text-base font-black tracking-wide uppercase", r.credentialStatus === "SUCCESS" ? "bg-pass-soft text-pass" : r.credentialStatus === "EXPIRED" ? "bg-present-soft text-present-ink" : "bg-fail-soft text-fail")}>
+              {status}
+            </span>
+          )}
         </h2>
-        <StatusMark mark={asExpected ? "pass" : "fail"}>{asExpected ? "Behaved as expected" : "Did not behave as expected"}</StatusMark>
+        <StatusMark mark={asExpected ? "pass" : gap ? "warn" : "fail"}>{asExpected ? "Behaved as expected" : gap ? `Known gap ${gap}` : "Did not behave as expected"}</StatusMark>
       </div>
+      {gap && (
+        <p className="mt-2 max-w-[75ch] text-sm">
+          <strong>Known upstream gap {gap}:</strong> {KNOWN_GAPS[gap]}. It is written up with evidence in <code className="font-mono">docs/gaps.md</code>; this run reproduces it.
+        </p>
+      )}
       <p className="mt-2 max-w-[75ch] text-[1.02rem]">{r.explanation}</p>
       <p className="mt-1 text-sm text-muted">Expected: {r.expected === "PASS" ? "accept" : "reject"}.{r.errorCode ? ` Error code: ${r.errorCode}.` : ""}</p>
       {r.checks.length > 0 && (
@@ -137,6 +163,8 @@ export function RunPage() {
   const events = useQuery({ queryKey: ["run-events", id], queryFn: () => api.runEvents(id) });
   const [pulses, setPulses] = useState<Pulse[]>([]);
   const [showDiagram, setShowDiagram] = useState(true);
+  const [selected, setSelected] = useState<string | null>(null);
+  const inspectorRef = useRef<HTMLElement>(null);
   const announce = useRef<HTMLParagraphElement>(null);
 
   const onMessage = useCallback(
@@ -173,14 +201,16 @@ export function RunPage() {
           <p className="font-mono text-sm text-muted">{r.id}</p>
           <h1 className="text-2xl sm:text-3xl">{r.labels.typeName}</h1>
           <p className="mt-1 text-muted">
-            {formatLabel(r.labels.format, r.labels.dataModel)}, {r.labels.proofType}. {r.spec.mode === "direct-share" ? "Direct share" : r.spec.query === "dcql" ? "OpenID4VP with DCQL" : "OpenID4VP with Presentation Exchange"}
+            {formatLabel(r.labels.format, r.labels.dataModel)}, {r.labels.proofType}. {r.spec.mode === "direct-share" ? "Direct share" : r.spec.query === "dcql" ? `OpenID4VP with DCQL${r.labels.format === "ldp_vc" && r.spec.dcqlPaths === "inji" ? " (Inji-style claim paths)" : ""}` : "OpenID4VP with Presentation Exchange"}
             {r.spec.tamper !== "none" && <span className="font-bold text-present-ink">. Tamper: {TAMPER_PRESETS[r.spec.tamper].label.toLowerCase()}</span>}.
           </p>
-          {r.labels.external && (
+          {(r.labels.external || r.labels.hosted) && (
             <p className="mt-2 flex flex-wrap gap-1.5">
-              {r.labels.external.issuer && <Tag tone="issue">External issuer: {r.labels.issuerName}</Tag>}
-              {r.labels.external.wallet && <Tag>External wallet: {r.labels.wallet}</Tag>}
-              {r.labels.external.verifier && <Tag tone="present">External verifier: {r.labels.verifier}</Tag>}
+              {r.labels.hosted?.issuer && <Tag tone="issue">Hosted issuer on {r.labels.hosted.issuer}: {r.labels.issuerName}</Tag>}
+              {r.labels.hosted?.verifier && <Tag tone="present">Hosted verifier on {r.labels.hosted.verifier}</Tag>}
+              {r.labels.external?.issuer && <Tag tone="issue">External issuer: {r.labels.issuerName}</Tag>}
+              {r.labels.external?.wallet && <Tag>External wallet: {r.labels.wallet}</Tag>}
+              {r.labels.external?.verifier && <Tag tone="present">External verifier: {r.labels.verifier}</Tag>}
             </p>
           )}
         </div>
@@ -208,14 +238,14 @@ export function RunPage() {
       {waiting && <ActionPanel run={r} step={waiting} />}
       {r.result && <ResultPanel run={r} />}
 
-      <section aria-labelledby="inspector">
+      <section aria-labelledby="inspector" ref={inspectorRef} className="scroll-mt-4">
         <div className="mb-3 flex items-baseline justify-between gap-3">
           <h2 id="inspector" className="text-xl">
             Protocol inspector
           </h2>
           <span className="text-sm text-muted">{events.data?.length ?? 0} messages, secrets masked</span>
         </div>
-        <Inspector events={events.data ?? []} emptyHint={live ? "Waiting for the first message…" : undefined} />
+        <Inspector events={events.data ?? []} emptyHint={live ? "Waiting for the first message…" : undefined} selected={selected} onSelect={setSelected} />
       </section>
 
       {(events.data?.length ?? 0) > 1 && (
@@ -228,7 +258,19 @@ export function RunPage() {
               {showDiagram ? "Hide" : "Show"}
             </button>
           </div>
-          {showDiagram && <SequenceDiagram events={events.data ?? []} />}
+          {showDiagram && (
+            <>
+              <p className="mb-2 text-sm text-muted">Select an arrow to open that message in the inspector.</p>
+              <SequenceDiagram
+                events={events.data ?? []}
+                selected={selected}
+                onSelect={(eid) => {
+                  setSelected(eid);
+                  inspectorRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+                }}
+              />
+            </>
+          )}
         </section>
       )}
     </div>

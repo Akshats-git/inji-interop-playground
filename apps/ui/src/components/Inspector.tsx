@@ -27,6 +27,12 @@ const MEANING: [RegExp, string][] = [
   [/^Verify credential/, "Direct share: the holder shows the credential itself as a QR code (PixelPass-compressed) and the verifier checks it, with no OpenID4VP exchange."],
   [/^Status list/, "The verifier downloads the issuer's status list to see whether this credential has been revoked."],
   [/^Issuer DID document|^Issuer JWKS/, "Someone is resolving the issuer's public keys to check a signature."],
+  [/^eSignet: CSRF/, "eSignet's login page starts with a CSRF token; the wallet sends it back on every call, as a browser would."],
+  [/^eSignet: start login/, "The authorization request of the authorization code flow: which client asks, for which scope, where to send the person back (redirect_uri), and a PKCE challenge so only this wallet can redeem the code."],
+  [/^eSignet: send OTP/, "eSignet sends a one-time password to the identity's registered email or phone. On MOSIP Collab the demo identities use a static test OTP instead."],
+  [/^eSignet: sign in with the OTP/, "The holder proves who they are with the OTP. This is the step a person does on eSignet's page; the playground can do it for a demo identity."],
+  [/^eSignet: authorization code/, "eSignet issues a short-lived authorization code and would redirect the browser to the redirect_uri with it. The wallet swaps it for an access token next."],
+  [/^Nonce request/, "OpenID4VCI 1.0 moved the c_nonce out of the token response into its own endpoint. The wallet fetches a fresh nonce and signs its proof of possession over it."],
 ];
 const meaningOf = (title: string) => MEANING.find(([re]) => re.test(title))?.[1];
 
@@ -276,8 +282,11 @@ function Payload({ m }: { m?: ProtocolEvent["request"] }) {
   );
 }
 
-export function Inspector({ events, emptyHint, newestFirst = false }: { events: EventSummary[]; emptyHint?: string; newestFirst?: boolean }) {
-  const [selected, setSelected] = useState<string | null>(null);
+export function Inspector({ events, emptyHint, newestFirst = false, selected: controlled, onSelect }: { events: EventSummary[]; emptyHint?: string; newestFirst?: boolean; selected?: string | null; onSelect?: (id: string) => void }) {
+  const [own, setOwn] = useState<string | null>(null);
+  // Controlled when the page passes a selection (the sequence diagram shares it), otherwise its own.
+  const selected = controlled !== undefined ? controlled : own;
+  const setSelected = (id: string) => (onSelect ? onSelect(id) : setOwn(id));
   const current = selected ?? events[events.length - 1]?.id ?? null;
   if (!events.length) return <Empty title="No protocol messages yet">{emptyHint ?? "Messages appear here as soon as a wallet or verifier talks through the gateway."}</Empty>;
   return (
@@ -287,7 +296,7 @@ export function Inspector({ events, emptyHint, newestFirst = false }: { events: 
           <EventRow key={e.id} e={e} selected={e.id === current} onSelect={() => setSelected(e.id)} />
         ))}
       </ol>
-      <div className="max-h-[48rem] min-w-0 overflow-y-auto">{current && <EventDetail key={current} id={current} />}</div>
+      <div className="max-h-[48rem] min-h-[24rem] min-w-0 overflow-y-auto">{current && <EventDetail key={current} id={current} />}</div>
     </div>
   );
 }

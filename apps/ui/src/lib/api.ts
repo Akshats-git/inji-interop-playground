@@ -1,4 +1,4 @@
-import type { CatalogType, CredentialType, EventSummary, IssuerProfile, ProtocolEvent, Run, RunSpec, VerifierInfo, WalletInfo } from "@playground/core";
+import type { CatalogType, CredentialType, EventSummary, IssuerProfile, ProtocolEvent, Run, RunSpec, TestIdentity, VerifierInfo, WalletInfo } from "@playground/core";
 
 export class ApiError extends Error {
   constructor(
@@ -31,8 +31,35 @@ export interface Status {
   identifiers: string;
   services: { certify: boolean; verify: boolean };
   versions: Record<string, string>;
+  /** Client ids for Inji Verify requests: its DID (signed, by reference) and a pre-registered name (by value). */
+  verifyClientIds: { signed: string | null; byValue: string };
   retentionDays: number;
   parties: { file: string | null; errors: number; configured: number; reachable: number };
+  /** Hosted Inji environments (MOSIP Collab). */
+  hosted: { id: string; name: string; reachable: boolean; issuers: number; types: number }[];
+}
+
+/** A hosted Inji deployment as the playground discovered it (no keys). */
+export interface HostedEnvironment {
+  id: string;
+  name: string;
+  description: string;
+  homepage?: string;
+  version?: string;
+  mimoto?: { url: string; ok?: boolean; detail?: string };
+  refreshedAt?: string;
+  issuers: { id: string; name: string; credentialIssuer: string; authorizationServer?: string; protocol: "1.0" | "draft 13"; listedBy?: string; note?: string; error?: string; types: CatalogType[] }[];
+  verifier?: VerifierInfo;
+  client?: { clientId: string; redirectUri: string; authorizationServers: string[]; ready: boolean; problem?: string };
+  testData: { otp?: string; identities: TestIdentity[]; notes: { issuer?: string; text: string }[]; selfRegistration?: string };
+}
+
+export interface CollectJob {
+  id: string;
+  status: "signing-in" | "waiting-login" | "collecting" | "done" | "failed";
+  loginUrl?: string;
+  held?: HeldSummary;
+  error?: string;
 }
 
 /** The parties registry: built-in and external wallets and verifiers, external issuers with their types. */
@@ -54,6 +81,7 @@ export interface Parties {
   }[];
   verifiers: VerifierInfo[];
   wallets: (WalletInfo & { automated: boolean })[];
+  environments: HostedEnvironment[];
 }
 
 export interface HeldSummary {
@@ -77,6 +105,8 @@ export interface QrMeasure {
 }
 
 export interface Capabilities {
+  /** What each hosted environment says about itself. */
+  hosted: { id: string; name: string; version?: string; verifier?: { name: string; queryLanguages: string[]; formats: string[] }; issuers: { name: string; protocol: string; formats: string[]; types: number; error?: string }[] }[];
   claimed: {
     issuer: { name: string; formats: string[]; signingAlgorithms: { suite: string; alg: string }[]; sdJwtAlgorithms: string[]; bindingMethods: string[]; proofTypes: string[]; grantTypes: string[]; protocol: string; configurations: number };
     verifier: { name: string; formats: string[]; queryLanguages: string[]; signatureSuites: string[]; didMethods: string[]; qr: string };
@@ -113,6 +143,11 @@ export const api = {
   catalog: () => request<CatalogType[]>("/catalog"),
   externalOffer: (issuer: string, type: string, body: { claims?: Record<string, unknown>; txCode?: string } = {}) => post<{ offerUri: string }>(`/parties/issuers/${issuer}/types/${type}/offers`, body),
   runInput: (id: string, body: { offerUri?: string; confirm?: boolean }) => post<void>(`/runs/${id}/input`, body),
+
+  hosted: () => request<{ environments: HostedEnvironment[]; health: Record<string, { ok: boolean; detail: string }> }>("/hosted"),
+  refreshHosted: () => post<{ environments: HostedEnvironment[] }>("/hosted/refresh", {}),
+  collectHosted: (typeId: string, login: { mode: "auto" | "interactive"; individualId?: string }) => post<CollectJob>("/hosted/collect", { typeId, login }),
+  collectJob: (id: string) => request<CollectJob>(`/hosted/collect/${id}`),
 
   matrix: () => request<{ key: string; run: Run }[]>("/matrix"),
   capabilities: () => request<Capabilities>("/capabilities"),

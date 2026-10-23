@@ -36,10 +36,9 @@ function StationDot({ station, state, name, role, flash }: { station: Station; s
     <div className={cx("absolute top-0 flex w-[34%] flex-col gap-2", align)} style={{ left: station === "issuer" ? 0 : station === "wallet" ? "33%" : undefined, right: station === "verifier" ? 0 : undefined }}>
       <span
         className={cx(
-          "relative z-10 grid size-8 place-items-center rounded-full border-[5px] bg-surface transition-colors duration-300",
-          ring,
-          state === "done" && (station === "issuer" ? "bg-issue" : station === "verifier" ? "bg-present" : "bg-ink"),
-          state === "fail" && "border-fail bg-fail",
+          "relative z-10 grid size-8 place-items-center rounded-full border-[5px] transition-colors duration-300",
+          // One background class only: with two, the stylesheet's order (not this list's) decides which wins.
+          state === "fail" ? "border-fail bg-fail" : cx(ring, state === "done" ? (station === "issuer" ? "bg-issue" : station === "verifier" ? "bg-present" : "bg-ink") : "bg-surface"),
           state === "active" && "ring-4 ring-issue-soft",
           flash && "ring-4 ring-present-soft",
         )}

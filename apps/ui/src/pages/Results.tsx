@@ -1,52 +1,73 @@
 import { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { TAMPER_PRESETS, type Run, type TamperPreset } from "@playground/core";
+import { credentialStatusLabel, knownGapOf, TAMPER_PRESETS, type Run, type TamperPreset } from "@playground/core";
 import { api } from "../lib/api";
 import { ago, formatLabel } from "../lib/format";
 import { verdictMark } from "./RunBuilder";
 import { cx, Empty, Field, PageHeader, Panel, Select } from "../components/ui";
 
-/** Matrix columns: who verified, and how the holder presented. */
-const COLUMNS = [
+/** Built-in matrix columns: who verified, and how the holder presented. External verifiers add their own. */
+const BASE_COLUMNS = [
   { key: "inji-verify|pe", verifier: "Inji Verify", how: "OpenID4VP, PE" },
   { key: "inji-verify|dcql", verifier: "Inji Verify", how: "OpenID4VP, DCQL" },
   { key: "inji-verify|direct", verifier: "Inji Verify", how: "Direct share" },
   { key: "reference-verifier|pe", verifier: "Reference Verifier", how: "OpenID4VP, PE" },
   { key: "reference-verifier|dcql", verifier: "Reference Verifier", how: "OpenID4VP, DCQL" },
 ];
-
-const columnOf = (r: Run) => `${r.spec.verifier}|${r.spec.mode === "direct-share" ? "direct" : r.spec.query === "dcql" ? "dcql" : "pe"}`;
+/** Verifiers the playground writes requests for (built-in and hosted Inji Verify), split by how the holder presents. */
+const how = (r: Run) => (r.spec.mode === "direct-share" ? "direct" : r.spec.query === "dcql" ? "dcql" : "pe");
+const HOW_LABEL = { direct: "Direct share", dcql: "OpenID4VP, DCQL", pe: "OpenID4VP, PE" } as const;
+const ownRequest = (r: Run) => Boolean(r.labels.external?.verifier);
+const columnOf = (r: Run) => (ownRequest(r) ? `${r.spec.verifier}|own` : `${r.spec.verifier}|${how(r)}`);
 
 function Cell({ run }: { run?: Run }) {
   if (!run) return <span className="text-sm text-muted">Not run</span>;
   const res = run.result;
   const outcome = res?.verifierOutcome === "ACCEPTED" ? "accepted" : res?.verifierOutcome === "REJECTED" ? "rejected" : res?.verifierOutcome === "NOT_REACHED" ? "stopped early" : "error";
+  const status = res?.verifierOutcome === "NOT_REACHED" ? undefined : credentialStatusLabel(res?.credentialStatus);
   return (
     <Link to={`/runs/${run.id}`} className="group flex flex-col items-start gap-1 rounded px-1 py-0.5 hover:bg-sunken" title={res?.explanation}>
       {verdictMark(run)}
-      <span className="text-xs text-muted group-hover:text-ink">Verifier {outcome}</span>
+      <span className="text-xs text-muted group-hover:text-ink">
+        Verifier {outcome}
+        {status ? ` (${status.toLowerCase()})` : ""}
+      </span>
     </Link>
   );
 }
 
 function Matrix() {
   const q = useQuery({ queryKey: ["matrix"], queryFn: api.matrix, refetchInterval: 10_000 });
-  const rows = useMemo(() => {
-    const m = new Map<string, { typeName: string; format: string; tamper: TamperPreset; cells: Map<string, Run> }>();
+  const { rows, columns } = useMemo(() => {
+    const m = new Map<string, { typeName: string; format: string; tamper: TamperPreset; wallet: string; externalWallet: boolean; cells: Map<string, Run> }>();
+    const extraColumns = new Map<string, { key: string; verifier: string; how: string }>();
     for (const { run } of q.data ?? []) {
-      const key = [run.labels.typeName, run.labels.format, run.labels.dataModel, run.spec.tamper].join("|");
-      const row = m.get(key) ?? { typeName: run.labels.typeName, format: formatLabel(run.labels.format, run.labels.dataModel), tamper: run.spec.tamper, cells: new Map() };
+      // One row per credential, fault and wallet: two wallets must never share (and overwrite) a cell.
+      const key = [run.labels.typeName, run.labels.format, run.labels.dataModel, run.spec.tamper, run.spec.wallet].join("|");
+      const row = m.get(key) ?? { typeName: run.labels.typeName, format: formatLabel(run.labels.format, run.labels.dataModel), tamper: run.spec.tamper, wallet: run.labels.wallet, externalWallet: Boolean(run.labels.external?.wallet), cells: new Map() };
       const col = columnOf(run);
+      if (col.endsWith("|own")) extraColumns.set(col, { key: col, verifier: run.labels.verifier, how: "OpenID4VP, its own request" });
+      else if (!BASE_COLUMNS.some((c) => c.key === col)) extraColumns.set(col, { key: col, verifier: run.labels.verifier, how: HOW_LABEL[how(run)] });
       const prev = row.cells.get(col);
       if (!prev || prev.createdAt < run.createdAt) row.cells.set(col, run);
       m.set(key, row);
     }
-    return [...m.values()].sort((a, b) => a.typeName.localeCompare(b.typeName) || a.format.localeCompare(b.format) || (a.tamper === "none" ? -1 : b.tamper === "none" ? 1 : a.tamper.localeCompare(b.tamper)));
+    const sorted = [...m.values()].sort(
+      (a, b) =>
+        a.typeName.localeCompare(b.typeName) ||
+        a.format.localeCompare(b.format) ||
+        Number(a.externalWallet) - Number(b.externalWallet) ||
+        a.wallet.localeCompare(b.wallet) ||
+        (a.tamper === "none" ? -1 : b.tamper === "none" ? 1 : a.tamper.localeCompare(b.tamper)),
+    );
+    return { rows: sorted, columns: [...BASE_COLUMNS, ...[...extraColumns.values()].sort((a, b) => a.key.localeCompare(b.key))] };
   }, [q.data]);
 
-  const passed = rows.reduce((n, r) => n + [...r.cells.values()].filter((x) => x.result?.verdict === "PASS").length, 0);
-  const total = rows.reduce((n, r) => n + r.cells.size, 0);
+  const cells = rows.flatMap((r) => [...r.cells.values()]);
+  const passed = cells.filter((x) => x.result?.verdict === "PASS").length;
+  const gaps = cells.filter((x) => x.result?.verdict === "FAIL" && knownGapOf(x)).length;
+  const unexpected = cells.length - passed - gaps;
 
   if (q.isLoading) return <p className="text-muted">Loading the matrix…</p>;
   if (!rows.length)
@@ -59,16 +80,17 @@ function Matrix() {
   return (
     <>
       <p className="mb-3 text-sm text-muted">
-        <strong className="tabular text-ink">{passed}</strong> of <strong className="tabular text-ink">{total}</strong> combinations behaved as expected. A tamper row passes when the verifier rejects it.
+        Of <strong className="tabular text-ink">{cells.length}</strong> combinations, <strong className="tabular text-ink">{passed}</strong> behaved as expected,{" "}
+        <strong className="tabular text-ink">{gaps}</strong> reproduce a known gap (docs/gaps.md) and <strong className="tabular text-ink">{unexpected}</strong> are unexpected. A tamper row passes when the verifier rejects it.
       </p>
       <div className="overflow-x-auto rounded-[10px] border border-hairline bg-surface">
         <table className="w-full min-w-[56rem] border-collapse text-left">
           <thead>
             <tr className="border-b border-hairline align-bottom">
               <th scope="col" className="px-3 py-2.5 text-sm font-bold">
-                Credential and fault
+                Credential, wallet and fault
               </th>
-              {COLUMNS.map((c) => (
+              {columns.map((c) => (
                 <th key={c.key} scope="col" className="border-l border-hairline px-3 py-2.5 text-sm">
                   <span className="block font-bold">{c.verifier}</span>
                   <span className="block font-medium text-muted">{c.how}</span>
@@ -78,13 +100,16 @@ function Matrix() {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={r.typeName + r.format + r.tamper} className={cx("border-b border-hairline last:border-b-0", r.tamper !== "none" && "bg-present-soft/40")}>
+              <tr key={r.typeName + r.format + r.tamper + r.wallet} className={cx("border-b border-hairline last:border-b-0", r.tamper !== "none" && "bg-present-soft/40")}>
                 <th scope="row" className="px-3 py-2 align-top font-normal">
                   <span className="block font-bold">{r.typeName}</span>
                   <span className="block text-sm text-muted">{r.format}</span>
+                  <span className="block text-sm text-muted">
+                    Wallet: <span className={cx(r.externalWallet && "font-semibold text-ink")}>{r.wallet}</span>
+                  </span>
                   {r.tamper !== "none" && <span className="mt-0.5 block text-sm font-semibold text-present-ink">{TAMPER_PRESETS[r.tamper].label}</span>}
                 </th>
-                {COLUMNS.map((c) => (
+                {columns.map((c) => (
                   <td key={c.key} className="border-l border-hairline px-2 py-2 align-top">
                     <Cell run={r.cells.get(c.key)} />
                   </td>
@@ -100,14 +125,22 @@ function Matrix() {
 
 const FILTERS = {
   verdict: { label: "Outcome", options: [["", "Any"], ["PASS", "As expected"], ["FAIL", "Unexpected"]] },
-  verifier: { label: "Verifier", options: [["", "Any"], ["inji-verify", "Inji Verify"], ["reference-verifier", "Reference Verifier"]] },
+  verifier: { label: "Verifier", options: [["", "Any"]] },
   format: { label: "Format", options: [["", "Any"], ["ldp_vc", "W3C JSON-LD"], ["vc+sd-jwt", "SD-JWT VC"]] },
-  wallet: { label: "Wallet", options: [["", "Any"], ["reference-wallet", "Reference Wallet"], ["inji-wallet", "Inji Wallet"], ["external-wallet", "Other wallet"]] },
+  wallet: { label: "Wallet", options: [["", "Any"]] },
   status: { label: "Status", options: [["", "Any"], ["completed", "Completed"], ["failed", "Failed"], ["cancelled", "Cancelled"], ["waiting", "Waiting"]] },
-} as const;
+} as const satisfies Record<string, { label: string; options: readonly (readonly [string, string])[] }>;
 
 function History() {
   const [params, setParams] = useSearchParams();
+  // Wallets and verifiers come from the registry, so external ones from the parties file can be filtered too.
+  const parties = useQuery({ queryKey: ["parties"], queryFn: api.parties });
+  const optionsFor = (key: keyof typeof FILTERS): readonly (readonly [string, string])[] =>
+    key === "wallet"
+      ? [["", "Any"], ...(parties.data?.wallets ?? []).filter((w) => w.runnable).map((w) => [w.id, w.label] as const)]
+      : key === "verifier"
+        ? [["", "Any"], ...(parties.data?.verifiers ?? []).map((v) => [v.id, v.label] as const)]
+        : FILTERS[key].options;
   const qs = new URLSearchParams([...params].filter(([k, v]) => k in FILTERS && v));
   qs.set("limit", "200");
   const q = useQuery({ queryKey: ["runs", "history", qs.toString()], queryFn: () => api.runs(`?${qs}`), refetchInterval: 10_000 });
@@ -115,7 +148,7 @@ function History() {
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {Object.entries(FILTERS).map(([key, f]) => (
+        {(Object.entries(FILTERS) as [keyof typeof FILTERS, (typeof FILTERS)[keyof typeof FILTERS]][]).map(([key, f]) => (
           <Field key={key} label={f.label}>
             {(id) => (
               <Select
@@ -128,7 +161,7 @@ function History() {
                   setParams(next, { replace: true });
                 }}
               >
-                {f.options.map(([v, l]) => (
+                {optionsFor(key).map(([v, l]) => (
                   <option key={v} value={v}>
                     {l}
                   </option>
@@ -174,7 +207,7 @@ export default function ResultsPage() {
     <>
       <PageHeader
         title="Results"
-        lede="The matrix shows the latest run for every combination of credential, verifier and presentation style. History lists every run, newest first."
+        lede="The matrix shows the latest run for every combination of credential, wallet, verifier and presentation style. History lists every run, newest first."
         action={
           <div role="tablist" aria-label="Results view" className="flex gap-1 rounded-md bg-sunken p-1">
             {(["matrix", "history"] as const).map((t) => (

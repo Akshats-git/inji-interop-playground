@@ -100,7 +100,8 @@ function issuerLines(c: Capabilities) {
 }
 
 function verifierLines(c: Capabilities) {
-  const inji = c.proven.filter((r) => r.verifier.startsWith("Inji Verify"));
+  // Only the bundled Inji Verify: a hosted one (MOSIP Collab's 1.0) has its own panel below.
+  const inji = c.proven.filter((r) => r.verifier === c.claimed.verifier.name);
   const formats: Item[] = [
     { label: "W3C JSON-LD, VCDM 1.1", claimed: true, rows: inji.filter((r) => r.format.includes("DM 1.1")) },
     { label: "W3C JSON-LD, VCDM 2.0", claimed: true, rows: inji.filter((r) => r.format.includes("DM 2.0")) },
@@ -113,6 +114,42 @@ function verifierLines(c: Capabilities) {
   ];
   const suites: Item[] = c.claimed.verifier.signatureSuites.map((s) => ({ label: s, claimed: true, rows: inji.filter((r) => r.proof === s) }));
   return { formats, presentation, suites };
+}
+
+/** A hosted Inji (MOSIP Collab): what its verifier and issuers advertise, against what runs here proved. */
+function HostedPanel({ h, proven }: { h: Capabilities["hosted"][number]; proven: Proven[] }) {
+  const v = h.verifier;
+  const items: Item[] = v
+    ? [
+        { label: "W3C JSON-LD, VCDM 1.1", claimed: v.formats.includes("ldp_vc"), rows: proven.filter((r) => r.format.includes("DM 1.1")) },
+        { label: "W3C JSON-LD, VCDM 2.0", claimed: v.formats.includes("ldp_vc"), rows: proven.filter((r) => r.format.includes("DM 2.0")) },
+        { label: "IETF SD-JWT VC (vc+sd-jwt and dc+sd-jwt)", claimed: v.formats.some((f) => f.includes("sd-jwt")), rows: proven.filter((r) => r.format.includes("sd-jwt")) },
+        { label: "OpenID4VP with DCQL", claimed: v.queryLanguages.includes("DCQL"), rows: proven.filter((r) => r.mode !== "direct-share" && r.query === "dcql") },
+        { label: "OpenID4VP with Presentation Exchange", note: "The 1.0 line dropped it: Inji's policy is no fallback.", claimed: v.queryLanguages.includes("Presentation Exchange"), rows: proven.filter((r) => r.mode !== "direct-share" && r.query === "presentation_exchange") },
+        { label: "Direct share (v2 vc-verification)", claimed: true, rows: proven.filter((r) => r.mode === "direct-share") },
+      ]
+    : [];
+  return (
+    <Panel title={`${h.name}${h.version ? `, Inji ${h.version}` : ""} (hosted)`}>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {v && <Line title={`${v.name} verifies`} items={items} lane="present" />}
+        <div>
+          <h3 className="mb-3 text-base">Its issuers advertise</h3>
+          <ul className="flex flex-col gap-2 text-sm">
+            {h.issuers.map((i) => (
+              <li key={i.name} className="rounded-md border border-hairline px-3 py-2">
+                <span className="font-bold">{i.name}</span>
+                <span className="block text-muted">
+                  OpenID4VCI {i.protocol}, {i.types} type{i.types === 1 ? "" : "s"}: {i.formats.join(", ") || "none read"}
+                  {i.error ? `. Metadata unreadable: ${i.error}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </Panel>
+  );
 }
 
 function ProvenTable({ rows }: { rows: Proven[] }) {
@@ -200,6 +237,10 @@ export default function CapabilitiesPage() {
               </div>
             </Panel>
           </div>
+
+          {c.hosted.map((h) => (
+            <HostedPanel key={h.id} h={h} proven={c.proven.filter((r) => h.verifier && r.verifier === h.verifier.name)} />
+          ))}
 
           <Panel title="QR Lab: will a photo fit?">
             <p className="mb-5 max-w-[68ch] text-sm text-muted">

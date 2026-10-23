@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { TAMPER_PRESETS, type TamperPreset } from "@playground/core";
-import { api, ApiError, type HeldSummary } from "../lib/api";
-import { ago, formatLabel } from "../lib/format";
+import { authorizationCodeOffer, TAMPER_PRESETS, type TamperPreset } from "@playground/core";
+import { api, ApiError, type CollectJob, type HeldSummary } from "../lib/api";
+import { ago, formatLabel, hostOf } from "../lib/format";
 import { JsonView } from "../components/JsonView";
+import { QrCode } from "../components/QrCode";
 import { QrMeasureView } from "../components/QrLab";
-import { Button, cx, Empty, Field, Input, Notice, PageHeader, Panel, Select, StatusMark, Textarea } from "../components/ui";
+import { TestData } from "../components/TestData";
+import { Button, Choice, cx, Empty, Field, Input, Notice, PageHeader, Panel, Select, StatusMark, Textarea } from "../components/ui";
 
 const errorText = (e: unknown, fallback: string) => (e instanceof ApiError ? e.message : fallback);
 
@@ -91,6 +93,131 @@ function CollectExternal({ onCollected }: { onCollected: () => void }) {
           </Notice>
         </div>
       )}
+    </Panel>
+  );
+}
+
+/**
+ * Hosted Inji issuers (MOSIP Collab) use the authorization code flow: the holder signs in at eSignet. The Reference
+ * Wallet can do that by itself with a demo identity, or send you to eSignet's page; a phone wallet scans an
+ * authorization-code offer and signs in on the phone.
+ */
+function CollectHosted({ onCollected }: { onCollected: () => void }) {
+  const q = useQuery({ queryKey: ["hosted"], queryFn: api.hosted, staleTime: 60_000 });
+  const envs = q.data?.environments ?? [];
+  const all = envs.flatMap((e) => e.issuers.flatMap((i) => i.types));
+  const collectable = all.filter((t) => t.canIssue);
+  const [typeId, setTypeId] = useState("");
+  const [mode, setMode] = useState<"auto" | "interactive">("auto");
+  const [identity, setIdentity] = useState("");
+  const [showQr, setShowQr] = useState(false);
+  const [job, setJob] = useState<CollectJob>();
+  const type = all.find((t) => t.id === typeId) ?? collectable[0];
+  const env = envs.find((e) => e.id === type?.hosted?.environmentId);
+  const start = useMutation({ mutationFn: () => api.collectHosted(type!.id, { mode, individualId: identity || undefined }), onSuccess: setJob });
+  // Poll a collection until it ends; a sign-in by a person can take a minute or two.
+  useEffect(() => {
+    if (!job || job.status === "done" || job.status === "failed") return;
+    const t = setTimeout(() => void api.collectJob(job.id).then(setJob).catch(() => undefined), 2000);
+    return () => clearTimeout(t);
+  }, [job]);
+  useEffect(() => {
+    if (job?.status === "done") onCollected();
+  }, [job?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (q.isLoading) return <div className="min-h-64" aria-hidden />;
+  if (!envs.length || !type?.hosted) return null;
+  const h = type.hosted;
+  return (
+    <Panel title={`Collect from ${envs.map((e) => e.name).join(", ")}`} className="border-t-4 border-t-issue">
+      <p className="mb-4 max-w-[75ch] text-sm text-muted">
+        Real Inji Certify issuers hosted by MOSIP, found through {env?.name}'s Mimoto. They use the <strong className="text-ink">authorization code flow</strong>: the holder signs in at eSignet
+        and the issuer fills the claims from that identity.
+      </p>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
+        <form
+          className="flex min-w-0 flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            setJob(undefined);
+            start.mutate();
+          }}
+        >
+          <Field label="Credential" hint={`${type.issuerName}, OpenID4VCI ${h.protocol}, ${formatLabel(type.format, type.dataModel)}. Sign-in at ${hostOf(h.authorizationServer)}.`}>
+            {(id) => (
+              <Select id={id} value={type.id} onChange={(e) => setTypeId(e.target.value)}>
+                {envs.flatMap((e) =>
+                  e.issuers
+                    .filter((i) => i.types.length)
+                    .map((i) => (
+                      <optgroup key={`${e.id}/${i.id}`} label={`${i.name}${i.types.some((t) => t.canIssue) ? "" : " (phone only)"}`}>
+                        {i.types.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.displayName}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )),
+                )}
+              </Select>
+            )}
+          </Field>
+          {type.canIssue ? (
+            <>
+              <div role="radiogroup" aria-label="How the Reference Wallet signs in" className="grid gap-2 sm:grid-cols-2">
+                <Choice name="collect-mode" value={"auto" as const} current={mode} onChange={setMode} title="Automatically" note="A demo identity and the test OTP." />
+                <Choice name="collect-mode" value={"interactive" as const} current={mode} onChange={setMode} title="I'll sign in myself" note="eSignet's own page, in a new tab." />
+              </div>
+              {mode === "auto" && env && (
+                <Field label="Demo identity">
+                  {(id) => (
+                    <Select id={id} value={identity} onChange={(e) => setIdentity(e.target.value)}>
+                      {env.testData.identities.map((i, n) => (
+                        <option key={i.id} value={n === 0 ? "" : i.id}>
+                          {i.id}, {i.label}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </Field>
+              )}
+              <Button tone="primary" type="submit" busy={start.isPending || (job !== undefined && !["done", "failed", "waiting-login"].includes(job.status))} className="self-start">
+                Collect with the Reference Wallet
+              </Button>
+            </>
+          ) : (
+            <Notice>
+              {type.issuerName} signs holders in at {hostOf(h.authorizationServer)}, where the Reference Wallet has no OAuth client. Scan its offer with Inji Wallet instead, or add it from
+              the app's own issuer list.
+            </Notice>
+          )}
+          {start.error && <Notice tone="error">{errorText(start.error, "The collection could not start.")}</Notice>}
+          {job?.status === "waiting-login" && job.loginUrl && (
+            <Notice>
+              <span className="block font-bold">Sign in at eSignet, then come back.</span>
+              <a href={job.loginUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-10 items-center rounded-md bg-ink px-4 font-bold text-paper hover:bg-issue">
+                Open eSignet in a new tab
+              </a>
+            </Notice>
+          )}
+          {job?.status === "failed" && <Notice tone="error">{job.error}</Notice>}
+          {job?.status === "done" && job.held && (
+            <Notice>
+              Collected <strong>{job.held.title}</strong> from {hostOf(job.held.issuer)}. It is now in the list above.
+            </Notice>
+          )}
+          {(mode === "interactive" || !type.canIssue || showQr) && <TestData environment={h.environmentId} issuerId={type.issuerId} />}
+        </form>
+        <div className="flex flex-col items-center gap-2">
+          {showQr ? (
+            <>
+              <QrCode value={authorizationCodeOffer(h.credentialIssuer, [type.configurationId], h.authorizationServer)} label={`Authorization-code offer for ${type.displayName}`} />
+              <p className="max-w-[18rem] text-center text-sm text-muted">Scan with Inji Wallet (the 1.0.0-alpha.1 build from collab.mosip.net); it signs you in at eSignet with the test data.</p>
+            </>
+          ) : (
+            <Button onClick={() => setShowQr(true)}>Show the QR code for a phone</Button>
+          )}
+        </div>
+      </div>
     </Panel>
   );
 }
@@ -216,6 +343,12 @@ function HeldDetail({ id, onDeleted }: { id: string; onDeleted: () => void }) {
           ))}
         </dl>
       )}
+      {h.format === "mso_mdoc" && (
+        <Notice>
+          An ISO mDoc (mso_mdoc): CBOR, signed by the issuer and bound to this wallet's device key. The playground keeps it but does not decode its claims, and no verifier
+          here can check it yet: Inji Verify does not support mDoc.
+        </Notice>
+      )}
       <p className="text-sm">
         Bound to holder key <code className="font-mono break-all text-muted">{h.holder}</code>
       </p>
@@ -281,6 +414,7 @@ export default function WalletPage() {
           <CollectOffer initial={params.get("offer") ?? ""} onCollected={() => void qc.invalidateQueries({ queryKey: ["held"] })} />
           <AnswerRequest initial={params.get("request") ?? ""} held={held.data ?? []} />
         </div>
+        <CollectHosted onCollected={() => void qc.invalidateQueries({ queryKey: ["held"] })} />
         <section aria-labelledby="held-title">
           <h2 id="held-title" className="mb-3 text-xl">
             Held credentials

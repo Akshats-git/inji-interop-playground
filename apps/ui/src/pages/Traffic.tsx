@@ -78,7 +78,10 @@ function LiveFeed() {
         </button>
       </div>
       {q.isLoading ? (
-        <p className="text-muted">Loading recent traffic…</p>
+        // Hold the feed's eventual height, so the Decoder below does not jump when it arrives.
+        <p className="min-h-[36rem] text-muted" aria-busy>
+          Loading recent traffic…
+        </p>
       ) : !all.length ? (
         <Empty title="No traffic yet">
           Every request that passes through the gateway shows up here as it happens. <Link to="/" className="text-issue underline">Start a run</Link> or point a wallet at an offer.
