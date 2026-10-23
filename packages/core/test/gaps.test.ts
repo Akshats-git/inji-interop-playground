@@ -40,6 +40,7 @@ describe("known gaps", () => {
     expect(knownGapOf(hosted({ verifier: "collab-verify", tamper: "self-signed-sdjwt", format: "dc+sd-jwt" as never, hostedIssuer: true }))).toBe("G11");
     expect(knownGapOf(hosted({ verifier: "collab-verify", tamper: "wrong-nonce", format: "dc+sd-jwt" as never, hostedIssuer: true }))).toBeUndefined();
     expect(knownGapOf(hosted({ verifier: "reference-verifier", format: "ldp_vc", outcome: "REJECTED", hostedIssuer: true, detail: "Safe mode validation error." }))).toBe("G15");
+    expect(knownGapOf(hosted({ verifier: "collab-verify", format: "ldp_vc", outcome: "REJECTED", hostedIssuer: true, detail: "PublicKeyResolutionFailedException: Public key extraction failed for kid: did:web:x#k" }))).toBe("G41");
   });
 
   it("never explains away a run that behaved as expected, or a new failure", () => {

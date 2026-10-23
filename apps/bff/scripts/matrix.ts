@@ -109,7 +109,7 @@ const COLLAB_ROWS: Row[] = [
   { id: "C4", type: MOCK, verifier: "collab-verify", query: "dcql", requested: ["email"], dcqlPaths: "inji" },
   { id: "C5", type: MOCK2, verifier: "collab-verify", query: "dcql", requested: [] },
   { id: "C6", type: C_FARMER, verifier: "collab-verify", query: "dcql", requested: [] },
-  { id: "C7", type: C_LAND, verifier: "collab-verify", query: "dcql", requested: [] },
+  { id: "C7", type: C_LAND, verifier: "collab-verify", query: "dcql", requested: [], knownGap: "G41" },
   { id: "C8", type: MOCK_SD, verifier: "collab-verify", mode: "direct-share" },
   { id: "C9", type: MOCK, verifier: "collab-verify", query: "presentation_exchange", requested: [] },
   // Crossing the version split: Collab's 1.0 credentials at the bundled Verify 0.18.2, the bundled 0.14 ones at Verify 1.0.
@@ -124,7 +124,7 @@ const COLLAB_ROWS: Row[] = [
   { id: "C16", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "wrong-nonce", requested: ["UIN"] },
   { id: "C17", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "no-holder-proof", requested: ["UIN"] },
   { id: "C18", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "self-signed-sdjwt", requested: ["UIN"], knownGap: "G11" },
-  { id: "C19", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "alter-claim", requested: ["UIN"] },
+  { id: "C19", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "alter-claim", requested: ["dateOfBirth"] },
   { id: "C20", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "foreign-holder", requested: ["UIN"] },
   { id: "C21", type: MOCK, verifier: "collab-verify", query: "dcql", tamper: "alter-claim", requested: [] },
 ];
@@ -217,7 +217,9 @@ async function main() {
   const withCollab = Boolean(status.hosted?.some((h) => h.id === "collab" && h.reachable)) && catalog.some((t) => t.id === MOCK && t.canIssue);
   if (!withCollab) console.log("MOSIP Collab not reachable (or its test client key missing): skipping the C rows");
   const collabRows = COLLAB_ROWS.filter((r) => !r.needsPublicUrl || status.mode === "public");
-  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : []), ...(withCollab ? collabRows : [])];
+  // ONLY=C7,C19 reruns just those rows (the report then lists only them), for chasing one result.
+  const only = process.env.ONLY?.split(",").map((x) => x.trim());
+  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : []), ...(withCollab ? collabRows : [])].filter((r) => !only || only.includes(r.id));
   const results: { row: Row; run?: Run; error?: string }[] = [];
   for (const row of rows) {
     // Certify fetches W3C contexts over the internet (gap G16), so retry once on a transient issuance error.

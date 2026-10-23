@@ -225,6 +225,7 @@ export const KNOWN_GAPS = {
   G33: "walt.id's wallet puts the definition id in descriptor_map",
   G35: "walt.id's wallet fetches request_uri as JSON only; Inji Verify answers 406",
   G36: "Inji Verify 1.0 reads DCQL claim paths from credentialSubject, not from the credential's root as OpenID4VP 1.0 does",
+  G41: "Collab's Land registry signs with a key its did:web document does not list, so no verifier can resolve it",
 } as const;
 export type KnownGapId = keyof typeof KNOWN_GAPS;
 
@@ -251,6 +252,7 @@ export function knownGapOf(run: Pick<Run, "spec" | "labels" | "result">): KnownG
   if (spec.wallet === "waltid-wallet" && spec.verifier === "reference-verifier" && r.verifierOutcome === "REJECTED") return "G33";
   if (spec.wallet === "waltid-wallet" && spec.verifier === "inji-verify" && spec.verifyRequest !== "by-value" && r.verifierOutcome === "NOT_REACHED" && r.explanation.includes("present step")) return "G35";
   if (labels.hosted?.verifier && labels.format === "ldp_vc" && spec.query === "dcql" && spec.dcqlPaths !== "inji" && r.verifierOutcome === "REJECTED" && /claim path/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)) return "G36";
+  if (labels.hosted?.issuer && r.verifierOutcome === "REJECTED" && /public key (extraction|resolution) failed/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)) return "G41";
   return undefined;
 }
 
