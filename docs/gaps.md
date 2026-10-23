@@ -355,8 +355,7 @@ did:web:inji.github.io:inji-config:collab:landregistry#0B6e9kc5PoTRd_L9FrmkVRCQG
 curl -s https://inji.github.io/inji-config/collab/landregistry/did.json | jq -r '.verificationMethod[].id'
 # did:web:inji.github.io:inji-config:collab:landregistry#2Fx_l12c8_2xKT-I2QL1dF4UIncSNwyuAx11PxLDtdc   (no #0B6e9kc5…)
 ```
-The mock and Farmer issuers' keys resolve (C2, C6). The MOSIP ID, insurance and mDL issuers publish no DID
-document at the same place (404), which fits their SD-JWT/mDoc signing with `x5c`; they were not tested here.
+The mock and Farmer issuers' keys resolve (C2, C6). The MOSIP ID, insurance and mDL issuers publish no DID document at the same place (404); their credentials were not verified here.
 
 ## MOSIP Collab (Inji 1.0.0-alpha.1)
 
