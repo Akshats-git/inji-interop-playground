@@ -159,3 +159,68 @@ wallets:
   #   install: { android: "https://play.google.com/store/apps/details?id=<package>" }
   #   formats: [vc+sd-jwt]
   #   protocols: [OpenID4VCI, OpenID4VP]
+
+# Hosted Inji deployments the playground connects to over the internet. MOSIP's Collab sandbox runs the Inji
+# 1.0.0-alpha.1 line: real Inji Certify issuers (listed by its Mimoto), eSignet, and Inji Verify 1.0 (DCQL).
+# The local bundle stays the 0.x line (Certify 0.14.0, Verify 0.18.2), so runs can cross between the two.
+environments:
+  - id: collab
+    name: MOSIP Collab
+    description: >-
+      MOSIP's public sandbox. Its issuers use the authorization code flow: the holder signs in at eSignet with a
+      UIN and an OTP (MOSIP publishes demo UINs and a static test OTP).
+    homepage: https://collab.mosip.net/
+    version: 1.0.0-alpha.1
+    # Mimoto's issuer list is where the playground finds Collab's issuers; each issuer's own metadata gives its
+    # credential types. iiit-dharwad is listed by Collab's Mimoto but hosted by a third party outside Collab, with
+    # its own eSignet and 47 certificate types; delete the exclude line to bring it in.
+    mimoto:
+      url: https://api.collab.mosip.net
+      exclude: [iiit-dharwad]
+    # Collab's mock issuer (named in the PS2 problem statement) is not in Mimoto's list, so it is named here.
+    issuers:
+      - { id: mock, name: Collab mock issuer, credentialIssuer: "https://injicertify-mock.collab.mosip.net" }
+    verify:
+      url: https://injiverify.collab.mosip.net/v1/verify
+      name: Inji Verify 1.0 (MOSIP Collab)
+      # Verify's own DID with OpenID4VP 1.0's client identifier prefix, as Collab's verifier UI uses it: Verify
+      # signs the request object and the QR code carries only a request_uri.
+      clientId: decentralized_identifier:did:web:injiverify.collab.mosip.net:v1:verify
+      queryLanguages: [dcql]
+      version: 1.0.0-alpha.1
+    # MOSIP's documented test client for wallets built locally against Collab's eSignet ("wallet-demo", see
+    # docs.inji.io → Credential Providers → "Use mock data from collab sandbox env"). ./playground.sh fetches its
+    # published key into collab/keys/ (git-ignored). Registered at eSignet-mock with this redirect URI only, so
+    # the Reference Wallet can sign in for issuers whose authorization server is eSignet-mock.
+    client:
+      clientId: wallet-demo
+      redirectUri: http://localhost:3004/redirect
+      privateKeyFile: collab/keys/wallet-demo.key.pem
+      authorizationServers: [https://esignet-mock.collab.mosip.net]
+    # Shown next to every authorization-code QR code and sign-in link (Swati, AMA 4), and used when the Reference
+    # Wallet signs in by itself. All of it is public mock data from docs.inji.io.
+    testData:
+      otp: "111111"
+      # The first is the default for automatic sign-ins: checked on 23 Oct 2026, it has a record at the mock,
+      # Farmer, Land registry and mDL issuers. The others have records at the mock and Farmer issuers.
+      identities:
+        - { id: "2154189532", label: "Male adult (mock UIN)" }
+        - { id: "5614273165", label: "Male adult (mock UIN)" }
+        - { id: "5860356276", label: "Female adult (mock UIN)" }
+        - { id: "2089250384", label: "Female adult (mock UIN)" }
+        - { id: "3963293078", label: "Minor, 5 to 18 (mock UIN)" }
+        - { id: "5134067562", label: "Infant, under 5 (mock UIN)" }
+      notes:
+        - issuer: Land
+          text: "Land registry: only 2154189532 and 5614273165 have land records; other UINs answer ERROR_FETCHING_DATA_RECORD_FROM_TABLE."
+        - issuer: MockMdl
+          text: "Driving licence (mDoc): use 2154189532; the others answer ERROR_FETCHING_IDENTITY_DATA."
+        - issuer: TruckPass
+          text: "Truck pass: none of the published demo UINs has a record here (ERROR_FETCHING_DATA_RECORD_FROM_TABLE)."
+        - issuer: StayProtected
+          text: "Insurance: sign in with Policy Number 12345, Full Name (policy name) insuranceCredentials and date of birth 2000-01-01."
+        - issuer: Mosip
+          text: "MOSIP National ID: needs a UIN registered on Collab. Get your own at the self-registration page; its OTP is emailed to you."
+        - issuer: MosipTAN
+          text: "Tax Department: also issued from a UIN registered on Collab (self-registration)."
+      selfRegistration: https://self-register.collab.mosip.net/

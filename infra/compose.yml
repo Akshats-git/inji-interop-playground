@@ -111,18 +111,26 @@ services:
       DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/playground
       CERTIFY_INTERNAL_URL: http://certify:8090
       VERIFY_INTERNAL_URL: http://verify-service:8080
+      # Inji Verify's DID: as a client id it makes Verify sign requests (request_uri), which keeps QR codes small.
+      VERIFY_DID: ${VERIFY_DID:-did:web:playground.localhost%3A8080:pub:verify:v1:verify}
       EVENT_ENCRYPTION_KEY: ${EVENT_ENCRYPTION_KEY:-}
       RETENTION_DAYS: ${RETENTION_DAYS:-7}
       # The tunnel only exposes the wallet-facing gateway (/pub/*) unless this is "true".
       PUBLIC_UI: ${PUBLIC_UI:-false}
-      # External issuers, verifiers and wallets. Read at start-up: edit infra/parties.yaml, then ./playground.sh restart.
+      # External issuers, verifiers and wallets, and hosted Inji (MOSIP Collab). Read at start-up: edit
+      # infra/parties.yaml, then ./playground.sh restart.
       PARTIES_FILE: /app/config/parties.yaml
+      # Where eSignet sends a person's browser back after they sign in (MOSIP's Collab test client is registered
+      # with http://localhost:3004/redirect).
+      OAUTH_REDIRECT_PORT: "3004"
     volumes:
       - ./parties.yaml:/app/config/parties.yaml:ro
       - ./external/keys:/app/config/external/keys:ro
+      - ./collab/keys:/app/config/collab/keys:ro
     # This computer only: the API is unauthenticated. Phones reach the gateway through the tunnel instead.
     ports:
       - "127.0.0.1:${PLAYGROUND_PORT:-8080}:8080"
+      - "127.0.0.1:3004:3004"
     networks:
       inji:
         # Containers reach the gateway under the same name the browser uses (*.localhost is loopback in

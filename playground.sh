@@ -91,6 +91,33 @@ ensure_lab_keys() {
   say "Generated the external lab's demo issuer key and certificate in infra/external/keys/."
 }
 
+# MOSIP's documented Collab test client (wallet-demo): its key is published in MOSIP's documentation repository
+# (docs.inji.io → Credential Providers → "Use mock data from collab sandbox env"). Fetched once, kept out of git.
+# Without it the Collab lane still works for phones; only the Reference Wallet's own sign-in needs it.
+COLLAB_KEY_URL="https://github.com/mosip/documentation/raw/inji/docs/.gitbook/assets/oidckeystore.p12.zip"
+COLLAB_KEY_PASS="xy4gh6swa2i"
+ensure_collab_key() {
+  local dir="$ROOT/infra/collab/keys" tmp
+  [[ -f "$dir/wallet-demo.key.pem" ]] && return
+  command -v openssl >/dev/null && command -v curl >/dev/null || { warn "openssl and curl are needed to fetch MOSIP's Collab test client key; the Reference Wallet will not sign in at Collab by itself."; return; }
+  tmp="$(mktemp -d)"
+  if curl -fsSL --max-time 30 -o "$tmp/k.zip" "$COLLAB_KEY_URL" &&
+    { unzip -oq "$tmp/k.zip" oidckeystore.p12 -d "$tmp" 2>/dev/null || python3 -I -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extract("oidckeystore.p12", sys.argv[2])' "$tmp/k.zip" "$tmp"; }; then
+    # The keystore uses legacy RC2 encryption: OpenSSL 3 needs -legacy, LibreSSL (macOS) must not get it.
+    if openssl pkcs12 -in "$tmp/oidckeystore.p12" -passin "pass:$COLLAB_KEY_PASS" -nocerts -nodes -legacy 2>/dev/null | openssl pkey -out "$dir/wallet-demo.key.pem" 2>/dev/null ||
+      openssl pkcs12 -in "$tmp/oidckeystore.p12" -passin "pass:$COLLAB_KEY_PASS" -nocerts -nodes 2>/dev/null | openssl pkey -out "$dir/wallet-demo.key.pem" 2>/dev/null; then
+      chmod 644 "$dir/wallet-demo.key.pem"
+      say "Fetched MOSIP's Collab test client key (wallet-demo) into infra/collab/keys/."
+    else
+      rm -f "$dir/wallet-demo.key.pem"
+      warn "Could not read MOSIP's Collab test client key; the Reference Wallet will not sign in at Collab by itself."
+    fi
+  else
+    warn "Could not download MOSIP's Collab test client key (offline?); the Reference Wallet will not sign in at Collab by itself."
+  fi
+  rm -rf "$tmp"
+}
+
 # Profiles for this start: the external lab when it is switched on.
 lab_profile() { if external_on; then echo "--profile external"; fi; }
 
@@ -162,6 +189,7 @@ cmd_up() {
   require_docker
   ensure_env
   parse_external_flag "$@"
+  ensure_collab_key
   local_identity
   # Leave tunnel mode cleanly if it was on.
   compose --profile tunnel rm -sf tunnel >/dev/null 2>&1 || true
@@ -177,6 +205,7 @@ cmd_restart() {
   require_docker
   [[ -f "$ENV_FILE" ]] || die ".env is missing: run ./playground.sh up first."
   if external_on; then ensure_lab_keys; fi
+  ensure_collab_key
   say "Restarting the playground; it reads infra/parties.yaml again."
   # shellcheck disable=SC2046
   compose $(lab_profile) up -d --no-deps --force-recreate --wait --wait-timeout 120 playground
@@ -189,6 +218,7 @@ cmd_restart() {
 cmd_tunnel() {
   require_docker
   ensure_env
+  ensure_collab_key
   local url=${1:-}
   if [[ -n "$url" ]]; then
     [[ "$url" == https://* ]] || die "The public URL must start with https:// (phones and did:web both need HTTPS)."
