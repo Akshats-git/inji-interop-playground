@@ -84,7 +84,9 @@ gives the full version.
 2. **The tunnel exposes only `/pub/*`.** In tunnel mode the public URL is a real internet address. A wallet
    only ever needs the wallet-facing gateway, so the exposure guard
    ([exposure.ts](../apps/bff/src/gateway/exposure.ts)) answers 404 for the UI, `/api/*` and `/ws` when a
-   request's `Host` is the public host. `PUBLIC_UI=true` in `.env` opts the UI and API in (to use the UI on a
+   request came through the public URL: its `Host` or any `X-Forwarded-Host` entry is the public host, or it
+   carries Cloudflare's edge headers. (A forwarded header naming a local host never overrides that; until
+   19 Oct it did, which let `X-Forwarded-Host: localhost` reach the API through the tunnel.) `PUBLIC_UI=true` in `.env` opts the UI and API in (to use the UI on a
    phone). It also exposes recorded tokens to anyone with the URL, so leave it off unless you need it, and
    only on a URL you control.
 3. **Certify's admin APIs are never exposed.** In the reference setup they have no authentication: anyone who
@@ -123,6 +125,32 @@ handled like code:
 - **Synthetic data still applies.** Claim values typed into a run with an external issuer are sent to that
   issuer to be signed. Use made-up values, as everywhere else in the playground.
 
+## MOSIP Collab (a hosted environment)
+
+The Collab lane connects the playground to MOSIP's public sandbox over the internet. What that means for privacy:
+
+- **Only MOSIP's public demo data goes there.** The identities are the mock UINs MOSIP publishes for the sandbox
+  (listed in [infra/parties.yaml](../infra/parties.yaml)) and the static test OTP `111111`. The playground never
+  asks for a real UIN or phone number and never stores one. Use your own self-registered UIN only through the
+  interactive sign-in, in your own browser at eSignet: the playground sees the authorization code, not your OTP.
+- **Automatic sign-in is deliberate and limited.** In "automatic" mode the Reference Wallet calls eSignet's
+  own authentication API with a demo UIN and the static OTP, then exchanges the code. It exists so the matrix and
+  the CI run need no person. It refuses to run for an environment without a published static OTP, and the
+  interactive mode is always available.
+- **The `wallet-demo` private key is MOSIP's, and public.** MOSIP publishes the test OIDC client's PKCS12 file and
+  password in its documentation for everyone to use. `./playground.sh` downloads it into `infra/collab/keys/`
+  (git-ignored, mounted read-only) so the Reference Wallet can authenticate to eSignet with `private_key_jwt`.
+  It identifies a shared test client, not a person, and must never be reused for anything else. Its registered
+  redirect is `http://localhost:3004/redirect`, so the playground publishes port 3004 on `127.0.0.1` only; the
+  redirect page serves nothing but that path and checks the `state` of a sign-in the playground started itself.
+- **The tunnel does not expose it.** In tunnel mode only `/pub/*` is public, as before; the `/api/hosted*` routes
+  and port 3004 stay local.
+- **Everything is recorded like any other run**, with tokens and claim values masked and sealed at rest. The
+  credentials Collab's issuers produce hold fictional data (a farmer, a plot of land, a driving licence).
+- **The sandbox is shared.** Collab can change or reset at any time and other participants use the same demo
+  UINs, so a result is a snapshot: every Collab finding in [gaps.md](gaps.md) is dated and names the versions
+  seen.
+
 ## No secrets in git
 
 - `.env` holds the encryption key, the Postgres password and the mode settings. It is generated on first start
@@ -130,6 +158,7 @@ handled like code:
 - The Postgres password is random for every new database volume. An existing volume created before passwords
   were generated keeps the old default, and `./playground.sh` warns about it.
 - The external lab's demo issuer key (`infra/external/keys/`) is generated on first use and git-ignored.
+- `infra/collab/keys/` (MOSIP's public test client key, fetched by `./playground.sh`) is git-ignored too.
 - Keystores (`*.p12`) are git-ignored and live in Docker volumes. The private keys the Reference Wallet and
   Reference Verifier use are generated at run time.
 - Fixed values that remain are upstream defaults for local use: Certify's PKCS12 keystore password `local`
@@ -138,7 +167,7 @@ handled like code:
 ## Findings this lab surfaced about the Inji stack
 
 Testing with tamper presets found weaknesses in Inji Verify 0.18.2 (G11, G19, G20: forged or replayed SD-JWT
-presentations accepted) and in Certify 0.14.0 (G27: the access token's `sub` carries every claim value; G8:
+presentations accepted; on Collab's Inji Verify 1.0.0-alpha.1, G19 and G20 are fixed but G11 is not) and in Certify 0.14.0 (G27: the access token's `sub` carries every claim value; G8:
 templates without JSON escaping). They are being reported to MOSIP privately; see
 [gaps.md](gaps.md#responsible-disclosure). The playground's own Reference Verifier rejects all of these
 presentations; it is the comparison that shows the gap.
