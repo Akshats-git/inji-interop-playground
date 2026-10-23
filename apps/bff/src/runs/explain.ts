@@ -6,10 +6,11 @@ import { TAMPER_PRESETS, type CredentialStatus, type RunResult, type TamperPrese
 import type { VerifyResultV2 } from "../inji/verify.js";
 import type { VerifierResult } from "../reference/verifier/service.js";
 
+/** `who` names the Inji Verify deployment (the bundled 0.18.2 by default, or a hosted one such as MOSIP Collab's). */
 type Input =
-  | { kind: "inji-vp"; vp: VerifyResultV2; expected: Verdict; tamper: TamperPreset; walletStatus?: number; walletBody?: unknown }
-  | { kind: "inji-direct"; direct: VerifyResultV2["credentialResults"][number]; expected: Verdict; tamper: TamperPreset }
-  | { kind: "inji-error"; errorCode: string; errorDetail: string; expected: Verdict; tamper: TamperPreset; walletStatus?: number; walletBody?: unknown }
+  | { kind: "inji-vp"; vp: VerifyResultV2; expected: Verdict; tamper: TamperPreset; walletStatus?: number; walletBody?: unknown; who?: string }
+  | { kind: "inji-direct"; direct: VerifyResultV2["credentialResults"][number]; expected: Verdict; tamper: TamperPreset; who?: string }
+  | { kind: "inji-error"; errorCode: string; errorDetail: string; expected: Verdict; tamper: TamperPreset; walletStatus?: number; walletBody?: unknown; who?: string }
   | { kind: "ref"; ref: VerifierResult; expected: Verdict; tamper: TamperPreset }
   /** An external verifier from the parties file: only its verdict (and whatever detail it returned) is known. */
   | { kind: "external"; who: string; accepted: boolean; detail?: unknown; expected: Verdict; tamper: TamperPreset };
@@ -87,7 +88,8 @@ export function explainResult(i: Input): RunResult {
     });
     const accepted = i.vp.allChecksSuccessful && i.vp.credentialResults.length > 0;
     const firstErr = i.vp.credentialResults.map((c) => c.schemaAndSignatureCheck?.error ?? c.holderProofCheck?.error ?? c.statusCheck?.find((s) => !s.valid)?.error).find(Boolean);
-    const expired = i.vp.credentialResults.some((c) => c.expiryCheck && !c.expiryCheck.valid);
+    // "Valid but expired": the signature holds and only the validity period has ended.
+    const expired = i.vp.credentialResults.some((c) => c.expiryCheck && !c.expiryCheck.valid && c.schemaAndSignatureCheck?.valid !== false);
     const revoked = i.vp.credentialResults.some((c) => c.statusCheck?.some((s) => !s.valid));
     const status: CredentialStatus = accepted ? "SUCCESS" : expired ? "EXPIRED" : revoked ? "REVOKED" : "INVALID";
     const reason = expired ? "the credential has expired" : revoked ? "the credential has been revoked" : meaning(firstErr?.errorCode, firstErr?.errorMessage);
@@ -98,7 +100,7 @@ export function explainResult(i: Input): RunResult {
       credentialStatus: status,
       errorCode: accepted ? undefined : firstErr?.errorCode ?? status,
       errorDetail: accepted ? undefined : firstErr?.errorMessage,
-      explanation: summarise(accepted, i.expected, i.tamper, reason, "Inji Verify"),
+      explanation: summarise(accepted, i.expected, i.tamper, reason, i.who ?? "Inji Verify"),
       checks,
     };
   }
@@ -106,7 +108,7 @@ export function explainResult(i: Input): RunResult {
     const c = i.direct;
     const accepted = Boolean(c.allChecksSuccessful);
     const err = c.schemaAndSignatureCheck?.error;
-    const expired = c.expiryCheck && !c.expiryCheck.valid;
+    const expired = c.expiryCheck && !c.expiryCheck.valid && c.schemaAndSignatureCheck?.valid !== false;
     return {
       verdict: verdictFor(accepted, i.expected),
       expected: i.expected,
@@ -114,7 +116,7 @@ export function explainResult(i: Input): RunResult {
       credentialStatus: accepted ? "SUCCESS" : expired ? "EXPIRED" : "INVALID",
       errorCode: accepted ? undefined : err?.errorCode ?? (expired ? "ERR_VC_EXPIRED" : "INVALID"),
       errorDetail: err?.errorMessage,
-      explanation: summarise(accepted, i.expected, i.tamper, expired ? "the credential has expired" : meaning(err?.errorCode, err?.errorMessage), "Inji Verify"),
+      explanation: summarise(accepted, i.expected, i.tamper, expired ? "the credential has expired" : meaning(err?.errorCode, err?.errorMessage), i.who ?? "Inji Verify"),
       checks: [
         { name: "Issuer signature & schema", ok: Boolean(c.schemaAndSignatureCheck?.valid), detail: err ? `${err.errorCode}: ${err.errorMessage}` : undefined },
         ...(c.expiryCheck ? [{ name: "Not expired", ok: Boolean(c.expiryCheck.valid) }] : []),
@@ -133,7 +135,7 @@ export function explainResult(i: Input): RunResult {
       credentialStatus: "INVALID",
       errorCode: code,
       errorDetail: detail,
-      explanation: summarise(false, i.expected, i.tamper, meaning(code, detail), "Inji Verify"),
+      explanation: summarise(false, i.expected, i.tamper, meaning(code, detail), i.who ?? "Inji Verify"),
       checks: [{ name: "Presentation accepted for verification", ok: false, detail: `${code}${detail ? `: ${detail}` : ""}` }],
     };
   }

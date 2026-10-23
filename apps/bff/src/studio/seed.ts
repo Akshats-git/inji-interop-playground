@@ -62,6 +62,21 @@ const TYPES: Partial<CredentialTypeInput>[] = [
       { name: "graduationDate", label: "Graduated on", kind: "date", required: true, selectivelyDisclosable: true },
     ],
   },
+  {
+    // Shows "Valid but expired": correctly signed, but its validity ended on 1 Jan 2025.
+    issuerSlug: "veridonia-uni",
+    typeName: "ExpiredLibraryPass",
+    displayName: "Library Pass (expired)",
+    description: "Hard-coded to have expired on 1 Jan 2025, to test how verifiers treat expired credentials.",
+    format: "ldp_vc",
+    dataModel: "2.0",
+    ldpSuite: "Ed25519Signature2020",
+    expiresAt: "2025-01-01T00:00:00.000Z",
+    fields: [
+      { name: "holderName", label: "Holder", kind: "text", required: true, selectivelyDisclosable: true },
+      { name: "cardNumber", label: "Card number", kind: "text", required: true, selectivelyDisclosable: true },
+    ],
+  },
 ];
 
 export const DEMO_CLAIMS: Record<string, Record<string, unknown>> = {

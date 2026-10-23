@@ -10,12 +10,15 @@
  */
 import { EventEmitter } from "node:events";
 import {
+  authorizationCodeOffer,
   catalogFromStudio,
   coerceClaims,
   isExternalTypeId,
+  isHostedTypeId,
   isTruthyVerdict,
   toDcql,
   toPresentationDefinition,
+  validateDcql,
   TAMPER_PRESETS,
   type CatalogType,
   type CredentialType,
@@ -31,6 +34,8 @@ import {
 } from "@playground/core";
 import { z } from "zod";
 import type { Recorder } from "../gateway/recorder.js";
+import type { HostedService } from "../hosted/service.js";
+import { HostedVerifyError, type HostedVerifyClient } from "../hosted/verify.js";
 import type { InjiVerifyClient, VerifyResultV2 } from "../inji/verify.js";
 import { log } from "../log.js";
 import { PartyError, type PartiesService } from "../parties/service.js";
@@ -53,14 +58,20 @@ export const RunSpecInput = z.object({
   claims: z.record(z.unknown()).default({}),
   txCode: z.string().optional(),
   tamper: z.enum(Object.keys(TAMPER_PRESETS) as [keyof typeof TAMPER_PRESETS, ...(keyof typeof TAMPER_PRESETS)[]]).default("none"),
+  verifyRequest: z.enum(["signed", "by-value"]).default("signed"),
   heldCredentialId: z.string().optional(),
   skipIssuance: z.boolean().default(false),
+  /** Authorization-code issuance from a hosted Inji issuer: sign in automatically as a demo identity, or yourself. */
+  login: z.object({ mode: z.enum(["auto", "interactive"]).default("auto"), individualId: z.string().trim().max(40).optional() }).optional(),
+  /** DCQL claim paths for W3C credentials: from the credential's root (OpenID4VP 1.0) or from credentialSubject (Inji, G36). */
+  dcqlPaths: z.enum(["spec", "inji"]).default("spec"),
 });
 
 export const VERSIONS = { "Inji Certify": "0.14.0", "Inji Verify": "0.18.2", "OpenID4VCI": "draft 13", "OpenID4VP": "draft 23 (PE) / 1.0 (DCQL)" };
 
 const HUMAN_TIMEOUT_MS = 10 * 60_000;
-const VERIFIER_CLIENT_ID = "inji-playground";
+/** The client id for Inji Verify requests by value (a pre-registered name; Verify then does not sign). */
+export const VERIFIER_CLIENT_ID = "inji-playground";
 
 /** A verifier should reject tampered presentations and credentials past their expiry date. */
 export function expectationFor(spec: Pick<RunSpec, "tamper">, type: Pick<CatalogType, "expiresAt">): "PASS" | "FAIL" {
@@ -98,6 +109,8 @@ export interface RunInput {
 export class Orchestrator extends EventEmitter {
   private cancelled = new Set<string>();
   private inputs = new Map<string, (input: RunInput) => void>();
+  /** Runs waiting for a person to sign in at eSignet: their OAuth state, so a cancel can release them. */
+  private logins = new Map<string, string>();
 
   constructor(
     private readonly deps: {
@@ -108,14 +121,23 @@ export class Orchestrator extends EventEmitter {
       refVerifier: ReferenceVerifier;
       injiVerify: InjiVerifyClient;
       parties: PartiesService;
+      /** Hosted Inji environments (MOSIP Collab): their issuers, their Inji Verify, signing in at their eSignet. */
+      hosted: HostedService;
+      /** Inji Verify's DID, used as the client id for signed requests. Without it every request goes by value. */
+      verifyDid?: string;
     },
   ) {
     super();
     this.setMaxListeners(200);
   }
 
-  /** The type behind a run: a Studio type id or "ext:<issuer>/<type>". */
+  /** The type behind a run: a Studio type id, "ext:<issuer>/<type>" or "hosted:<environment>/<issuer>/<configuration>". */
   async resolveType(typeId: string): Promise<{ type: CatalogType; studio?: CredentialType }> {
+    if (isHostedTypeId(typeId)) {
+      const found = this.deps.hosted.findType(typeId);
+      if (!found) throw new RunError("unknown_type", `No hosted credential type ${typeId}. Hosted issuers are discovered in the background after start-up; check the Parties page, then try again.`);
+      return { type: found };
+    }
     if (isExternalTypeId(typeId)) {
       const found = this.deps.parties.findType(typeId);
       if (!found) throw new RunError("unknown_type", `No external credential type ${typeId} in the parties file. Was the file changed without a restart?`);
@@ -130,7 +152,7 @@ export class Orchestrator extends EventEmitter {
     const spec = RunSpecInput.parse(input) as RunSpec;
     const { type, studio } = await this.resolveType(spec.typeId);
     const wallet = this.deps.parties.wallet(spec.wallet);
-    const verifier = this.deps.parties.verifier(spec.verifier);
+    const verifier = this.deps.parties.verifier(spec.verifier) ?? this.deps.hosted.verifier(spec.verifier)?.info;
     if (!wallet) throw new RunError("unknown_wallet", `No wallet called "${spec.wallet}". Built-in wallets and the ones in the parties file are listed on the Parties page.`);
     if (!verifier) throw new RunError("unknown_verifier", `No verifier called "${spec.verifier}".`);
     const cast: Cast = { type, studio, wallet, verifier };
@@ -149,6 +171,9 @@ export class Orchestrator extends EventEmitter {
         ...(type.origin === "external" || wallet.origin === "external" || verifier.origin === "external"
           ? { external: { issuer: type.origin === "external" || undefined, wallet: wallet.origin === "external" || undefined, verifier: verifier.origin === "external" || undefined } }
           : {}),
+        ...(type.hosted || verifier.origin === "hosted"
+          ? { hosted: { issuer: type.hosted?.environmentName, verifier: verifier.origin === "hosted" ? this.deps.hosted.environment(verifier.environmentId!)?.name : undefined } }
+          : {}),
         issuer: type.issuerId,
         issuerName: type.issuerName,
         typeName: type.displayName,
@@ -157,7 +182,13 @@ export class Orchestrator extends EventEmitter {
         proofType: type.proof,
         wallet: wallet.label,
         verifier: verifier.label,
-        versions: { ...VERSIONS, ...(type.origin === "external" ? { [type.issuerName]: this.deps.parties.issuers.find((i) => i.id === type.issuerId)?.software ?? "external" } : {}), ...(verifier.software && verifier.origin === "external" ? { [verifier.label]: verifier.software } : {}), ...(wallet.software && wallet.origin === "external" ? { [wallet.label]: wallet.software } : {}) },
+        versions: {
+          ...VERSIONS,
+          ...(type.origin === "external" ? { [type.issuerName]: this.deps.parties.issuers.find((i) => i.id === type.issuerId)?.software ?? "external" } : {}),
+          ...(type.hosted ? { [`Inji Certify (${type.hosted.environmentName}, ${type.issuerName})`]: `${type.hosted.protocol === "1.0" ? "1.0 line" : "0.x line"}, OpenID4VCI ${type.hosted.protocol}` } : {}),
+          ...(verifier.software && verifier.origin !== "builtin" ? { [verifier.label]: verifier.software } : {}),
+          ...(wallet.software && wallet.origin === "external" ? { [wallet.label]: wallet.software } : {}),
+        },
       },
       steps: (["issue", "request", "present", "verify"] as StepName[]).map((name) => ({ name, status: "pending" })),
     };
@@ -169,19 +200,31 @@ export class Orchestrator extends EventEmitter {
 
   /** Combinations that cannot work, refused up front with the reason. */
   private check(spec: RunSpec, c: Cast) {
-    if (!c.wallet.runnable) throw new RunError("unsupported", "Inji Web 0.17 has no credential-offer support, so it cannot take part in issuer-initiated runs. Use it from the Wallet page (wallet-initiated).");
+    if (!c.wallet.runnable) throw new RunError("unsupported", "Inji Web is a wallet-initiated browser wallet on MOSIP Collab: open it, pick an issuer and sign in. It presents only to verifiers its Mimoto trusts, so the playground cannot drive it in runs.");
+    if (c.type.format === "mso_mdoc" && spec.mode !== "direct-share")
+      throw new RunError("unsupported", "No verifier here can check an mso_mdoc credential yet: Inji Verify does not support it (MOSIP, AMA 4) and neither does the Reference Verifier. Collect it from the Wallet page to look at it.");
+    const h = c.type.hosted;
+    if (h) {
+      if (c.wallet.id === "reference-wallet" && !(h.authorizationServer && this.deps.hosted.clientFor(h.environmentId, h.authorizationServer)))
+        throw new RunError("unsupported", `${c.type.issuerName} signs holders in at ${h.authorizationServer ? new URL(h.authorizationServer).host : "its own server"}, where the Reference Wallet has no OAuth client${this.deps.hosted.clientProblem(h.environmentId) ? ` (${this.deps.hosted.clientProblem(h.environmentId)})` : ""}. Use Inji Wallet on a phone, which signs in through ${h.environmentName}'s Mimoto, or pick an issuer marked "automatic".`);
+      if (c.wallet.origin === "external" && !c.wallet.interactive) throw new RunError("unsupported", `${c.wallet.label} is driven through its API and cannot sign a person in at eSignet, so it cannot collect from ${c.type.issuerName}.`);
+    }
+    if (c.verifier.origin === "hosted" && spec.mode === "direct-share" && c.wallet.interactive)
+      throw new RunError("unsupported", `To show a credential's own QR code to ${c.verifier.label}, open its page yourself; the playground can only send it a credential the Reference Wallet holds.`);
     if (spec.tamper !== "none" && !c.wallet.supportsTamper) throw new RunError("unsupported", `Only the Reference Wallet can misbehave on purpose; ${c.wallet.label} presents honestly.`);
     if (spec.mode === "direct-share") {
       if (!c.verifier.supportsDirectShare) throw new RunError("unsupported", `Direct share means showing the credential's own QR code to Inji Verify. ${c.verifier.label} only takes OpenID4VP presentations.`);
       if (!c.wallet.supportsDirectShare) throw new RunError("unsupported", `${c.wallet.label} keeps its credentials behind its API, so it cannot show one as a QR code. Use an OpenID4VP request instead.`);
     }
-    if (c.verifier.origin === "external" && !c.verifier.formats.includes(c.type.format)) throw new RunError("unsupported", `${c.verifier.label} is configured to verify ${c.verifier.formats.join(", ")}, not ${c.type.format}.`);
+    if (c.verifier.origin !== "builtin" && !c.verifier.formats.includes(c.type.format)) throw new RunError("unsupported", `${c.verifier.label} is configured to verify ${c.verifier.formats.join(", ")}, not ${c.type.format}.`);
     if (spec.skipIssuance && c.wallet.id !== "reference-wallet") throw new RunError("unsupported", "Only the Reference Wallet can reuse a credential it already holds.");
   }
 
   cancel(id: string) {
     this.cancelled.add(id);
     this.deps.recorder.release(id);
+    const state = this.logins.get(id);
+    if (state) this.deps.hosted.cancelInteractive(state);
   }
 
   /** Hand a waiting run what it asked for (an offer, or a Continue). Returns false when nothing is waiting. */
@@ -285,6 +328,7 @@ export class Orchestrator extends EventEmitter {
       purpose: `Show your ${type.displayName}`,
       format: type.format,
       typeName: type.typeName,
+      typeIri: type.typeIri,
       vct: type.vct,
       claims,
       requireHolderBinding: true,
@@ -302,6 +346,121 @@ export class Orchestrator extends EventEmitter {
   private partyError(e: unknown): never {
     if (e instanceof PartyError) throw new RunError(e.code, e.message, e.detail === undefined ? undefined : typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail).slice(0, 2000));
     throw e;
+  }
+
+  /** Turn a hosted Inji service's failure (or its absence) into a run error with its answer as the detail. */
+  private hostedError(e: unknown): never {
+    if (e instanceof HostedVerifyError) throw new RunError(e.code, e.message, e.body === undefined ? undefined : JSON.stringify(e.body).slice(0, 2000));
+    const err = e as { code?: string; message: string };
+    throw new RunError(err.code ?? "hosted_error", err.message);
+  }
+
+  /**
+   * Authorization-code issuance from a hosted Inji issuer (MOSIP Collab). The Reference Wallet signs the holder
+   * in at the issuer's eSignet, by itself with a demo identity or with the person on eSignet's own page; a
+   * person's wallet gets an authorization-code offer to scan and signs in on the phone.
+   */
+  private async issueHosted(run: Run, s: RunStep, cast: Cast): Promise<{ heldId?: string; credential?: unknown }> {
+    const { type, wallet: walletInfo } = cast;
+    const h = type.hosted!;
+    const { wallet, hosted } = this.deps;
+    const host = h.authorizationServer ? new URL(h.authorizationServer).host : "the issuer";
+    if (walletInfo.id === "reference-wallet") {
+      const client = hosted.clientFor(h.environmentId, h.authorizationServer!)!;
+      const mode = run.spec.login?.mode ?? "auto";
+      let who = "";
+      const r = await wallet
+        .receiveAuthorized({
+          credentialIssuer: h.credentialIssuer,
+          configId: type.configurationId,
+          client,
+          runId: run.id,
+          typeId: type.id,
+          signIn: async (p) => {
+            if (mode === "auto") {
+              const id = run.spec.login?.individualId ?? hosted.identities(h.environmentId, p.authorizationServer)[0]?.id;
+              who = `as demo identity ${id ?? "?"} with ${h.environmentName}'s test OTP`;
+              s.note = `Signing in at ${host} ${who}…`;
+              await this.save(run);
+              return hosted.signInAutomatically(h.environmentId, p, { individualId: id, runId: run.id });
+            }
+            const { url, code } = hosted.startInteractive(h.environmentId, p);
+            this.logins.set(run.id, p.state);
+            s.status = "waiting";
+            s.action = { kind: "login", uri: url, environment: h.environmentId, hint: `Sign in at ${host} (eSignet) as the holder, with a demo identity from the test data below or your own. eSignet then sends you back to the playground, and the run carries on.` };
+            await this.save(run);
+            try {
+              const c = await code;
+              who = "by you";
+              return c;
+            } finally {
+              this.logins.delete(run.id);
+              s.status = "running";
+              s.action = undefined;
+              await this.save(run);
+            }
+          },
+        })
+        .catch((e) => {
+          const err = e as { code?: string; message: string; status?: number; body?: unknown };
+          throw new RunError(err.code ?? "issuance_failed", err.status ? `${err.message} (HTTP ${err.status})` : err.message, err.body === undefined ? undefined : JSON.stringify(err.body).slice(0, 2000));
+        });
+      s.note = `Signed in at ${host} ${who} and collected the credential from ${type.issuerName} with the authorization code flow (OpenID4VCI ${h.protocol}). Bound to ${r.held.holder.slice(0, 32)}…`;
+      return { heldId: r.held.id, credential: r.credential };
+    }
+    // A person's wallet: an authorization-code offer to scan. The phone then talks to the hosted issuer directly.
+    s.status = "waiting";
+    s.action = {
+      kind: "scan-offer",
+      uri: authorizationCodeOffer(h.credentialIssuer, [type.configurationId], h.authorizationServer),
+      needsConfirm: true,
+      environment: h.environmentId,
+      hint: `Scan with ${walletInfo.label}. It sends you to ${host} (eSignet) to sign in with the test data below, then downloads "${type.displayName}". Inji Wallet can also add it from its own issuer list (+, then ${type.issuerName}). Press Continue once the credential is in the wallet.`,
+    };
+    await this.save(run);
+    await this.waitForInput(run, (i) => Boolean(i.confirm));
+    s.note = `${walletInfo.label} collected "${type.displayName}" from ${type.issuerName}. That exchange ran between the phone and ${h.environmentName}, outside the playground's gateway.`;
+    return {};
+  }
+
+  /** A presentation request at a hosted Inji Verify: DCQL for the 1.0 line, or Presentation Exchange to record its refusal. */
+  private async requestHosted(run: Run, s: RunStep, hv: NonNullable<ReturnType<HostedService["verifier"]>>, q: QuerySpec, type: CatalogType) {
+    const clientId = hv.env.verify!.clientId;
+    const host = new URL(hv.env.verify!.url).host;
+    if (run.spec.query !== "dcql" && !hv.info.accepts.includes("presentation_exchange")) {
+      // Send it anyway: what a DCQL-only verifier does with Presentation Exchange is the finding (M11 the other way round).
+      let r: Awaited<ReturnType<HostedVerifyClient["createRequest"]>>;
+      try {
+        r = await hv.client.createRequest({ clientId, presentationDefinition: toPresentationDefinition(q, "inji"), runId: run.id });
+      } catch (e) {
+        if (!(e instanceof HostedVerifyError)) this.hostedError(e);
+        throw new RunError("incompatible", `${hv.info.label} refused the Presentation Exchange request (HTTP ${e.status}, ${e.code}). The 1.0 line understands DCQL only; Presentation Exchange is the 0.x line's query language.`);
+      }
+      throw new RunError("incompatible", `${hv.info.label} accepted the call but request ${r.requestId} carries ${r.authorizationDetails?.dcqlQuery ? "a DCQL query it did not get" : "no query a wallet can answer"}.`);
+    }
+    const dcqlQuery = toDcql(q, { typeIri: type.typeIri, pathStyle: run.spec.dcqlPaths });
+    const problems = validateDcql(dcqlQuery);
+    if (problems.length) throw new RunError(problems[0]!.code, problems.map((p) => p.message).join(" "));
+    const req = await hv.client.createRequest({ clientId, dcqlQuery, runId: run.id }).catch((e) => this.hostedError(e));
+    this.deps.recorder.bind(run.id, req.requestId, req.transactionId, req.nonce);
+    run.requestUri = hv.client.authorizationUri(req, clientId);
+    s.note = req.requestUri
+      ? `DCQL request ${req.requestId} created at ${host}: signed by Inji Verify (client_id ${clientId}) and fetched by request_uri.`
+      : `DCQL request ${req.requestId} created at ${host}, by value (client_id ${clientId}).`;
+    return { kind: "hosted" as const, transactionId: req.transactionId, requestId: req.requestId, client: hv.client, label: hv.info.label };
+  }
+
+  /** Wait for a phone to answer a hosted verifier, which the playground sees only as the request's status changing. */
+  private async waitForHostedSubmission(run: Run, ref: { requestId: string; client: HostedVerifyClient }) {
+    const deadline = Date.now() + HUMAN_TIMEOUT_MS;
+    for (;;) {
+      if (this.cancelled.has(run.id)) throw new RunError("cancelled", "The run was cancelled.");
+      const status = await ref.client.status(ref.requestId, run.id).catch(() => "ACTIVE");
+      if (status === "VP_SUBMITTED") return;
+      if (status === "EXPIRED") throw new RunError("timeout", "The hosted verifier's request expired before a wallet answered it.");
+      if (Date.now() > deadline) throw new RunError("timeout", "Nobody answered the request within 10 minutes.");
+      await new Promise((r) => setTimeout(r, 2000));
+    }
   }
 
   private async execute(run: Run, cast: Cast) {
@@ -322,6 +481,14 @@ export class Orchestrator extends EventEmitter {
           s.status = "skipped";
           s.note = "Reusing a credential the Reference Wallet already holds.";
           credential = (await wallet.walletCredentials(heldId))[0]?.credential;
+          return;
+        }
+
+        // A hosted Inji issuer (MOSIP Collab): the authorization code flow, the holder signs in at its eSignet.
+        if (type.hosted) {
+          const got = await this.issueHosted(run, s, cast);
+          heldId = got.heldId;
+          credential = got.credential;
           return;
         }
 
@@ -388,7 +555,13 @@ export class Orchestrator extends EventEmitter {
 
       // 2. Request ----------------------------------------------------------------------------------------
       const q = this.querySpec(run, type);
-      let requestRef: { kind: "inji"; transactionId: string; requestId: string } | { kind: "ref"; id: string } | { kind: "ext"; saved: Record<string, unknown> } | undefined;
+      let requestRef:
+        | { kind: "inji"; transactionId: string; requestId: string }
+        | { kind: "hosted"; transactionId: string; requestId: string; client: HostedVerifyClient; label: string }
+        | { kind: "ref"; id: string }
+        | { kind: "ext"; saved: Record<string, unknown> }
+        | undefined;
+      const hostedVerifier = this.deps.hosted.verifier(spec.verifier);
       if (spec.mode !== "direct-share") {
         await this.step(run, "request", async (s) => {
           if (extVerifier) {
@@ -398,6 +571,10 @@ export class Orchestrator extends EventEmitter {
             run.requestUri = String(saved.requestUri);
             requestRef = { kind: "ext", saved };
             s.note = `${verifierInfo.label} wrote its own request${saved.state ? ` (state ${String(saved.state)})` : ""}.`;
+            return;
+          }
+          if (hostedVerifier) {
+            requestRef = await this.requestHosted(run, s, hostedVerifier, q, type);
             return;
           }
           if (spec.verifier === "inji-verify") {
@@ -413,13 +590,17 @@ export class Orchestrator extends EventEmitter {
                 throw new RunError("incompatible", `Inji Verify 0.18.2 refused the DCQL request (HTTP ${err.status ?? "?"}${err.code ? `, ${err.code}` : ""}${err.detail ? `: ${err.detail}` : ""}). It only understands Presentation Exchange; DCQL arrives with the 1.0 line.`);
               }
             }
-            const req = await injiVerify.createRequest({ clientId: VERIFIER_CLIENT_ID, presentationDefinition: toPresentationDefinition(q, "inji"), runId: run.id });
+            const signed = spec.verifyRequest !== "by-value" && Boolean(this.deps.verifyDid);
+            const clientId = signed ? this.deps.verifyDid! : VERIFIER_CLIENT_ID;
+            const req = await injiVerify.createRequest({ clientId, presentationDefinition: toPresentationDefinition(q, "inji"), runId: run.id });
             recorder.bind(run.id, req.requestId, req.transactionId, req.nonce);
-            run.requestUri = injiVerify.authorizationUri(req, VERIFIER_CLIENT_ID);
+            run.requestUri = injiVerify.authorizationUri(req, clientId);
             requestRef = { kind: "inji", transactionId: req.transactionId, requestId: req.requestId };
-            s.note = `Presentation Exchange request ${req.requestId} created (by value, client_id ${VERIFIER_CLIENT_ID}).`;
+            s.note = req.requestUri
+              ? `Presentation Exchange request ${req.requestId} created: signed by Inji Verify, fetched by request_uri (client_id ${clientId}).`
+              : `Presentation Exchange request ${req.requestId} created (by value, client_id ${clientId}).`;
           } else {
-            const session = await refVerifier.createRequest(q, { language: spec.query, runId: run.id });
+            const session = await refVerifier.createRequest(q, { language: spec.query, runId: run.id, pathStyle: spec.dcqlPaths });
             run.requestUri = session.uri;
             requestRef = { kind: "ref", id: session.id };
             s.note = `${spec.query === "dcql" ? "DCQL" : "Presentation Exchange"} request created.`;
@@ -460,14 +641,14 @@ export class Orchestrator extends EventEmitter {
             return;
           }
           const vcText = typeof credential === "string" ? credential : JSON.stringify(credential);
-          s.note = `Shared ${vcText.length} bytes directly (no OpenID4VP).`;
-          directResult = await injiVerify.verifyCredential(vcText, run.id);
+          s.note = `Shared ${vcText.length} bytes directly (no OpenID4VP)${hostedVerifier ? ` with ${hostedVerifier.info.label}` : ""}.`;
+          directResult = hostedVerifier ? await hostedVerifier.client.verifyCredential(vcText, run.id).catch((e) => this.hostedError(e)) : await injiVerify.verifyCredential(vcText, run.id);
           return;
         }
         if (walletInfo.id === "reference-wallet") {
           walletAnswer = await wallet.present(run.requestUri!, { heldId, tamper: spec.tamper, runId: run.id });
           const told = walletAnswer.disclosed ? ` Disclosed: ${walletAnswer.disclosed.join(", ") || "none"}; withheld: ${walletAnswer.withheld?.join(", ") || "none"}.` : "";
-          s.note = `${walletAnswer.matches[0]?.explanation ?? "Presented."}${told}${spec.tamper !== "none" ? ` Tamper: ${TAMPER_PRESETS[spec.tamper].label}.` : ""}`;
+          s.note = `${walletAnswer.matches[0]?.explanation ?? "Presented."}${told}${spec.tamper !== "none" ? ` Tamper: ${TAMPER_PRESETS[spec.tamper].label}.` : ""}${walletAnswer.notes.length ? ` ${walletAnswer.notes.join(" ")}` : ""}`;
           if (walletAnswer.status >= 400) s.note += ` The verifier answered HTTP ${walletAnswer.status}.`;
           return;
         }
@@ -488,6 +669,12 @@ export class Orchestrator extends EventEmitter {
           s.note = `${verifierInfo.label} received a presentation.`;
           return;
         }
+        if (requestRef?.kind === "hosted") {
+          // The phone answers the hosted verifier directly; its request status changing is the signal.
+          await this.waitForHostedSubmission(run, requestRef);
+          s.note = `${verifierInfo.label} received a presentation.`;
+          return;
+        }
         recorder.await(run.id, [spec.verifier === "inji-verify" ? "verify" : "reference-verifier"]);
         await this.waitForEvent(run, (e) => e.title === "Submit presentation");
       });
@@ -497,7 +684,7 @@ export class Orchestrator extends EventEmitter {
       await this.step(run, "verify", async (s) => {
         const expected = expectationFor(spec, type);
         if (directResult) {
-          result = explainResult({ expected, kind: "inji-direct", direct: directResult, tamper: spec.tamper });
+          result = explainResult({ expected, kind: "inji-direct", direct: directResult, tamper: spec.tamper, who: hostedVerifier?.info.label });
         } else if (requestRef?.kind === "ext") {
           const verdict = externalAnswer && "verified" in externalAnswer ? externalAnswer : await externalVerdict(extVerifier!.resultTimeoutSeconds * 1000);
           result = explainResult({ expected, kind: "external", who: verifierInfo.label, accepted: isTruthyVerdict(verdict.verified), detail: verdict.detail, tamper: spec.tamper });
@@ -516,6 +703,24 @@ export class Orchestrator extends EventEmitter {
           } catch (e) {
             const err = e as { code?: string; detail?: string; message: string; body?: unknown };
             result = explainResult({ expected, kind: "inji-error", errorCode: err.code ?? "VERIFY_ERROR", errorDetail: err.detail ?? err.message, tamper: spec.tamper, walletStatus: walletAnswer?.status, walletBody: walletAnswer?.verifierResponse });
+          }
+        } else if (requestRef?.kind === "hosted") {
+          const who = requestRef.label;
+          if (walletAnswer && walletAnswer.status >= 400) {
+            const body = walletAnswer.verifierResponse as Record<string, unknown> | string | undefined;
+            const code = typeof body === "object" && body ? String(body.errorCode ?? body.error ?? "SUBMISSION_REJECTED") : "SUBMISSION_REJECTED";
+            const detail = typeof body === "object" && body ? String(body.errorMessage ?? body.error_description ?? "") : String(body ?? "");
+            result = explainResult({ expected, kind: "inji-error", errorCode: code, errorDetail: detail, tamper: spec.tamper, walletStatus: walletAnswer.status, walletBody: body, who });
+          } else {
+            let status = "ACTIVE";
+            for (let i = 0; i < 6 && status === "ACTIVE"; i++) status = await requestRef.client.status(requestRef.requestId, run.id).catch(() => "ACTIVE");
+            try {
+              const r = await requestRef.client.result(requestRef.transactionId, run.id);
+              result = explainResult({ expected, kind: "inji-vp", vp: r, tamper: spec.tamper, walletStatus: walletAnswer?.status, walletBody: walletAnswer?.verifierResponse, who });
+            } catch (e) {
+              const err = e as { code?: string; message: string };
+              result = explainResult({ expected, kind: "inji-error", errorCode: err.code ?? "VERIFY_ERROR", errorDetail: err.message, tamper: spec.tamper, walletStatus: walletAnswer?.status, walletBody: walletAnswer?.verifierResponse, who });
+            }
           }
         } else if (requestRef?.kind === "ref") {
           const session = await refVerifier.waitFor(requestRef.id, human ? HUMAN_TIMEOUT_MS : 30_000);

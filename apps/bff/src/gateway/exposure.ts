@@ -33,11 +33,22 @@ export function isThisComputer(remoteAddress: string | undefined, gateway = cont
   return LOOPBACK.has(addr) || (!!gateway && (addr === gateway || addr === `::ffff:${gateway}`));
 }
 
+/**
+ * Did this request come in through the public URL? Any sign of it counts: the Host header, any
+ * X-Forwarded-Host entry, or Cloudflare's edge headers. The forwarded headers are set by whoever sent the
+ * request, so one of them naming a local host must never outweigh another that names the public host
+ * (otherwise `X-Forwarded-Host: localhost` through the tunnel would open the API).
+ */
 export function isPublicHostRequest(config: Pick<Config, "publicBaseUrl">, req: Pick<IncomingMessage, "headers">) {
   const pub = new URL(config.publicBaseUrl);
   if (pub.protocol !== "https:") return false;
-  const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "").split(",")[0]!.trim().toLowerCase();
-  return host === pub.host.toLowerCase();
+  const h = req.headers;
+  if (h["cf-connecting-ip"] !== undefined || h["cf-ray"] !== undefined) return true;
+  const hosts = [h.host, ...([] as (string | undefined)[]).concat(h["x-forwarded-host"])]
+    .flatMap((v) => String(v ?? "").split(","))
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean);
+  return hosts.includes(pub.host.toLowerCase());
 }
 
 export const isWalletFacing = (path: string) => path === "/pub" || path.startsWith("/pub/");

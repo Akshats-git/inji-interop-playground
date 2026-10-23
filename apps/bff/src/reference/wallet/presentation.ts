@@ -9,7 +9,7 @@ import { compactVerify, decodeProtectedHeader, importJWK, SignJWT, type JWK } fr
 import * as vc from "@digitalbazaar/vc";
 import { Ed25519Signature2020 } from "@digitalbazaar/ed25519-signature-2020";
 import { Ed25519VerificationKey2020 } from "@digitalbazaar/ed25519-verification-key-2020";
-import { decodeJwt, decodeSdJwt, filterMatches, jsonPath, parseAuthorizationRequest, type DcqlQuery, type PresentationDefinition, type TamperPreset } from "@playground/core";
+import { decodeJwt, decodeSdJwt, filterMatches, isSdJwtFormat, jsonPath, parseAuthorizationRequest, type DcqlQuery, type PresentationDefinition, type TamperPreset } from "@playground/core";
 import { base58btcDecode, ed25519Multibase, fromJwks, newHolderKey, privateKeyOf, type HolderKey } from "../keys.js";
 import { makeDocumentLoader } from "../ld.js";
 import { credentialClaims } from "./issuance.js";
@@ -97,11 +97,14 @@ export async function resolveRequest(http: WalletHttp, uri: string, resolveDid: 
   };
 }
 
+/** The DID inside a client id, with or without OpenID4VP 1.0's "decentralized_identifier:" prefix. */
+export const didOfClientId = (clientId: string) => clientId.replace(/^decentralized_identifier:/, "");
+
 /** Check a signed request object against the verifier's DID (did:web / did:key / did:jwk). */
 async function verifyRequestObject(jwt: string, clientId: string, resolveDid: (did: string) => Promise<Record<string, unknown>>): Promise<boolean> {
   const header = decodeProtectedHeader(jwt);
-  const kid = String(header.kid ?? "");
-  const did = (kid || clientId).split("#")[0]!;
+  const kid = didOfClientId(String(header.kid ?? ""));
+  const did = (kid || didOfClientId(clientId)).split("#")[0]!;
   if (!did.startsWith("did:")) return false;
   const doc = await resolveDid(did);
   const vms = (doc.verificationMethod as Record<string, unknown>[]) ?? [];
@@ -139,8 +142,7 @@ export function match(req: AuthorizationRequest, held: WalletCredential[]): Matc
   if (req.dcqlQuery) {
     const out: Match[] = [];
     for (const q of req.dcqlQuery.credentials) {
-      const sdFormat = q.format === "vc+sd-jwt" || q.format === "dc+sd-jwt";
-      const candidates = held.filter((h) => (sdFormat ? h.format === "vc+sd-jwt" || h.format === "dc+sd-jwt" : h.format === q.format));
+      const candidates = held.filter((h) => (isSdJwtFormat(q.format) ? isSdJwtFormat(h.format) : h.format === q.format));
       const found = candidates.find((h) => {
         if (q.meta?.vct_values) return q.meta.vct_values.includes(String(sdJwtView(h.credential as string).vct));
         if (q.meta?.type_values) {
@@ -165,7 +167,8 @@ export function match(req: AuthorizationRequest, held: WalletCredential[]): Matc
   for (const d of pd.input_descriptors) {
     const formats = Object.keys(d.format ?? pd.format ?? {});
     const found = held.find((h) => {
-      if (formats.length && !formats.includes(h.format) && !(h.format === "vc+sd-jwt" && formats.includes("dc+sd-jwt"))) return false;
+      // vc+sd-jwt and dc+sd-jwt are the same credential under two media types (drafts vs. Inji 1.0), so either matches.
+      if (formats.length && !formats.includes(h.format) && !(isSdJwtFormat(h.format) && formats.some(isSdJwtFormat))) return false;
       const view = h.format === "ldp_vc" ? h.credential : sdJwtView(h.credential as string);
       return d.constraints.fields.every((f) => f.optional || f.path.some((p) => filterMatches(f.filter, jsonPath(view, p))));
     });
@@ -180,11 +183,29 @@ export function match(req: AuthorizationRequest, held: WalletCredential[]): Matc
   return out;
 }
 
-/** Sign a W3C VP with Ed25519Signature2020 over the verifier's nonce (challenge) and client_id (domain). */
-async function signLdpPresentation(http: WalletHttp, credential: Record<string, unknown>, holder: HolderKey, challenge: string, domain: string) {
+/**
+ * Sign a W3C VP with Ed25519Signature2020 over the verifier's nonce (challenge) and client_id (domain).
+ *
+ * JSON-LD is canonicalised strictly ("safe mode": every term must be defined). Some issuers' credentials are not
+ * valid that way, e.g. an Ed25519Signature2020 proof without its suite context (gap G15, seen on the bundled
+ * Certify's defaults and on MOSIP Collab's issuers). Rather than stop, the wallet then signs leniently, as Inji's
+ * own processors do, and says so, so the run shows what the verifier makes of it.
+ */
+async function signLdpPresentation(http: WalletHttp, credential: Record<string, unknown>, holder: HolderKey, challenge: string, domain: string): Promise<{ vp: unknown; lenient: boolean }> {
+  try {
+    return { vp: await signLdpPresentationWith(http, credential, holder, challenge, domain, false), lenient: false };
+  } catch (e) {
+    if (!/safe mode/i.test((e as Error).message)) throw e;
+    return { vp: await signLdpPresentationWith(http, credential, holder, challenge, domain, true), lenient: true };
+  }
+}
+
+async function signLdpPresentationWith(http: WalletHttp, credential: Record<string, unknown>, holder: HolderKey, challenge: string, domain: string, lenient: boolean) {
   const { publicKeyMultibase, privateKeyMultibase } = ed25519Multibase(holder);
   const key = await Ed25519VerificationKey2020.from({ id: holder.kid, controller: holder.did, type: "Ed25519VerificationKey2020", publicKeyMultibase, privateKeyMultibase });
   const suite = new Ed25519Signature2020({ key });
+  // jsonld-signatures spreads canonizeOptions after its own safe: true, so this is its supported override.
+  if (lenient) suite.canonizeOptions = { safe: false };
   const v2 = ((credential["@context"] as string[]) ?? [])[0] === "https://www.w3.org/ns/credentials/v2";
   const presentation = {
     "@context": [v2 ? "https://www.w3.org/ns/credentials/v2" : "https://www.w3.org/2018/credentials/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
@@ -217,6 +238,8 @@ async function sdJwtPresentation(cred: string, holder: HolderKey, requested: str
 export interface PresentationOutcome {
   request: AuthorizationRequest;
   matches: Match[];
+  /** Things the wallet had to accommodate, for the run's notes (e.g. signing leniently). */
+  notes: string[];
   disclosed?: string[];
   withheld?: string[];
   verifierResponse: unknown;
@@ -233,6 +256,7 @@ export async function present(http: WalletHttp, req: AuthorizationRequest, held:
   }
   const nonce = tamper === "wrong-nonce" ? randomBytes(12).toString("base64url") : req.nonce;
   const tokens: { id: string; token: unknown; format: string }[] = [];
+  const notes: string[] = [];
   let disclosed: string[] | undefined;
   let withheld: string[] | undefined;
 
@@ -244,7 +268,10 @@ export async function present(http: WalletHttp, req: AuthorizationRequest, held:
       if (tamper === "alter-claim") alterFirstClaim(credential.credentialSubject as Record<string, unknown>);
       const vp = tamper === "no-holder-proof"
         ? { "@context": ["https://www.w3.org/2018/credentials/v1"], type: ["VerifiablePresentation"], holder: holder.did, verifiableCredential: [credential] }
-        : await signLdpPresentation(http, credential, holder, nonce, req.clientId);
+        : await signLdpPresentation(http, credential, holder, nonce, req.clientId).then((r) => {
+            if (r.lenient) notes.push("The credential is not valid JSON-LD in strict (safe) mode: its proof uses terms its @context does not define (gap G15). The wallet signed the presentation in lenient mode, as Inji's processors do.");
+            return r.vp;
+          });
       tokens.push({ id: m.queryId, token: vp, format: "ldp_vp" });
     } else {
       let cred = String(m.credential.credential);
@@ -292,7 +319,7 @@ export async function present(http: WalletHttp, req: AuthorizationRequest, held:
     status = err.status ?? 0;
     verifierResponse = err.body ?? String(e);
   }
-  return { request: req, matches, disclosed, withheld, verifierResponse, status, tamper };
+  return { request: req, matches, notes, disclosed, withheld, verifierResponse, status, tamper };
 }
 
 function alterFirstClaim(subject: Record<string, unknown>) {

@@ -15,7 +15,8 @@ export function runsApi(store: Store, orchestrator: Orchestrator) {
   r.post("/runs", h(async (req, res) => void res.status(201).json(await orchestrator.start(req.body))));
   r.get("/runs", h(async (req, res) => {
     const q = req.query as Record<string, string | undefined>;
-    res.json(await store.listRuns({ limit: Number(q.limit ?? 100), status: q.status, verdict: q.verdict, format: q.format, wallet: q.wallet, verifier: q.verifier }));
+    const limit = Math.min(Math.max(Number.parseInt(q.limit ?? "", 10) || 100, 1), 500);
+    res.json(await store.listRuns({ limit, status: q.status, verdict: q.verdict, format: q.format, wallet: q.wallet, verifier: q.verifier }));
   }));
   r.get("/runs/:id", h(async (req, res) => {
     const run = await store.getRun(req.params.id!);
@@ -45,7 +46,7 @@ export function runsApi(store: Store, orchestrator: Orchestrator) {
 
   r.get("/events", h(async (req, res) => {
     const runId = req.query.run === "none" ? null : (req.query.run as string | undefined);
-    res.json(await store.listEvents({ runId, limit: Number(req.query.limit ?? 200) }));
+    res.json(await store.listEvents({ runId, limit: Math.min(Math.max(Number.parseInt(String(req.query.limit ?? ""), 10) || 200, 1), 1000) }));
   }));
   r.get("/events/:id", h(async (req, res) => {
     const e = await store.getEvent(req.params.id!);

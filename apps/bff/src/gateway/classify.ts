@@ -30,6 +30,9 @@ function obj(v: unknown): Record<string, unknown> {
 
 function formatLabels(vpToken: unknown): string[] {
   const labels: string[] = [];
+  // A DCQL response (OpenID4VP 1.0) is an object keyed by credential query id, each holding an array.
+  const o = obj(vpToken);
+  if (!Array.isArray(vpToken) && Object.keys(o).length && !o.type && !o.proof && Object.values(o).every(Array.isArray)) return ["DCQL response", ...formatLabels(Object.values(o).flat())];
   const tokens = Array.isArray(vpToken) ? vpToken : [vpToken];
   for (const t of tokens) {
     if (typeof t === "string" && looksLikeSdJwt(t)) {
@@ -54,23 +57,39 @@ function formatLabels(vpToken: unknown): string[] {
   return labels;
 }
 
-function walletIs(actor?: string): Party {
-  return "wallet";
-}
+const HOSTED: Party[] = ["hosted-certify", "esignet", "hosted-verify"];
 
 /** The Reference Wallet (or the BFF) talking to a party outside the playground: name the step from the path and bodies. */
 function classifyExternal(x: Exchange): Classified {
   const e = x.external!;
-  const base = { from: e.from, to: e.to, labels: ["external party", ...(e.labels ?? [])] };
+  const hosted = HOSTED.includes(e.to) || HOSTED.includes(e.from);
+  const base = { from: e.from, to: e.to, labels: [hosted ? "hosted Inji" : "external party", ...(e.labels ?? [])] };
   if (e.title) return { ...base, title: e.title, phase: e.phase ?? "issuance" };
   const p = x.path;
   const req = obj(x.requestBody);
   const res = obj(x.responseBody);
-  if (p.includes("/.well-known/openid-credential-issuer")) return { ...base, title: "Issuer metadata", phase: "issuance", labels: [...base.labels, "discovery", `${Object.keys(obj(res.credential_configurations_supported)).length} credential configurations`] };
+  if (p.includes("/.well-known/openid-credential-issuer")) return { ...base, title: "Issuer metadata", phase: "issuance", labels: [...base.labels, "discovery", `${Object.keys(obj(res.credential_configurations_supported)).length} credential configurations`, ...(res.nonce_endpoint ? ["nonce_endpoint (OpenID4VCI 1.0)"] : [])] };
   if (p.includes("/.well-known/oauth-authorization-server") || p.includes("/.well-known/openid-configuration")) return { ...base, title: "Authorization server metadata", phase: "issuance", labels: [...base.labels, "discovery"] };
   if (/credential[_-]?offer/i.test(p) && x.method === "GET") return { ...base, title: "Fetch credential offer", phase: "issuance", labels: [...base.labels, "by reference"] };
-  if (req.grant_type) return { ...base, title: "Token request", phase: "issuance", labels: [...base.labels, req.grant_type === PRE_AUTH ? "pre-authorized_code" : String(req.grant_type)] };
-  if (obj(req.proof).proof_type || /\/credential$/.test(p)) return { ...base, title: "Credential request", phase: "issuance", labels: [...base.labels, String(req.format ?? "credential")] };
+  if (req.grant_type) {
+    const labels = [...base.labels, req.grant_type === PRE_AUTH ? "pre-authorized_code" : String(req.grant_type)];
+    if (req.code_verifier) labels.push("PKCE");
+    if (req.client_assertion) labels.push("private_key_jwt");
+    if (res.c_nonce) labels.push("c_nonce issued");
+    return { ...base, title: "Token request", phase: "issuance", labels };
+  }
+  if (/\/nonce$/.test(p) && x.method === "POST") return { ...base, title: "Nonce request", phase: "issuance", labels: [...base.labels, "OpenID4VCI 1.0", "c_nonce"] };
+  if (obj(req.proof).proof_type || req.proofs || /\/credential$/.test(p)) {
+    const labels = [...base.labels, String(req.format ?? req.credential_configuration_id ?? "credential")];
+    labels.push(req.proofs || req.credential_configuration_id ? "OpenID4VCI 1.0 request" : "OpenID4VCI draft 13 request");
+    return { ...base, title: "Credential request", phase: "issuance", labels };
+  }
+  if (/\/vp-request\/[^/]+\/status$/.test(p)) return { ...base, title: `Status: ${String(res.status ?? "?")}`, phase: "presentation", labels: base.labels };
+  if (/\/v2\/vp-results\//.test(p)) {
+    const status = Array.isArray(res.credentialResults) ? ((res.credentialResults as unknown[]).length && (res.credentialResults as unknown[]).every((c) => obj(c).allChecksSuccessful) ? "SUCCESS" : "INVALID") : `HTTP ${x.status}`;
+    return { ...base, title: `Verification result: ${status}`, phase: "verification", labels: [...base.labels, status] };
+  }
+  if (/vc-verification$/.test(p)) return { ...base, title: `Verify credential: ${obj(res).allChecksSuccessful === true ? "SUCCESS" : obj(res).allChecksSuccessful === false ? "INVALID" : String(res.verificationStatus ?? `HTTP ${x.status}`)}`, phase: "verification", labels: base.labels };
   if (req.vp_token !== undefined || req.error !== undefined) return { ...base, title: "Submit presentation", phase: "presentation", labels: [...base.labels, "direct_post", ...formatLabels(req.vp_token)] };
   if (/\/pd\/|presentation[_-]definition/i.test(p)) return { ...base, title: "Fetch presentation definition", phase: "presentation", labels: [...base.labels, "presentation_definition_uri"] };
   if (/\/request/.test(p) && x.method === "GET") return { ...base, title: "Fetch request object", phase: "presentation", labels: [...base.labels, "request_uri"] };
@@ -84,7 +103,8 @@ export function classify(x: Exchange): Classified {
   const res = obj(x.responseBody);
 
   if (x.upstream === "certify" || x.upstream === "studio") {
-    const from: Party = x.upstream === "studio" ? "studio" : walletIs(x.actorHeader);
+    // Who the wallet was (Reference Wallet, a phone, walt.id…) goes into the event's actor, not its lane.
+    const from: Party = x.upstream === "studio" ? "studio" : "wallet";
     if (p.startsWith("/credential-configurations"))
       return { title: x.method === "POST" ? "Register credential type" : x.method === "PUT" ? "Update credential type" : x.method === "DELETE" ? "Delete credential type" : "Read credential type", phase: "setup", labels: ["admin API", "internal network only"], from: "studio", to: "certify" };
     if (p.startsWith("/pre-authorized-data")) {

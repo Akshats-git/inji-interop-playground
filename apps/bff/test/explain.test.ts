@@ -16,6 +16,12 @@ describe("run verdicts", () => {
     expect(accepted.verdict).toBe("FAIL");
     expect(accepted.explanation).toMatch(/ACCEPTED a tampered presentation/);
   });
+  it("calls a credential 'valid but expired' only when its signature still holds", () => {
+    const expired = { ...ok, allChecksSuccessful: false, expiryCheck: { valid: false } };
+    const vp = (c: object) => ({ kind: "inji-vp" as const, expected: "FAIL" as const, tamper: "none" as const, vp: { transactionId: "t", allChecksSuccessful: false, credentialResults: [c as typeof ok] } });
+    expect(explainResult(vp(expired)).credentialStatus).toBe("EXPIRED");
+    expect(explainResult(vp({ ...bad, expiryCheck: { valid: false } })).credentialStatus).toBe("INVALID");
+  });
   it("expects expired credentials and tampered presentations to be rejected", () => {
     expect(expectationFor({ tamper: "none" }, { expiresAt: "" })).toBe("PASS");
     expect(expectationFor({ tamper: "none" }, { expiresAt: "2020-01-01T00:00:00.000Z" })).toBe("FAIL");

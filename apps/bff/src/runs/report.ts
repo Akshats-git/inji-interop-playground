@@ -1,5 +1,5 @@
 /** Per-run interop report (PS2 task 7): issuer, wallet, verifier, format, proof type, outcome, error detail. */
-import { PARTY_LABEL, type EventSummary, type Run } from "@playground/core";
+import { credentialStatusLabel, KNOWN_GAPS, knownGapOf, PARTY_LABEL, type EventSummary, type Run } from "@playground/core";
 
 export function redactRun(run: Run): Run {
   return { ...run, spec: { ...run.spec, claims: Object.fromEntries(Object.keys(run.spec.claims).map((k) => [k, "‹redacted›"])), txCode: run.spec.txCode ? "‹redacted›" : undefined } };
@@ -7,7 +7,9 @@ export function redactRun(run: Run): Run {
 
 export function runReportMarkdown(run: Run, events: EventSummary[]): string {
   const r = run.result;
-  const verdict = r ? (r.verdict === "PASS" ? "✅ PASS" : "❌ FAIL") : "⏳ in progress";
+  const gap = knownGapOf(run);
+  const verdict = r ? (r.verdict === "PASS" ? "✅ PASS" : gap ? `⚠️ FAIL (known gap ${gap})` : "❌ FAIL") : "⏳ in progress";
+  const issuerSoftware = run.labels.external?.issuer ? (run.labels.versions[run.labels.issuerName] ?? "external issuer") : `Inji Certify ${run.labels.versions["Inji Certify"]}`;
   const lines = [
     `# Interop run ${run.id}: ${verdict}`,
     "",
@@ -15,7 +17,7 @@ export function runReportMarkdown(run: Run, events: EventSummary[]): string {
     "",
     "| Field | Value |",
     "|---|---|",
-    `| Issuer | ${run.labels.issuerName} (Inji Certify ${run.labels.versions["Inji Certify"]}) |`,
+    `| Issuer | ${run.labels.issuerName} (${issuerSoftware}) |`,
     `| Credential type | ${run.labels.typeName} |`,
     `| Wallet | ${run.labels.wallet} |`,
     `| Verifier | ${run.labels.verifier} |`,
@@ -26,7 +28,8 @@ export function runReportMarkdown(run: Run, events: EventSummary[]): string {
     `| Tamper preset | ${run.spec.tamper} |`,
     `| Expected | ${r?.expected ?? "—"} |`,
     `| Verifier outcome | ${r?.verifierOutcome ?? "—"} |`,
-    `| Credential status | ${r?.credentialStatus ?? "—"} |`,
+    `| Credential status | ${credentialStatusLabel(r?.credentialStatus) ?? r?.credentialStatus ?? "—"} |`,
+    ...(gap ? [`| Known gap | ${gap}: ${KNOWN_GAPS[gap]} (docs/gaps.md) |`] : []),
     `| Error | ${r?.errorCode ? `\`${r.errorCode}\`${r.errorDetail ? `: ${r.errorDetail}` : ""}` : "—"} |`,
     "",
     "## What happened",

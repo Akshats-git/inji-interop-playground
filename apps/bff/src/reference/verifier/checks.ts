@@ -67,6 +67,12 @@ function ldpLoader(ctx: VerifierContext) {
 
 const W3C_V2 = "https://www.w3.org/ns/credentials/v2";
 
+/** Library messages a newcomer cannot act on, said in plain words. */
+function plain(message: string): string {
+  if (/safe mode/i.test(message)) return `${message} The credential uses JSON-LD terms its @context does not define (for example an Ed25519Signature2020 proof without that suite's context, gap G15), so a strict JSON-LD processor cannot check its signature.`;
+  return message;
+}
+
 function expiryCheck(cred: Record<string, unknown>): Check {
   const until = (cred.validUntil ?? cred.expirationDate) as string | undefined;
   if (!until) return { name: "Not expired", ok: true, detail: "No expiry set." };
@@ -105,9 +111,9 @@ export async function verifyLdpPresentation(ctx: VerifierContext, vp: Record<str
     try {
       const r = await vc.verify({ presentation: vp, suite, documentLoader, challenge: String(proof.challenge), domain: String(proof.domain), checkStatus: async () => ({ verified: true }) });
       const err = r.presentationResult?.results?.[0]?.error;
-      checks.push({ name: "Holder signature valid", ok: Boolean(r.presentationResult?.verified), detail: err ? String(err.message ?? err) : "Ed25519Signature2020 over the presentation verifies." });
+      checks.push({ name: "Holder signature valid", ok: Boolean(r.presentationResult?.verified), detail: err ? plain(String(err.message ?? err)) : "Ed25519Signature2020 over the presentation verifies." });
     } catch (e) {
-      checks.push({ name: "Holder signature valid", ok: false, detail: (e as Error).message });
+      checks.push({ name: "Holder signature valid", ok: false, detail: plain((e as Error).message) });
     }
     const holder = String(vp.holder ?? "");
     const vmController = String(proof.verificationMethod ?? "").split("#")[0];
@@ -124,9 +130,9 @@ export async function verifyLdpPresentation(ctx: VerifierContext, vp: Record<str
       const now = new Date(Math.min(from, until - 1000));
       const r = await vc.verifyCredential({ credential: cred, suite, documentLoader, now, checkStatus: async () => ({ verified: true }) });
       const err = r.results?.[0]?.error ?? r.error;
-      c.push({ name: "Issuer signature valid", ok: Boolean(r.verified), detail: r.verified ? `${String((cred.proof as Record<string, unknown>)?.type)} by ${String((cred.proof as Record<string, unknown>)?.verificationMethod)}` : String(err?.message ?? err?.errors?.[0]?.message ?? "signature check failed") });
+      c.push({ name: "Issuer signature valid", ok: Boolean(r.verified), detail: r.verified ? `${String((cred.proof as Record<string, unknown>)?.type)} by ${String((cred.proof as Record<string, unknown>)?.verificationMethod)}` : plain(String(err?.message ?? err?.errors?.[0]?.message ?? "signature check failed")) });
     } catch (e) {
-      c.push({ name: "Issuer signature valid", ok: false, detail: (e as Error).message });
+      c.push({ name: "Issuer signature valid", ok: false, detail: plain((e as Error).message) });
     }
     const subjectId = String((cred.credentialSubject as Record<string, unknown>)?.id ?? "").split("#")[0];
     if (subjectId && proof) c.push({ name: "Bound to the presenter", ok: subjectId === String(vp.holder), detail: `credentialSubject.id ${subjectId}` });

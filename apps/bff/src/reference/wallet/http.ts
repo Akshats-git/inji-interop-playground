@@ -4,6 +4,7 @@
  * a tunnel). Every call carries x-playground-actor/run headers, so the gateway records and attributes it
  * exactly like traffic from a phone.
  */
+import type { Party } from "@playground/core";
 import type { Recorder } from "../../gateway/recorder.js";
 import { HttpError } from "../../util/http.js";
 
@@ -19,7 +20,15 @@ export interface WalletHttp {
  * Calls to the playground's own origin are recorded by the gateway. Calls to anyone else (an external issuer or
  * verifier from the parties file) never pass it, so they are recorded here when a recorder is given.
  */
-export function walletHttp(opts: { publicBaseUrl: string; selfUrl: string; runId?: string | null; actor?: string; recorder?: Recorder }): WalletHttp {
+export function walletHttp(opts: {
+  publicBaseUrl: string;
+  selfUrl: string;
+  runId?: string | null;
+  actor?: string;
+  recorder?: Recorder;
+  /** Names known outside parties (a hosted Inji's Certify, eSignet or Verify) for the inspector's lanes. */
+  partyOf?: (url: string) => Party | undefined;
+}): WalletHttp {
   const isOwn = (url: string) => url.startsWith(opts.publicBaseUrl) || url.startsWith(opts.selfUrl);
   const route = (url: string) => (url.startsWith(opts.publicBaseUrl) ? opts.selfUrl + url.slice(opts.publicBaseUrl.length) : url);
   /** fetch, plus a recorded event when the other side is outside the playground. */
@@ -49,7 +58,7 @@ export function walletHttp(opts: { publicBaseUrl: string; selfUrl: string; runId
       runId: opts.runId ?? null,
       requestHeaders: init.headers,
       responseHeaders: Object.fromEntries(res.headers),
-      external: { from: opts.actor === "reference-verifier" ? "reference-verifier" : "wallet", to: toVerifier ? "external-verifier" : "external-issuer" },
+      external: { from: opts.actor === "reference-verifier" ? "reference-verifier" : "wallet", to: opts.partyOf?.(url) ?? (toVerifier ? "external-verifier" : "external-issuer") },
     });
     return { res, text };
   };
@@ -66,7 +75,13 @@ export function walletHttp(opts: { publicBaseUrl: string; selfUrl: string; runId
     } catch {
       /* not JSON */
     }
-    if (!res.ok) throw new HttpError(res.status, body, `${url} → ${res.status}`);
+    if (!res.ok) {
+      // Say what the other side said: OAuth-style {error, error_description} or Inji's {errorCode, errorMessage}.
+      const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
+      const code = b.error ?? b.errorCode;
+      const why = b.error_description ?? b.errorMessage;
+      throw new HttpError(res.status, body, `${new URL(url).host} answered HTTP ${res.status}${code ? `: ${String(code)}${why ? ` (${String(why)})` : ""}` : ""}`);
+    }
     return body;
   };
   return {

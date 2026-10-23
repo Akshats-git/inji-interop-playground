@@ -23,6 +23,12 @@ describe("public exposure guard", () => {
     await request(tunnel).get("/publicity").set("host", "abc.trycloudflare.com").expect(404);
   });
 
+  it("cannot be talked out of it with a forwarded-host header or a different Host", async () => {
+    await request(tunnel).get("/api/runs").set("host", "abc.trycloudflare.com").set("x-forwarded-host", "localhost:8080").expect(404);
+    await request(tunnel).get("/api/runs").set("host", "localhost:8080").set("x-forwarded-host", "localhost:8080, abc.trycloudflare.com").expect(404);
+    await request(tunnel).get("/api/runs").set("host", "playground:8080").set("cf-connecting-ip", "203.0.113.9").expect(404);
+  });
+
   it("serves everything on this machine", async () => {
     await request(tunnel).get("/api/runs").set("host", "localhost:8080").expect(200);
   });

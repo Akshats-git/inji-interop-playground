@@ -1,10 +1,10 @@
-import type { TamperPreset } from "@playground/core";
+import type { Party, TamperPreset } from "@playground/core";
 import type { Recorder } from "../../gateway/recorder.js";
 import type { Store, HeldCredential } from "../../store/types.js";
 import { now, uuid } from "../../util/ids.js";
 import { resolveLocalDid } from "../keys.js";
 import { walletHttp } from "./http.js";
-import { receiveOffer } from "./issuance.js";
+import { receiveOffer, receiveWithAuthorization, type ReceivedCredential, type SignIn, type WalletClient } from "./issuance.js";
 import { present, resolveRequest, type WalletCredential } from "./presentation.js";
 
 interface RawHeld {
@@ -14,6 +14,9 @@ interface RawHeld {
 
 /** The Reference Wallet as a service: keeps credentials (sealed at rest) and answers offers and requests. */
 export class ReferenceWallet {
+  /** Names hosted Inji parties for the inspector (set once the hosted environments are known). */
+  partyOf?: (url: string) => Party | undefined;
+
   constructor(
     private readonly store: Store,
     private readonly urls: { publicBaseUrl: () => string; selfUrl: string },
@@ -21,7 +24,7 @@ export class ReferenceWallet {
   ) {}
 
   private http(runId?: string | null) {
-    return walletHttp({ publicBaseUrl: this.urls.publicBaseUrl(), selfUrl: this.urls.selfUrl, runId, recorder: this.recorder });
+    return walletHttp({ publicBaseUrl: this.urls.publicBaseUrl(), selfUrl: this.urls.selfUrl, runId, recorder: this.recorder, partyOf: this.partyOf });
   }
 
   /** did:web over HTTPS, with a plain-HTTP fallback for *.localhost so local runs work without a tunnel. */
@@ -37,7 +40,16 @@ export class ReferenceWallet {
   }
 
   async receive(offerUri: string, opts: { txCode?: string; runId?: string | null; typeId?: string } = {}) {
-    const got = await receiveOffer(this.http(opts.runId), offerUri, { txCode: opts.txCode });
+    return this.keep(await receiveOffer(this.http(opts.runId), offerUri, { txCode: opts.txCode }), opts);
+  }
+
+  /** Authorization code issuance: the wallet signs the holder in (through `signIn`) and collects the credential. */
+  async receiveAuthorized(o: { credentialIssuer: string; configId: string; client: WalletClient; signIn: (p: SignIn) => Promise<string>; runId?: string | null; typeId?: string }) {
+    const got = await receiveWithAuthorization(this.http(o.runId), { credentialIssuer: o.credentialIssuer, configId: o.configId, client: o.client, signIn: o.signIn });
+    return this.keep(got, o);
+  }
+
+  private async keep(got: ReceivedCredential, opts: { runId?: string | null; typeId?: string }) {
     const held: HeldCredential = {
       id: uuid(),
       createdAt: now(),

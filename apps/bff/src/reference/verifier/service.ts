@@ -6,7 +6,7 @@
 import { randomBytes } from "node:crypto";
 import express from "express";
 import { exportJWK, generateKeyPair, SignJWT, type JWK } from "jose";
-import { toDcql, toPresentationDefinition, validateDcql, type DcqlQuery, type PresentationDefinition, type QuerySpec } from "@playground/core";
+import { toDcql, toPresentationDefinition, validateDcql, type DcqlPathStyle, type DcqlQuery, type PresentationDefinition, type QuerySpec } from "@playground/core";
 import type { Recorder } from "../../gateway/recorder.js";
 import { parseBody } from "../../gateway/recorder.js";
 import { log } from "../../log.js";
@@ -64,12 +64,12 @@ export class ReferenceVerifier {
   }
 
   /** Build a request in the chosen query language. `signed` uses a did: client id and request_uri. */
-  async createRequest(spec: QuerySpec & { typeIri?: string }, opts: { language: "presentation_exchange" | "dcql"; signed?: boolean; runId?: string | null; peDialect?: "inji" | "spec" }) {
+  async createRequest(spec: QuerySpec, opts: { language: "presentation_exchange" | "dcql"; signed?: boolean; runId?: string | null; peDialect?: "inji" | "spec"; pathStyle?: DcqlPathStyle }) {
     const id = randomBytes(9).toString("base64url");
     const base = this.publicBaseUrl();
     const responseUri = `${base}${PREFIX}/response/${id}`;
     const nonce = randomBytes(16).toString("base64url");
-    const dcql = opts.language === "dcql" ? toDcql(spec, { format: "dc+sd-jwt", typeIri: spec.typeIri }) : undefined;
+    const dcql = opts.language === "dcql" ? toDcql(spec, { format: "dc+sd-jwt", typeIri: spec.typeIri, pathStyle: opts.pathStyle }) : undefined;
     if (dcql) {
       const errs = validateDcql(dcql);
       if (errs.length) throw Object.assign(new Error(errs.map((e) => e.message).join(" ")), { code: errs[0]!.code });

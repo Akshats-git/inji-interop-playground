@@ -8,11 +8,12 @@ import QRCode from "qrcode";
 import * as pixelpass from "@injistack/pixelpass";
 import { LDP_SUITES, signingAlgOf, type Run } from "@playground/core";
 import type { Config } from "../config.js";
+import type { HostedService } from "../hosted/service.js";
 import type { CertifyClient } from "../inji/certify.js";
 import type { PartiesService } from "../parties/service.js";
 import type { Store } from "../store/types.js";
 import { call } from "../util/http.js";
-import { VERSIONS } from "../runs/orchestrator.js";
+import { VERIFIER_CLIENT_ID, VERSIONS } from "../runs/orchestrator.js";
 import { ApiError, h } from "./errors.js";
 
 /** Documented limits the QR Lab compares against. */
@@ -47,17 +48,18 @@ export async function measureQr(payload: string) {
   };
 }
 
-export function insightsApi(config: Config, store: Store, certify: CertifyClient, parties: PartiesService) {
+export function insightsApi(config: Config, store: Store, certify: CertifyClient, parties: PartiesService, hosted: HostedService) {
   const r = express.Router();
 
   /** Liveness for container health checks: answers without touching Certify or Verify. */
   r.get("/health", (_req, res) => void res.json({ ok: true }));
 
   r.get("/status", h(async (_req, res) => {
-    const [certifyUp, verifyUp, partyHealth] = await Promise.all([
+    const [certifyUp, verifyUp, partyHealth, hostedHealth] = await Promise.all([
       certify.health(),
       call(`${config.verifyUrl}/v1/verify/actuator/health`, { timeoutMs: 3000 }).then(() => true).catch(() => false),
       parties.health(),
+      hosted.health(),
     ]);
     const https = config.publicBaseUrl.startsWith("https://");
     res.json({
@@ -67,6 +69,7 @@ export function insightsApi(config: Config, store: Store, certify: CertifyClient
       identifiers: https ? "did:web" : "URL keys (did:web needs HTTPS)",
       services: { certify: certifyUp, verify: verifyUp },
       versions: VERSIONS,
+      verifyClientIds: { signed: config.verifyDid ?? null, byValue: VERIFIER_CLIENT_ID },
       retentionDays: config.retentionDays,
       parties: {
         file: parties.loaded.file,
@@ -74,6 +77,11 @@ export function insightsApi(config: Config, store: Store, certify: CertifyClient
         configured: Object.keys(partyHealth).length,
         reachable: Object.values(partyHealth).filter((h) => h.ok).length,
       },
+      // Hosted Inji environments (MOSIP Collab): reachable when every service the parties file names answers.
+      hosted: hosted.summary().map((e) => {
+        const checks = Object.entries(hostedHealth).filter(([k]) => k.startsWith(`hosted:${e.id}:`));
+        return { id: e.id, name: e.name, reachable: checks.length > 0 && checks.every(([, v]) => v.ok), issuers: e.issuers.length, types: e.issuers.reduce((n, i) => n + i.types.length, 0) };
+      }),
     });
   }));
 
@@ -125,7 +133,15 @@ export function insightsApi(config: Config, store: Store, certify: CertifyClient
       proven.set(key, p);
     }
     const types = await store.listTypes();
-    res.json({ claimed, proven: [...proven.values()], studioTypes: types.map((t) => ({ id: t.id, name: t.displayName, format: t.format, alg: signingAlgOf(t) })) });
+    // What each hosted environment says about itself: its issuers' metadata and its verifier's configuration.
+    const hostedClaims = hosted.summary().map((e) => ({
+      id: e.id,
+      name: e.name,
+      version: e.version,
+      verifier: e.verifier ? { name: e.verifier.label, queryLanguages: e.verifier.accepts.map((q) => (q === "dcql" ? "DCQL" : "Presentation Exchange")), formats: e.verifier.formats } : undefined,
+      issuers: e.issuers.map((i) => ({ name: i.name, protocol: i.protocol, formats: [...new Set(i.types.map((t) => t.format))], types: i.types.length, error: i.error })),
+    }));
+    res.json({ claimed, hosted: hostedClaims, proven: [...proven.values()], studioTypes: types.map((t) => ({ id: t.id, name: t.displayName, format: t.format, alg: signingAlgOf(t) })) });
   }));
 
   /** QR Lab: how big is this credential as a QR, raw and PixelPass-compressed, and where does it fit? */

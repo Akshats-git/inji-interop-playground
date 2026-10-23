@@ -9,6 +9,10 @@
  *
  * When the external lab is running (./playground.sh up --external) the X rows add journeys with parties from
  * infra/parties.yaml: the walt.id issuer, verifier and wallet, mixed with Inji Certify and Inji Verify.
+ *
+ * When MOSIP Collab is reachable (the environments entry of infra/parties.yaml) the C rows add journeys with its
+ * real Inji 1.0 issuers, eSignet and Inji Verify 1.0, alone and crossed with the bundled 0.x stack. The Reference
+ * Wallet signs in at Collab's eSignet with a published demo identity and the static test OTP.
  */
 import { writeFileSync } from "node:fs";
 import type { CatalogType, CredentialType, Run } from "@playground/core";
@@ -25,7 +29,13 @@ interface Row {
   query?: "presentation_exchange" | "dcql";
   mode?: "openid4vp-cross-device" | "direct-share";
   tamper?: string;
+  /** How Inji Verify sends its request (default: signed, by request_uri). */
+  verifyRequest?: "signed" | "by-value";
   requested?: string[];
+  /** DCQL claim paths for W3C credentials (default: from the credential's root, as OpenID4VP 1.0 says). */
+  dcqlPaths?: "spec" | "inji";
+  /** Only meaningful when the bundle has a public URL (a hosted verifier must be able to fetch local issuer keys). */
+  needsPublicUrl?: boolean;
   /** Expected to misbehave today; documented in docs/gaps.md. */
   knownGap?: string;
 }
@@ -49,6 +59,8 @@ const ROWS: Row[] = [
   { id: "M11", type: FARMER, verifier: "inji-verify", query: "dcql" },
   { id: "M12", type: EXPIRED, verifier: "inji-verify", requested: [] },
   { id: "M13", type: EXPIRED, verifier: "reference-verifier", requested: [] },
+  { id: "M14", type: FARMER, verifier: "inji-verify", verifyRequest: "by-value" },
+  { id: "M15", type: FARMER_SD, verifier: "inji-verify", verifyRequest: "by-value" },
   ...(["alter-claim", "wrong-nonce", "no-holder-proof", "foreign-holder"] as const).flatMap((tamper, i) => [
     { id: `T${i * 4 + 1}`, type: FARMER, verifier: "inji-verify" as const, tamper },
     { id: `T${i * 4 + 2}`, type: FARMER_SD, verifier: "inji-verify" as const, tamper, knownGap: tamper === "wrong-nonce" ? "G19" : tamper === "no-holder-proof" ? "G20" : undefined },
@@ -69,7 +81,7 @@ const EXTERNAL_ROWS: Row[] = [
   { id: "X4", type: LIB, verifier: "reference-verifier" },
   { id: "X5", type: LIB, verifier: "reference-verifier", query: "dcql" },
   { id: "X6", type: LIB, verifier: "waltid-verifier" },
-  { id: "X7", type: LIB, wallet: "waltid-wallet", verifier: "inji-verify" },
+  { id: "X7", type: LIB, wallet: "waltid-wallet", verifier: "inji-verify", verifyRequest: "by-value" },
   { id: "X8", type: LIB, wallet: "waltid-wallet", verifier: "waltid-verifier" },
   { id: "X9", type: LIB, wallet: "waltid-wallet", verifier: "reference-verifier", knownGap: "G33" },
   { id: "X10", type: FARMER_SD, verifier: "waltid-verifier", knownGap: "G32" },
@@ -80,6 +92,41 @@ const EXTERNAL_ROWS: Row[] = [
   { id: "X15", type: LIB, verifier: "reference-verifier", tamper: "self-signed-sdjwt" },
   { id: "X16", type: LIB, verifier: "waltid-verifier", tamper: "wrong-nonce" },
   { id: "X17", type: LIB, verifier: "waltid-verifier", tamper: "alter-claim" },
+  { id: "X18", type: LIB, wallet: "waltid-wallet", verifier: "inji-verify", knownGap: "G35" },
+];
+
+const MOCK = "hosted:collab/mock/MockVerifiableCredential";
+const MOCK2 = "hosted:collab/mock/MockVerifiableCredential_VCDM2.0";
+const MOCK_SD = "hosted:collab/mock/MockVerifiableCredential_SD_JWT";
+const C_FARMER = "hosted:collab/Farmer/FarmerCredential_VCDM2.0";
+const C_LAND = "hosted:collab/Land/LandStatementCredential_VCDM2.0";
+/** Journeys with MOSIP Collab (Inji 1.0.0-alpha.1), run when it is reachable from this machine. */
+const COLLAB_ROWS: Row[] = [
+  // All on Collab: its issuers, its eSignet, its Inji Verify 1.0.
+  { id: "C1", type: MOCK_SD, verifier: "collab-verify", query: "dcql", requested: ["UIN"] },
+  { id: "C2", type: MOCK, verifier: "collab-verify", query: "dcql", requested: [] },
+  { id: "C3", type: MOCK, verifier: "collab-verify", query: "dcql", requested: ["email"], knownGap: "G36" },
+  { id: "C4", type: MOCK, verifier: "collab-verify", query: "dcql", requested: ["email"], dcqlPaths: "inji" },
+  { id: "C5", type: MOCK2, verifier: "collab-verify", query: "dcql", requested: [] },
+  { id: "C6", type: C_FARMER, verifier: "collab-verify", query: "dcql", requested: [] },
+  { id: "C7", type: C_LAND, verifier: "collab-verify", query: "dcql", requested: [] },
+  { id: "C8", type: MOCK_SD, verifier: "collab-verify", mode: "direct-share" },
+  { id: "C9", type: MOCK, verifier: "collab-verify", query: "presentation_exchange", requested: [] },
+  // Crossing the version split: Collab's 1.0 credentials at the bundled Verify 0.18.2, the bundled 0.14 ones at Verify 1.0.
+  { id: "C10", type: MOCK, verifier: "inji-verify", requested: [] },
+  { id: "C11", type: MOCK_SD, verifier: "inji-verify", requested: ["UIN"] },
+  { id: "C12", type: FARMER_SD, verifier: "collab-verify", query: "dcql" },
+  { id: "C13", type: FARMER, verifier: "collab-verify", query: "dcql", dcqlPaths: "inji", needsPublicUrl: true },
+  // The independent Reference Verifier.
+  { id: "C14", type: MOCK_SD, verifier: "reference-verifier", query: "dcql", requested: ["UIN"] },
+  { id: "C15", type: MOCK, verifier: "reference-verifier", query: "dcql", requested: [], knownGap: "G15" },
+  // Tampering, against Inji Verify 1.0: which 0.18.2 weaknesses are fixed?
+  { id: "C16", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "wrong-nonce", requested: ["UIN"] },
+  { id: "C17", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "no-holder-proof", requested: ["UIN"] },
+  { id: "C18", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "self-signed-sdjwt", requested: ["UIN"], knownGap: "G11" },
+  { id: "C19", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "alter-claim", requested: ["UIN"] },
+  { id: "C20", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "foreign-holder", requested: ["UIN"] },
+  { id: "C21", type: MOCK, verifier: "collab-verify", query: "dcql", tamper: "alter-claim", requested: [] },
 ];
 
 const CLAIMS: Record<string, Record<string, unknown>> = {
@@ -131,6 +178,8 @@ async function runOne(row: Row, types: CredentialType[], catalog: CatalogType[])
       query: row.query ?? "presentation_exchange",
       mode: row.mode ?? "openid4vp-cross-device",
       tamper: row.tamper ?? "none",
+      verifyRequest: row.verifyRequest ?? "signed",
+      dcqlPaths: row.dcqlPaths ?? "spec",
       requestedClaims: row.requested ?? (row.type === EXPIRED ? [] : external ? [external.fields[0]!.name] : ["primaryCropType"]),
       claims,
     }),
@@ -162,10 +211,13 @@ async function main() {
   await ensureExpiredType(types);
   types = await api<CredentialType[]>("/types");
   const catalog = await api<CatalogType[]>("/catalog");
-  const status = await api<{ parties: { configured: number; reachable: number } }>("/status");
+  const status = await api<{ mode: string; parties: { configured: number; reachable: number }; hosted?: { id: string; reachable: boolean }[] }>("/status");
   const withExternal = catalog.some((t) => t.id === LIB) && status.parties.configured > 0 && status.parties.reachable === status.parties.configured;
   if (!withExternal) console.log("external lab not running: skipping the X rows (./playground.sh up --external to include them)");
-  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : [])];
+  const withCollab = Boolean(status.hosted?.some((h) => h.id === "collab" && h.reachable)) && catalog.some((t) => t.id === MOCK && t.canIssue);
+  if (!withCollab) console.log("MOSIP Collab not reachable (or its test client key missing): skipping the C rows");
+  const collabRows = COLLAB_ROWS.filter((r) => !r.needsPublicUrl || status.mode === "public");
+  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : []), ...(withCollab ? collabRows : [])];
   const results: { row: Row; run?: Run; error?: string }[] = [];
   for (const row of rows) {
     // Certify fetches W3C contexts over the internet (gap G16), so retry once on a transient issuance error.
@@ -189,7 +241,7 @@ async function main() {
     "# Interop report",
     "",
     `Generated ${new Date().toISOString()} by \`apps/bff/scripts/matrix.ts\` against ${BASE}.`,
-    `Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier${withExternal ? ", and the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0)" : ""}.`,
+    `Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier${withExternal ? ", the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0)" : ""}${withCollab ? ", and MOSIP Collab (Inji 1.0.0-alpha.1: its Certify issuers, eSignet and Inji Verify 1.0, reached over the internet)" : ""}.`,
     "",
     "**Verdict** means *the journey behaved as expected*: honest presentations are accepted; tampered or expired ones are rejected.",
     "Rows marked with a gap id are known upstream problems described in [gaps.md](gaps.md).",
@@ -203,10 +255,10 @@ async function main() {
       continue;
     }
     const r = run.result;
-    const q = row.mode === "direct-share" ? "—" : run.labels.external?.verifier ? "own" : run.spec.query === "dcql" ? "DCQL" : "PE";
+    const q = row.mode === "direct-share" ? "—" : run.labels.external?.verifier ? "own" : run.spec.query === "dcql" ? (run.spec.dcqlPaths === "inji" && run.labels.format === "ldp_vc" ? "DCQL (Inji paths)" : "DCQL") : "PE";
     const fmt = `${run.labels.format}${run.labels.dataModel ? ` (DM ${run.labels.dataModel})` : ""}`;
     lines.push(
-      `| ${row.id} | ${run.labels.typeName} | ${run.labels.issuerName} | ${fmt} | ${run.labels.wallet} | ${run.labels.verifier} | ${q} | ${row.mode === "direct-share" ? "direct share" : "OpenID4VP"} | ${row.tamper ?? "none"} | ${r?.expected === "PASS" ? "accept" : "reject"} | ${r?.verifierOutcome ?? "—"} | ${r?.errorCode ?? r?.credentialStatus ?? ""} | ${icon(run)}${row.knownGap ? ` ${row.knownGap}` : ""} | \`${run.id}\` |`,
+      `| ${row.id} | ${run.labels.typeName} | ${run.labels.issuerName}${run.labels.hosted?.issuer ? ` (${run.labels.hosted.issuer})` : ""} | ${fmt} | ${run.labels.wallet} | ${run.labels.verifier} | ${q} | ${row.mode === "direct-share" ? "direct share" : row.verifier === "inji-verify" && run.spec.query !== "dcql" ? `OpenID4VP, ${run.spec.verifyRequest === "by-value" ? "by value" : "signed request_uri"}` : "OpenID4VP"} | ${row.tamper ?? "none"} | ${r?.expected === "PASS" ? "accept" : "reject"} | ${r?.verifierOutcome ?? "—"} | ${r?.errorCode ?? r?.credentialStatus ?? ""} | ${icon(run)}${row.knownGap ? ` ${row.knownGap}` : ""} | \`${run.id}\` |`,
     );
   }
   const unexpected = results.filter((x) => !x.run || (x.run.result?.verdict !== "PASS" && !x.row.knownGap));
