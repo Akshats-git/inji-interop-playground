@@ -106,6 +106,14 @@ const MOCK2 = "hosted:collab/mock/MockVerifiableCredential_VCDM2.0";
 const MOCK_SD = "hosted:collab/mock/MockVerifiableCredential_SD_JWT";
 const C_FARMER = "hosted:collab/Farmer/FarmerCredential_VCDM2.0";
 const C_LAND = "hosted:collab/Land/LandStatementCredential_VCDM2.0";
+const ANIMO = "ext:animo-tax/tax-id";
+/** Animo's hosted playground (Credo, dc+sd-jwt, OpenID4VCI 1.0), run when it answers over the internet. */
+const ANIMO_ROWS: Row[] = [
+  { id: "A1", type: ANIMO, verifier: "inji-verify" },
+  { id: "A2", type: ANIMO, verifier: "inji-verify", mode: "direct-share" },
+  { id: "A3", type: ANIMO, verifier: "collab-verify", query: "dcql" },
+  { id: "A4", type: ANIMO, verifier: "inji-verify", tamper: "alter-claim" },
+];
 /** Journeys with MOSIP Collab (Inji 1.0.0-alpha.1), run when it is reachable from this machine. */
 const COLLAB_ROWS: Row[] = [
   // All on Collab: its issuers, its eSignet, its Inji Verify 1.0.
@@ -306,12 +314,20 @@ async function main() {
     catalog.some((t) => t.id === MOCK && t.canIssue);
   if (!withCollab)
     console.log("MOSIP Collab not reachable (or its test client key missing): skipping the C rows");
+  const withAnimo =
+    catalog.some((t) => t.id === ANIMO && t.canIssue) &&
+    Boolean(status.hosted?.some((h) => h.id === "collab" && h.reachable));
+  if (!withAnimo)
+    console.log("Animo's playground not reachable (or Collab down for A3): skipping the A rows");
   const collabRows = COLLAB_ROWS.filter((r) => !r.needsPublicUrl || status.mode === "public");
   // ONLY=C7,C19 reruns just those rows (the report then lists only them), for chasing one result.
   const only = process.env.ONLY?.split(",").map((x) => x.trim());
-  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : []), ...(withCollab ? collabRows : [])].filter(
-    (r) => !only || only.includes(r.id),
-  );
+  const rows = [
+    ...ROWS,
+    ...(withExternal ? EXTERNAL_ROWS : []),
+    ...(withCollab ? collabRows : []),
+    ...(withAnimo ? ANIMO_ROWS : []),
+  ].filter((r) => !only || only.includes(r.id));
   const results: { row: Row; run?: Run; error?: string }[] = [];
   for (const row of rows) {
     // Certify fetches W3C contexts over the internet (gap G16), so retry once on a transient issuance error.

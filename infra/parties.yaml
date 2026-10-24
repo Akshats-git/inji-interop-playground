@@ -91,6 +91,46 @@ issuers:
               x5Chain: ["${file:external/keys/waltid-demo.cert.pem}"]
             save: { offerUri: "$" }
 
+  # Animo's OpenID4VC playground (https://playground.animo.id, open source: github.com/animo/openid4vc-playground),
+  # named by the mentors as a real external stack. It runs on the internet, needs no lab, and creates a
+  # pre-authorized offer from a plain POST. It issues dc+sd-jwt (OpenID4VCI 1.0); the playground labels these
+  # types vc+sd-jwt. Each Animo issuer has its own address (ids from GET /api/issuers) and makes up its own
+  # claims, so the values typed in a run are ignored.
+  - id: animo-tax
+    name: Animo playground, Federal Central Tax Office
+    description: >-
+      An issuer from Animo's OpenID4VC playground (Credo, not Inji). Its Tax-ID is a dc+sd-jwt with fixed sample
+      data. Hosted by Animo; it can change or go away.
+    software: Animo OpenID4VC playground (Credo)
+    homepage: https://playground.animo.id
+    credentialIssuer: https://playground.animo.id/oid4vci/197625a0-b797-4559-80cc-bf5463b90dc3
+    backgroundColor: "#CAD7E0"
+    textColor: "#525C75"
+    types:
+      - id: tax-id
+        name: Tax-ID (Animo)
+        description: A German tax identification credential with sample data chosen by Animo.
+        configurationId: tax-id-sd-jwt
+        format: vc+sd-jwt
+        vct: https://example.eudi.ec.europa.eu/tax-id/1
+        proof: SD-JWT ES256 (x5c)
+        claims:
+          - { name: registered_family_name, label: Family name (set by Animo), sample: Seiwal }
+          - { name: registered_given_name, label: Given name (set by Animo), sample: Ines }
+          - { name: tax_number, label: Tax number (set by Animo), sample: "06958170437" }
+        offer:
+          - title: Ask Animo's playground for an offer
+            method: POST
+            url: https://playground.animo.id/api/offers/create
+            body:
+              credentialSupportedIds: ["${configurationId}"]
+              authorization: none
+              deferBy: none
+              requireDpop: false
+              requireWalletAttestation: false
+              requireKeyAttestation: false
+            save: { offerUri: "$.credentialOffer" }
+
   # An issuer without an offer API: runs ask the person to get an offer themselves and paste it in.
   # - id: another-issuer
   #   name: Another issuer
