@@ -30,9 +30,14 @@ export function walletHttp(opts: {
   partyOf?: (url: string) => Party | undefined;
 }): WalletHttp {
   const isOwn = (url: string) => url.startsWith(opts.publicBaseUrl) || url.startsWith(opts.selfUrl);
-  const route = (url: string) => (url.startsWith(opts.publicBaseUrl) ? opts.selfUrl + url.slice(opts.publicBaseUrl.length) : url);
+  const route = (url: string) =>
+    url.startsWith(opts.publicBaseUrl) ? opts.selfUrl + url.slice(opts.publicBaseUrl.length) : url;
   /** fetch, plus a recorded event when the other side is outside the playground. */
-  const send = async (url: string, init: RequestInit & { headers: Record<string, string> }, requestBody?: unknown) => {
+  const send = async (
+    url: string,
+    init: RequestInit & { headers: Record<string, string> },
+    requestBody?: unknown,
+  ) => {
     const started = Date.now();
     const at = new Date().toISOString();
     const res = await fetch(route(url), init);
@@ -44,7 +49,11 @@ export function walletHttp(opts: {
     } catch {
       /* not JSON */
     }
-    const toVerifier = /\/(pd|request)\b|presentation/i.test(url) || (requestBody && typeof requestBody === "object" && ("vp_token" in requestBody || "error" in requestBody));
+    const toVerifier =
+      /\/(pd|request)\b|presentation/i.test(url) ||
+      (requestBody &&
+        typeof requestBody === "object" &&
+        ("vp_token" in requestBody || "error" in requestBody));
     void opts.recorder.recordInternal({
       upstream: "external",
       method: init.method ?? "GET",
@@ -58,7 +67,10 @@ export function walletHttp(opts: {
       runId: opts.runId ?? null,
       requestHeaders: init.headers,
       responseHeaders: Object.fromEntries(res.headers),
-      external: { from: opts.actor === "reference-verifier" ? "reference-verifier" : "wallet", to: opts.partyOf?.(url) ?? (toVerifier ? "external-verifier" : "external-issuer") },
+      external: {
+        from: opts.actor === "reference-verifier" ? "reference-verifier" : "wallet",
+        to: opts.partyOf?.(url) ?? (toVerifier ? "external-verifier" : "external-issuer"),
+      },
     });
     return { res, text };
   };
@@ -80,24 +92,64 @@ export function walletHttp(opts: {
       const b = (body && typeof body === "object" ? body : {}) as Record<string, unknown>;
       const code = b.error ?? b.errorCode;
       const why = b.error_description ?? b.errorMessage;
-      throw new HttpError(res.status, body, `${new URL(url).host} answered HTTP ${res.status}${code ? `: ${String(code)}${why ? ` (${String(why)})` : ""}` : ""}`);
+      throw new HttpError(
+        res.status,
+        body,
+        `${new URL(url).host} answered HTTP ${res.status}${code ? `: ${String(code)}${why ? ` (${String(why)})` : ""}` : ""}`,
+      );
     }
     return body;
   };
   return {
     async getJson(url) {
-      return read(await send(url, { headers: headers({ accept: "application/json" }), signal: AbortSignal.timeout(30_000) }), url);
+      return read(
+        await send(url, {
+          headers: headers({ accept: "application/json" }),
+          signal: AbortSignal.timeout(30_000),
+        }),
+        url,
+      );
     },
     async getText(url) {
-      const { res, text } = await send(url, { headers: headers({ accept: "application/oauth-authz-req+jwt, application/json" }), signal: AbortSignal.timeout(30_000) });
+      const { res, text } = await send(url, {
+        headers: headers({ accept: "application/oauth-authz-req+jwt, application/json" }),
+        signal: AbortSignal.timeout(30_000),
+      });
       if (!res.ok) throw new HttpError(res.status, text, `${url} → ${res.status}`);
       return { contentType: res.headers.get("content-type") ?? "", text };
     },
     async postForm(url, form) {
-      return read(await send(url, { method: "POST", headers: headers({ "content-type": "application/x-www-form-urlencoded", accept: "application/json" }), body: new URLSearchParams(form), signal: AbortSignal.timeout(30_000) }, form), url);
+      return read(
+        await send(
+          url,
+          {
+            method: "POST",
+            headers: headers({
+              "content-type": "application/x-www-form-urlencoded",
+              accept: "application/json",
+            }),
+            body: new URLSearchParams(form),
+            signal: AbortSignal.timeout(30_000),
+          },
+          form,
+        ),
+        url,
+      );
     },
     async postJson(url, body, extra) {
-      return read(await send(url, { method: "POST", headers: headers({ "content-type": "application/json", accept: "application/json", ...extra }), body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) }, body), url);
+      return read(
+        await send(
+          url,
+          {
+            method: "POST",
+            headers: headers({ "content-type": "application/json", accept: "application/json", ...extra }),
+            body: JSON.stringify(body),
+            signal: AbortSignal.timeout(30_000),
+          },
+          body,
+        ),
+        url,
+      );
     },
   };
 }

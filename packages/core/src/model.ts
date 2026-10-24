@@ -82,11 +82,32 @@ export type VerifyRequestStyle = "signed" | "by-value";
 /** Deliberate faults the Reference Wallet can inject, to check verifiers fail correctly. */
 export const TAMPER_PRESETS = {
   none: { label: "None", expect: "PASS", explain: "An honest presentation." },
-  "alter-claim": { label: "Alter a claim after issuance", expect: "FAIL", explain: "Changes one claim value inside the signed credential. The issuer's signature no longer matches." },
-  "wrong-nonce": { label: "Answer with a stale nonce", expect: "FAIL", explain: "Signs the presentation over a different nonce, as a replayed answer would." },
-  "no-holder-proof": { label: "Drop the holder proof", expect: "FAIL", explain: "Sends the credential without proving possession of the holder key." },
-  "foreign-holder": { label: "Present someone else's credential", expect: "FAIL", explain: "Signs the presentation with a key that is not the one the credential is bound to." },
-  "self-signed-sdjwt": { label: "Forge an SD-JWT with a self-signed x5c", expect: "FAIL", explain: "Re-signs the issuer JWT with an attacker key and embeds the attacker's own certificate in x5c." },
+  "alter-claim": {
+    label: "Alter a claim after issuance",
+    expect: "FAIL",
+    explain:
+      "Changes one claim value inside the signed credential. The issuer's signature no longer matches.",
+  },
+  "wrong-nonce": {
+    label: "Answer with a stale nonce",
+    expect: "FAIL",
+    explain: "Signs the presentation over a different nonce, as a replayed answer would.",
+  },
+  "no-holder-proof": {
+    label: "Drop the holder proof",
+    expect: "FAIL",
+    explain: "Sends the credential without proving possession of the holder key.",
+  },
+  "foreign-holder": {
+    label: "Present someone else's credential",
+    expect: "FAIL",
+    explain: "Signs the presentation with a key that is not the one the credential is bound to.",
+  },
+  "self-signed-sdjwt": {
+    label: "Forge an SD-JWT with a self-signed x5c",
+    expect: "FAIL",
+    explain: "Re-signs the issuer JWT with an attacker key and embeds the attacker's own certificate in x5c.",
+  },
 } as const;
 export type TamperPreset = keyof typeof TAMPER_PRESETS;
 
@@ -203,15 +224,39 @@ export interface Run {
 }
 
 export const WALLETS: Record<WalletId, { label: string; interactive: boolean; note: string }> = {
-  "reference-wallet": { label: "Reference Wallet", interactive: false, note: "Headless OpenID4VCI/OpenID4VP wallet built into the playground on independent libraries (jose, jsonld, digitalbazaar). Speaks PE and DCQL." },
-  "inji-wallet": { label: "Inji Wallet (mobile)", interactive: true, note: "MOSIP's phone wallet (the 1.0.0-alpha.1 build linked from collab.mosip.net). Scan the offer and request QR codes with it. The bundled issuer and verifier need a public tunnel URL; MOSIP Collab's are already public." },
-  "inji-web": { label: "Inji Web", interactive: true, note: "MOSIP's browser wallet, backed by Mimoto, running on MOSIP Collab. Wallet-initiated: pick an issuer, sign in at eSignet, download. It presents only to verifiers Mimoto trusts, so it is listed here but not driven in runs." },
-  "external-wallet": { label: "Other OpenID4VCI wallet", interactive: true, note: "Any standards-compliant wallet that can scan an openid-credential-offer:// QR." },
+  "reference-wallet": {
+    label: "Reference Wallet",
+    interactive: false,
+    note: "Headless OpenID4VCI/OpenID4VP wallet built into the playground on independent libraries (jose, jsonld, digitalbazaar). Speaks PE and DCQL.",
+  },
+  "inji-wallet": {
+    label: "Inji Wallet (mobile)",
+    interactive: true,
+    note: "MOSIP's phone wallet (the 1.0.0-alpha.1 build linked from collab.mosip.net). Scan the offer and request QR codes with it. The bundled issuer and verifier need a public tunnel URL; MOSIP Collab's are already public.",
+  },
+  "inji-web": {
+    label: "Inji Web",
+    interactive: true,
+    note: "MOSIP's browser wallet, backed by Mimoto, running on MOSIP Collab. Wallet-initiated: pick an issuer, sign in at eSignet, download. It presents only to verifiers Mimoto trusts, so it is listed here but not driven in runs.",
+  },
+  "external-wallet": {
+    label: "Other OpenID4VCI wallet",
+    interactive: true,
+    note: "Any standards-compliant wallet that can scan an openid-credential-offer:// QR.",
+  },
 };
 
 export const VERIFIERS: Record<VerifierId, { label: string; accepts: QueryLanguage[]; note: string }> = {
-  "inji-verify": { label: "Inji Verify 0.18.2", accepts: ["presentation_exchange"], note: "MOSIP's verifier service. The 0.x line accepts Presentation Exchange only." },
-  "reference-verifier": { label: "Reference Verifier", accepts: ["presentation_exchange", "dcql"], note: "Independent OpenID4VP relying party in the playground. Accepts PE (draft 23) and DCQL (1.0)." },
+  "inji-verify": {
+    label: "Inji Verify 0.18.2",
+    accepts: ["presentation_exchange"],
+    note: "MOSIP's verifier service. The 0.x line accepts Presentation Exchange only.",
+  },
+  "reference-verifier": {
+    label: "Reference Verifier",
+    accepts: ["presentation_exchange", "dcql"],
+    note: "Independent OpenID4VP relying party in the playground. Accepts PE (draft 23) and DCQL (1.0).",
+  },
 };
 
 /** Upstream problems written up in docs/gaps.md that runs reproduce on purpose. */
@@ -245,14 +290,65 @@ export function knownGapOf(run: Pick<Run, "spec" | "labels" | "result">): KnownG
     if (spec.tamper === "self-signed-sdjwt") return "G11";
   }
   // Inji Verify 1.0 (MOSIP Collab) still has G11; it fixed G19 and G20.
-  if (labels.hosted?.verifier && isSdJwtFormat(labels.format) && spec.tamper === "self-signed-sdjwt" && r.verifierOutcome === "ACCEPTED") return "G11";
-  if (spec.verifier === "reference-verifier" && labels.hosted?.issuer && labels.format === "ldp_vc" && r.verifierOutcome === "REJECTED" && /safe mode/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)) return "G15";
-  if (spec.wallet === "waltid-wallet" && certifyIssued && r.verifierOutcome === "NOT_REACHED" && run.result?.explanation.includes("issue step")) return "G30";
-  if (spec.verifier === "waltid-verifier" && certifyIssued && labels.format === "vc+sd-jwt" && spec.tamper === "none" && r.verifierOutcome === "REJECTED") return "G32";
-  if (spec.wallet === "waltid-wallet" && spec.verifier === "reference-verifier" && r.verifierOutcome === "REJECTED") return "G33";
-  if (spec.wallet === "waltid-wallet" && spec.verifier === "inji-verify" && spec.verifyRequest !== "by-value" && r.verifierOutcome === "NOT_REACHED" && r.explanation.includes("present step")) return "G35";
-  if (labels.hosted?.verifier && labels.format === "ldp_vc" && spec.query === "dcql" && spec.dcqlPaths !== "inji" && r.verifierOutcome === "REJECTED" && /claim path/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)) return "G36";
-  if (labels.hosted?.issuer && r.verifierOutcome === "REJECTED" && /public key (extraction|resolution) failed/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)) return "G41";
+  if (
+    labels.hosted?.verifier &&
+    isSdJwtFormat(labels.format) &&
+    spec.tamper === "self-signed-sdjwt" &&
+    r.verifierOutcome === "ACCEPTED"
+  )
+    return "G11";
+  if (
+    spec.verifier === "reference-verifier" &&
+    labels.hosted?.issuer &&
+    labels.format === "ldp_vc" &&
+    r.verifierOutcome === "REJECTED" &&
+    /safe mode/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)
+  )
+    return "G15";
+  if (
+    spec.wallet === "waltid-wallet" &&
+    certifyIssued &&
+    r.verifierOutcome === "NOT_REACHED" &&
+    run.result?.explanation.includes("issue step")
+  )
+    return "G30";
+  if (
+    spec.verifier === "waltid-verifier" &&
+    certifyIssued &&
+    labels.format === "vc+sd-jwt" &&
+    spec.tamper === "none" &&
+    r.verifierOutcome === "REJECTED"
+  )
+    return "G32";
+  if (
+    spec.wallet === "waltid-wallet" &&
+    spec.verifier === "reference-verifier" &&
+    r.verifierOutcome === "REJECTED"
+  )
+    return "G33";
+  if (
+    spec.wallet === "waltid-wallet" &&
+    spec.verifier === "inji-verify" &&
+    spec.verifyRequest !== "by-value" &&
+    r.verifierOutcome === "NOT_REACHED" &&
+    r.explanation.includes("present step")
+  )
+    return "G35";
+  if (
+    labels.hosted?.verifier &&
+    labels.format === "ldp_vc" &&
+    spec.query === "dcql" &&
+    spec.dcqlPaths !== "inji" &&
+    r.verifierOutcome === "REJECTED" &&
+    /claim path/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)
+  )
+    return "G36";
+  if (
+    labels.hosted?.issuer &&
+    r.verifierOutcome === "REJECTED" &&
+    /public key (extraction|resolution) failed/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)
+  )
+    return "G41";
   return undefined;
 }
 
@@ -261,8 +357,17 @@ export const isSdJwtFormat = (f: string) => f === "vc+sd-jwt" || f === "dc+sd-jw
 
 /** Inji Verify's words for a credential's state: Valid, Invalid, Valid but expired, Revoked. */
 export function credentialStatusLabel(s: CredentialStatus | undefined): string | undefined {
-  return s === "SUCCESS" ? "Valid" : s === "INVALID" ? "Invalid" : s === "EXPIRED" ? "Valid but expired" : s === "REVOKED" ? "Revoked" : undefined;
+  return s === "SUCCESS"
+    ? "Valid"
+    : s === "INVALID"
+      ? "Invalid"
+      : s === "EXPIRED"
+        ? "Valid but expired"
+        : s === "REVOKED"
+          ? "Revoked"
+          : undefined;
 }
 
 /** Did this message fail? An error status the parties file allows (409 "account exists") is labelled and does not count. */
-export const isFailedEvent = (e: Pick<EventSummary, "status" | "labels">) => e.status >= 400 && !e.labels.some((l) => l.endsWith("expected here"));
+export const isFailedEvent = (e: Pick<EventSummary, "status" | "labels">) =>
+  e.status >= 400 && !e.labels.some((l) => l.endsWith("expected here"));

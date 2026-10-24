@@ -32,7 +32,15 @@ function Wordmark() {
         <path d="M5 7h15" stroke="var(--issue)" strokeWidth="4" strokeLinecap="round" />
         <path d="M20 7h15" stroke="var(--present)" strokeWidth="4" strokeLinecap="round" />
         {[5, 20, 35].map((cx) => (
-          <circle key={cx} cx={cx} cy="7" r="4.5" fill="var(--surface)" stroke="var(--ink)" strokeWidth="2.5" />
+          <circle
+            key={cx}
+            cx={cx}
+            cy="7"
+            r="4.5"
+            fill="var(--surface)"
+            stroke="var(--ink)"
+            strokeWidth="2.5"
+          />
         ))}
       </svg>
       <span className="text-[1.05rem] leading-none font-black tracking-tight">
@@ -45,7 +53,15 @@ function Wordmark() {
 function SystemStatus() {
   const q = useQuery({ queryKey: ["status"], queryFn: api.status, refetchInterval: 15_000 });
   const s = q.data;
-  const dot = (ok?: boolean) => <span className={cx("inline-block size-2 rounded-full", ok === undefined ? "bg-muted" : ok ? "bg-pass" : "bg-fail")} aria-hidden />;
+  const dot = (ok?: boolean) => (
+    <span
+      className={cx(
+        "inline-block size-2 rounded-full",
+        ok === undefined ? "bg-muted" : ok ? "bg-pass" : "bg-fail",
+      )}
+      aria-hidden
+    />
+  );
   return (
     <div className="flex items-center gap-3 text-sm text-muted" aria-live="polite">
       <span className="flex items-center gap-1.5" title="Inji Certify 0.14.0">
@@ -55,13 +71,23 @@ function SystemStatus() {
         {dot(s?.services.verify)} Verify
       </span>
       {s?.hosted.map((h) => (
-        <NavLink key={h.id} to="/parties#hosted" className="hidden items-center gap-1.5 sm:flex" title={`${h.name}: ${h.issuers} issuers, ${h.types} credential types${h.reachable ? "" : " (not reachable)"}`}>
+        <NavLink
+          key={h.id}
+          to="/parties#hosted"
+          className="hidden items-center gap-1.5 sm:flex"
+          title={`${h.name}: ${h.issuers} issuers, ${h.types} credential types${h.reachable ? "" : " (not reachable)"}`}
+        >
           {dot(h.reachable)} {h.name.replace(/^MOSIP /, "")}
         </NavLink>
       ))}
       {s && s.parties.configured > 0 && (
-        <NavLink to="/parties" className="hidden items-center gap-1.5 sm:flex" title={`${s.parties.reachable} of ${s.parties.configured} external parties reachable`}>
-          {dot(s.parties.reachable === s.parties.configured)} External {s.parties.reachable}/{s.parties.configured}
+        <NavLink
+          to="/parties"
+          className="hidden items-center gap-1.5 sm:flex"
+          title={`${s.parties.reachable} of ${s.parties.configured} external parties reachable`}
+        >
+          {dot(s.parties.reachable === s.parties.configured)} External {s.parties.reachable}/
+          {s.parties.configured}
         </NavLink>
       )}
       {s && (
@@ -93,7 +119,11 @@ function ThemeToggle() {
   }, [theme]);
   const dark = theme === "dark" || (!theme && matchMedia("(prefers-color-scheme: dark)").matches);
   return (
-    <button className="rounded-md border border-hairline px-2.5 py-1 text-sm font-bold hover:border-ink" onClick={() => setTheme(dark ? "light" : "dark")} aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}>
+    <button
+      className="rounded-md border border-hairline px-2.5 py-1 text-sm font-bold hover:border-ink"
+      onClick={() => setTheme(dark ? "light" : "dark")}
+      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+    >
       {dark ? "Light" : "Dark"}
     </button>
   );
@@ -106,7 +136,10 @@ export function App() {
   }, [loc.pathname]);
   return (
     <div className="min-h-screen">
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2"
+      >
         Skip to content
       </a>
       <header className="border-b border-hairline bg-surface">
@@ -124,7 +157,12 @@ export function App() {
                 <NavLink
                   to={n.to}
                   end={n.to === "/"}
-                  className={({ isActive }) => cx("block border-b-[3px] px-3 py-2 text-sm font-bold whitespace-nowrap transition-colors duration-150", isActive ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink")}
+                  className={({ isActive }) =>
+                    cx(
+                      "block border-b-[3px] px-3 py-2 text-sm font-bold whitespace-nowrap transition-colors duration-150",
+                      isActive ? "border-ink text-ink" : "border-transparent text-muted hover:text-ink",
+                    )
+                  }
                 >
                   {n.label}
                 </NavLink>
@@ -134,7 +172,11 @@ export function App() {
         </nav>
       </header>
       {/* At least a screen tall, so the footer starts below the fold and content arriving never shoves it around. */}
-      <main id="main" tabIndex={-1} className="mx-auto min-h-svh max-w-[1320px] px-4 py-6 outline-none sm:px-6 sm:py-8">
+      <main
+        id="main"
+        tabIndex={-1}
+        className="mx-auto min-h-svh max-w-[1320px] px-4 py-6 outline-none sm:px-6 sm:py-8"
+      >
         <Suspense fallback={<p className="text-muted">Loading…</p>}>
           <Routes>
             <Route path="/" element={<RunBuilderPage />} />
@@ -152,7 +194,8 @@ export function App() {
       </main>
       <footer className="mx-auto flex max-w-[1320px] flex-col gap-1 border-t border-hairline px-4 pt-4 pb-8 text-sm text-muted sm:flex-row sm:justify-between sm:px-6">
         <p>
-          <strong className="font-bold text-ink">Use synthetic data only.</strong> Never enter a real person's details, even to try something out.
+          <strong className="font-bold text-ink">Use synthetic data only.</strong> Never enter a real person's
+          details, even to try something out.
         </p>
         <p>Inji Interoperability Playground, open source under MPL-2.0.</p>
       </footer>

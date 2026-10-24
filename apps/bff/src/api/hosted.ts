@@ -25,62 +25,94 @@ export function hostedApi(hosted: HostedService, wallet: ReferenceWallet) {
     for (const [id, j] of jobs) if (Date.now() - j.at > 30 * 60_000) jobs.delete(id);
   };
 
-  r.get("/hosted", h(async (_req, res) => void res.json({ environments: hosted.summary(), health: await hosted.health() })));
+  r.get(
+    "/hosted",
+    h(async (_req, res) => void res.json({ environments: hosted.summary(), health: await hosted.health() })),
+  );
 
-  r.post("/hosted/refresh", h(async (_req, res) => {
-    await hosted.refresh();
-    res.json({ environments: hosted.summary(), health: await hosted.health() });
-  }));
+  r.post(
+    "/hosted/refresh",
+    h(async (_req, res) => {
+      await hosted.refresh();
+      res.json({ environments: hosted.summary(), health: await hosted.health() });
+    }),
+  );
 
   /**
    * The Reference Wallet collects a credential from a hosted issuer. Automatic sign-ins finish on their own;
    * interactive ones answer with eSignet's login page as soon as it is known, and the UI polls the job.
    */
-  r.post("/hosted/collect", h(async (req, res) => {
-    const { typeId, login } = (req.body ?? {}) as { typeId?: string; login?: { mode?: string; individualId?: string } };
-    const type = typeId ? hosted.findType(typeId) : undefined;
-    if (!type?.hosted) throw new ApiError(404, "not_found", "No such hosted credential type. The environment may still be loading; see the Parties page.");
-    const h0 = type.hosted;
-    const client = h0.authorizationServer ? hosted.clientFor(h0.environmentId, h0.authorizationServer) : undefined;
-    if (!client) throw new ApiError(400, "no_client", `The Reference Wallet cannot sign in at ${h0.authorizationServer ?? "this issuer"}. ${hosted.clientProblem(h0.environmentId) ?? "Use Inji Wallet on a phone for this issuer."}`);
-    const mode = login?.mode === "interactive" ? "interactive" : "auto";
-    gc();
-    const job: CollectJob = { id: randomBytes(8).toString("base64url"), status: "signing-in", at: Date.now() };
-    jobs.set(job.id, job);
-    let ready!: () => void;
-    const shown = new Promise<void>((resolve) => (ready = resolve));
-    void wallet
-      .receiveAuthorized({
-        credentialIssuer: h0.credentialIssuer,
-        configId: type.configurationId,
-        client,
-        typeId: type.id,
-        signIn: async (p) => {
-          if (mode === "auto") return hosted.signInAutomatically(h0.environmentId, p, { individualId: login?.individualId });
-          const { url, code } = hosted.startInteractive(h0.environmentId, p);
-          Object.assign(job, { status: "waiting-login", loginUrl: url });
-          ready();
-          const c = await code;
-          job.status = "collecting";
-          return c;
-        },
-      })
-      .then(({ held }) => {
-        const { raw: _raw, ...summary } = held;
-        Object.assign(job, { status: "done", held: summary });
-      })
-      .catch((e) => Object.assign(job, { status: "failed", error: (e as Error).message }))
-      .finally(ready);
-    // Automatic sign-ins take a few seconds; wait for them, or for eSignet's page to be known.
-    await Promise.race([shown, new Promise((r) => setTimeout(r, mode === "auto" ? 45_000 : 20_000))]);
-    res.status(202).json(job);
-  }));
+  r.post(
+    "/hosted/collect",
+    h(async (req, res) => {
+      const { typeId, login } = (req.body ?? {}) as {
+        typeId?: string;
+        login?: { mode?: string; individualId?: string };
+      };
+      const type = typeId ? hosted.findType(typeId) : undefined;
+      if (!type?.hosted)
+        throw new ApiError(
+          404,
+          "not_found",
+          "No such hosted credential type. The environment may still be loading; see the Parties page.",
+        );
+      const h0 = type.hosted;
+      const client = h0.authorizationServer
+        ? hosted.clientFor(h0.environmentId, h0.authorizationServer)
+        : undefined;
+      if (!client)
+        throw new ApiError(
+          400,
+          "no_client",
+          `The Reference Wallet cannot sign in at ${h0.authorizationServer ?? "this issuer"}. ${hosted.clientProblem(h0.environmentId) ?? "Use Inji Wallet on a phone for this issuer."}`,
+        );
+      const mode = login?.mode === "interactive" ? "interactive" : "auto";
+      gc();
+      const job: CollectJob = {
+        id: randomBytes(8).toString("base64url"),
+        status: "signing-in",
+        at: Date.now(),
+      };
+      jobs.set(job.id, job);
+      let ready!: () => void;
+      const shown = new Promise<void>((resolve) => (ready = resolve));
+      void wallet
+        .receiveAuthorized({
+          credentialIssuer: h0.credentialIssuer,
+          configId: type.configurationId,
+          client,
+          typeId: type.id,
+          signIn: async (p) => {
+            if (mode === "auto")
+              return hosted.signInAutomatically(h0.environmentId, p, { individualId: login?.individualId });
+            const { url, code } = hosted.startInteractive(h0.environmentId, p);
+            Object.assign(job, { status: "waiting-login", loginUrl: url });
+            ready();
+            const c = await code;
+            job.status = "collecting";
+            return c;
+          },
+        })
+        .then(({ held }) => {
+          const { raw: _raw, ...summary } = held;
+          Object.assign(job, { status: "done", held: summary });
+        })
+        .catch((e) => Object.assign(job, { status: "failed", error: (e as Error).message }))
+        .finally(ready);
+      // Automatic sign-ins take a few seconds; wait for them, or for eSignet's page to be known.
+      await Promise.race([shown, new Promise((r) => setTimeout(r, mode === "auto" ? 45_000 : 20_000))]);
+      res.status(202).json(job);
+    }),
+  );
 
-  r.get("/hosted/collect/:id", h(async (req, res) => {
-    const job = jobs.get(req.params.id!);
-    if (!job) throw new ApiError(404, "not_found", "No such collection (it may have expired).");
-    res.json(job);
-  }));
+  r.get(
+    "/hosted/collect/:id",
+    h(async (req, res) => {
+      const job = jobs.get(req.params.id!);
+      if (!job) throw new ApiError(404, "not_found", "No such collection (it may have expired).");
+      res.json(job);
+    }),
+  );
 
   return r;
 }
@@ -103,11 +135,34 @@ export function redirectApp(hosted: HostedService) {
   app.get("/redirect", (req, res) => {
     const q = req.query as Record<string, string | undefined>;
     const state = q.state ?? "";
-    const known = hosted.completeInteractive(state, { code: q.code, error: q.error, description: q.error_description });
+    const known = hosted.completeInteractive(state, {
+      code: q.code,
+      error: q.error,
+      description: q.error_description,
+    });
     res.set("cache-control", "no-store").type("html");
-    if (!known) return void res.status(400).send(page("Sign-in not expected", "<h1>This sign-in is not expected</h1><p>No run or collection in the playground is waiting for it (it may have timed out, or the playground restarted). Start again from the playground.</p>"));
-    if (q.error) return void res.send(page("Sign-in failed", `<h1>eSignet did not sign you in</h1><p>${esc(q.error)}${q.error_description ? `: ${esc(q.error_description)}` : ""}. Return to the playground tab; the run says what happened.</p>`));
-    res.send(page("Signed in", "<h1>Signed in at eSignet</h1><p>The playground has the authorization code and is collecting the credential. You can close this tab and return to the playground.</p>"));
+    if (!known)
+      return void res
+        .status(400)
+        .send(
+          page(
+            "Sign-in not expected",
+            "<h1>This sign-in is not expected</h1><p>No run or collection in the playground is waiting for it (it may have timed out, or the playground restarted). Start again from the playground.</p>",
+          ),
+        );
+    if (q.error)
+      return void res.send(
+        page(
+          "Sign-in failed",
+          `<h1>eSignet did not sign you in</h1><p>${esc(q.error)}${q.error_description ? `: ${esc(q.error_description)}` : ""}. Return to the playground tab; the run says what happened.</p>`,
+        ),
+      );
+    res.send(
+      page(
+        "Signed in",
+        "<h1>Signed in at eSignet</h1><p>The playground has the authorization code and is collecting the credential. You can close this tab and return to the playground.</p>",
+      ),
+    );
   });
   app.use((_req, res) => void res.status(404).type("text/plain").send("Only /redirect is served here."));
   return app;

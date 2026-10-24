@@ -63,7 +63,13 @@ const ROWS: Row[] = [
   { id: "M15", type: FARMER_SD, verifier: "inji-verify", verifyRequest: "by-value" },
   ...(["alter-claim", "wrong-nonce", "no-holder-proof", "foreign-holder"] as const).flatMap((tamper, i) => [
     { id: `T${i * 4 + 1}`, type: FARMER, verifier: "inji-verify" as const, tamper },
-    { id: `T${i * 4 + 2}`, type: FARMER_SD, verifier: "inji-verify" as const, tamper, knownGap: tamper === "wrong-nonce" ? "G19" : tamper === "no-holder-proof" ? "G20" : undefined },
+    {
+      id: `T${i * 4 + 2}`,
+      type: FARMER_SD,
+      verifier: "inji-verify" as const,
+      tamper,
+      knownGap: tamper === "wrong-nonce" ? "G19" : tamper === "no-holder-proof" ? "G20" : undefined,
+    },
     { id: `T${i * 4 + 3}`, type: FARMER, verifier: "reference-verifier" as const, tamper },
     { id: `T${i * 4 + 4}`, type: FARMER_SD, verifier: "reference-verifier" as const, tamper },
   ]),
@@ -116,28 +122,91 @@ const COLLAB_ROWS: Row[] = [
   { id: "C10", type: MOCK, verifier: "inji-verify", requested: [] },
   { id: "C11", type: MOCK_SD, verifier: "inji-verify", requested: ["UIN"] },
   { id: "C12", type: FARMER_SD, verifier: "collab-verify", query: "dcql" },
-  { id: "C13", type: FARMER, verifier: "collab-verify", query: "dcql", dcqlPaths: "inji", needsPublicUrl: true },
+  {
+    id: "C13",
+    type: FARMER,
+    verifier: "collab-verify",
+    query: "dcql",
+    dcqlPaths: "inji",
+    needsPublicUrl: true,
+  },
   // The independent Reference Verifier.
   { id: "C14", type: MOCK_SD, verifier: "reference-verifier", query: "dcql", requested: ["UIN"] },
   { id: "C15", type: MOCK, verifier: "reference-verifier", query: "dcql", requested: [], knownGap: "G15" },
   // Tampering, against Inji Verify 1.0: which 0.18.2 weaknesses are fixed?
-  { id: "C16", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "wrong-nonce", requested: ["UIN"] },
-  { id: "C17", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "no-holder-proof", requested: ["UIN"] },
-  { id: "C18", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "self-signed-sdjwt", requested: ["UIN"], knownGap: "G11" },
-  { id: "C19", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "alter-claim", requested: ["dateOfBirth"] },
-  { id: "C20", type: MOCK_SD, verifier: "collab-verify", query: "dcql", tamper: "foreign-holder", requested: ["UIN"] },
+  {
+    id: "C16",
+    type: MOCK_SD,
+    verifier: "collab-verify",
+    query: "dcql",
+    tamper: "wrong-nonce",
+    requested: ["UIN"],
+  },
+  {
+    id: "C17",
+    type: MOCK_SD,
+    verifier: "collab-verify",
+    query: "dcql",
+    tamper: "no-holder-proof",
+    requested: ["UIN"],
+  },
+  {
+    id: "C18",
+    type: MOCK_SD,
+    verifier: "collab-verify",
+    query: "dcql",
+    tamper: "self-signed-sdjwt",
+    requested: ["UIN"],
+    knownGap: "G11",
+  },
+  {
+    id: "C19",
+    type: MOCK_SD,
+    verifier: "collab-verify",
+    query: "dcql",
+    tamper: "alter-claim",
+    requested: ["dateOfBirth"],
+  },
+  {
+    id: "C20",
+    type: MOCK_SD,
+    verifier: "collab-verify",
+    query: "dcql",
+    tamper: "foreign-holder",
+    requested: ["UIN"],
+  },
   { id: "C21", type: MOCK, verifier: "collab-verify", query: "dcql", tamper: "alter-claim", requested: [] },
 ];
 
 const CLAIMS: Record<string, Record<string, unknown>> = {
-  [FARMER]: { fullName: "Ramesh Kumar", farmerId: "KA-MND-20931", primaryCropType: "Ragi", landAreaAcres: 3.5, district: "Mandya" },
-  [FARMER_SD]: { fullName: "Ramesh Kumar", farmerId: "KA-MND-20931", primaryCropType: "Ragi", landAreaAcres: 3.5, district: "Mandya" },
-  [DEGREE]: { fullName: "Asha Rao", degree: "B.Tech", major: "Computer Science", graduationDate: "2025-06-30" },
+  [FARMER]: {
+    fullName: "Ramesh Kumar",
+    farmerId: "KA-MND-20931",
+    primaryCropType: "Ragi",
+    landAreaAcres: 3.5,
+    district: "Mandya",
+  },
+  [FARMER_SD]: {
+    fullName: "Ramesh Kumar",
+    farmerId: "KA-MND-20931",
+    primaryCropType: "Ragi",
+    landAreaAcres: 3.5,
+    district: "Mandya",
+  },
+  [DEGREE]: {
+    fullName: "Asha Rao",
+    degree: "B.Tech",
+    major: "Computer Science",
+    graduationDate: "2025-06-30",
+  },
   [EXPIRED]: { holderName: "Asha Rao", cardNumber: "LIB-0042" },
 };
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE}/api${path}`, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
+  const res = await fetch(`${BASE}/api${path}`, {
+    ...init,
+    headers: { "content-type": "application/json", ...init?.headers },
+  });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(`${path}: ${res.status} ${JSON.stringify(body)}`);
   return body as T;
@@ -152,7 +221,8 @@ async function ensureExpiredType(types: CredentialType[]) {
       issuerSlug: "veridonia-uni",
       typeName: "ExpiredLibraryPass",
       displayName: "Library Pass (expired)",
-      description: "Hard-coded to have expired on 1 Jan 2025, to test how verifiers treat expired credentials.",
+      description:
+        "Hard-coded to have expired on 1 Jan 2025, to test how verifiers treat expired credentials.",
       format: "ldp_vc",
       dataModel: "2.0",
       expiresAt: "2025-01-01T00:00:00.000Z",
@@ -168,7 +238,9 @@ async function runOne(row: Row, types: CredentialType[], catalog: CatalogType[])
   const external = catalog.find((t) => t.id === row.type);
   const type = external ?? types.find((t) => t.configId === row.type);
   if (!type) throw new Error(`credential type ${row.type} not found`);
-  const claims = external ? Object.fromEntries(external.fields.map((f) => [f.name, f.sample ?? "Sample"])) : CLAIMS[row.type];
+  const claims = external
+    ? Object.fromEntries(external.fields.map((f) => [f.name, f.sample ?? "Sample"]))
+    : CLAIMS[row.type];
   const run = await api<Run>("/runs", {
     method: "POST",
     body: JSON.stringify({
@@ -180,7 +252,9 @@ async function runOne(row: Row, types: CredentialType[], catalog: CatalogType[])
       tamper: row.tamper ?? "none",
       verifyRequest: row.verifyRequest ?? "signed",
       dcqlPaths: row.dcqlPaths ?? "spec",
-      requestedClaims: row.requested ?? (row.type === EXPIRED ? [] : external ? [external.fields[0]!.name] : ["primaryCropType"]),
+      requestedClaims:
+        row.requested ??
+        (row.type === EXPIRED ? [] : external ? [external.fields[0]!.name] : ["primaryCropType"]),
       claims,
     }),
   });
@@ -200,7 +274,10 @@ async function seededTypes(): Promise<CredentialType[]> {
   for (let i = 0; ; i++) {
     const types = await api<CredentialType[]>("/types").catch(() => [] as CredentialType[]);
     if (needed.every((id) => types.some((t) => t.configId === id))) return types;
-    if (i >= 90) throw new Error(`demo credential types were not seeded within 3 minutes (missing ${needed.filter((id) => !types.some((t) => t.configId === id)).join(", ")})`);
+    if (i >= 90)
+      throw new Error(
+        `demo credential types were not seeded within 3 minutes (missing ${needed.filter((id) => !types.some((t) => t.configId === id)).join(", ")})`,
+      );
     if (i === 0) console.log("waiting for the demo credential types to be seeded…");
     await new Promise((r) => setTimeout(r, 2000));
   }
@@ -211,15 +288,30 @@ async function main() {
   await ensureExpiredType(types);
   types = await api<CredentialType[]>("/types");
   const catalog = await api<CatalogType[]>("/catalog");
-  const status = await api<{ mode: string; parties: { configured: number; reachable: number }; hosted?: { id: string; reachable: boolean }[] }>("/status");
-  const withExternal = catalog.some((t) => t.id === LIB) && status.parties.configured > 0 && status.parties.reachable === status.parties.configured;
-  if (!withExternal) console.log("external lab not running: skipping the X rows (./playground.sh up --external to include them)");
-  const withCollab = Boolean(status.hosted?.some((h) => h.id === "collab" && h.reachable)) && catalog.some((t) => t.id === MOCK && t.canIssue);
-  if (!withCollab) console.log("MOSIP Collab not reachable (or its test client key missing): skipping the C rows");
+  const status = await api<{
+    mode: string;
+    parties: { configured: number; reachable: number };
+    hosted?: { id: string; reachable: boolean }[];
+  }>("/status");
+  const withExternal =
+    catalog.some((t) => t.id === LIB) &&
+    status.parties.configured > 0 &&
+    status.parties.reachable === status.parties.configured;
+  if (!withExternal)
+    console.log(
+      "external lab not running: skipping the X rows (./playground.sh up --external to include them)",
+    );
+  const withCollab =
+    Boolean(status.hosted?.some((h) => h.id === "collab" && h.reachable)) &&
+    catalog.some((t) => t.id === MOCK && t.canIssue);
+  if (!withCollab)
+    console.log("MOSIP Collab not reachable (or its test client key missing): skipping the C rows");
   const collabRows = COLLAB_ROWS.filter((r) => !r.needsPublicUrl || status.mode === "public");
   // ONLY=C7,C19 reruns just those rows (the report then lists only them), for chasing one result.
   const only = process.env.ONLY?.split(",").map((x) => x.trim());
-  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : []), ...(withCollab ? collabRows : [])].filter((r) => !only || only.includes(r.id));
+  const rows = [...ROWS, ...(withExternal ? EXTERNAL_ROWS : []), ...(withCollab ? collabRows : [])].filter(
+    (r) => !only || only.includes(r.id),
+  );
   const results: { row: Row; run?: Run; error?: string }[] = [];
   for (const row of rows) {
     // Certify fetches W3C contexts over the internet (gap G16), so retry once on a transient issuance error.
@@ -229,7 +321,9 @@ async function main() {
         const run = await runOne(row, types, catalog);
         if (run.status === "failed" && run.steps[0]?.status === "failed" && attempt++ < 1) continue;
         results.push({ row, run });
-        console.log(`${row.id.padEnd(4)} ${icon(run)} ${run.labels.format.padEnd(9)} ${(row.wallet ?? "reference-wallet").padEnd(17)} ${row.verifier.padEnd(18)} ${(row.tamper ?? "none").padEnd(17)} ${run.result?.verifierOutcome ?? "-"} ${run.result?.errorCode ?? ""}`);
+        console.log(
+          `${row.id.padEnd(4)} ${icon(run)} ${run.labels.format.padEnd(9)} ${(row.wallet ?? "reference-wallet").padEnd(17)} ${row.verifier.padEnd(18)} ${(row.tamper ?? "none").padEnd(17)} ${run.result?.verifierOutcome ?? "-"} ${run.result?.errorCode ?? ""}`,
+        );
         break;
       } catch (e) {
         results.push({ row, error: (e as Error).message });
@@ -253,11 +347,22 @@ async function main() {
   ];
   for (const { row, run, error } of results) {
     if (!run) {
-      lines.push(`| ${row.id} | ${row.type} | | | ${row.wallet ?? "reference-wallet"} | ${row.verifier} | | | ${row.tamper ?? "none"} | | | ${error} | ⚠️ | |`);
+      lines.push(
+        `| ${row.id} | ${row.type} | | | ${row.wallet ?? "reference-wallet"} | ${row.verifier} | | | ${row.tamper ?? "none"} | | | ${error} | ⚠️ | |`,
+      );
       continue;
     }
     const r = run.result;
-    const q = row.mode === "direct-share" ? "—" : run.labels.external?.verifier ? "own" : run.spec.query === "dcql" ? (run.spec.dcqlPaths === "inji" && run.labels.format === "ldp_vc" ? "DCQL (Inji paths)" : "DCQL") : "PE";
+    const q =
+      row.mode === "direct-share"
+        ? "—"
+        : run.labels.external?.verifier
+          ? "own"
+          : run.spec.query === "dcql"
+            ? run.spec.dcqlPaths === "inji" && run.labels.format === "ldp_vc"
+              ? "DCQL (Inji paths)"
+              : "DCQL"
+            : "PE";
     const fmt = `${run.labels.format}${run.labels.dataModel ? ` (DM ${run.labels.dataModel})` : ""}`;
     lines.push(
       `| ${row.id} | ${run.labels.typeName} | ${run.labels.issuerName}${run.labels.hosted?.issuer ? ` (${run.labels.hosted.issuer})` : ""} | ${fmt} | ${run.labels.wallet} | ${run.labels.verifier} | ${q} | ${row.mode === "direct-share" ? "direct share" : row.verifier === "inji-verify" && run.spec.query !== "dcql" ? `OpenID4VP, ${run.spec.verifyRequest === "by-value" ? "by value" : "signed request_uri"}` : "OpenID4VP"} | ${row.tamper ?? "none"} | ${r?.expected === "PASS" ? "accept" : "reject"} | ${r?.verifierOutcome ?? "—"} | ${r?.errorCode ?? r?.credentialStatus ?? ""} | ${icon(run)}${row.knownGap ? ` ${row.knownGap}` : ""} | \`${run.id}\` |`,
@@ -265,7 +370,11 @@ async function main() {
   }
   const unexpected = results.filter((x) => !x.run || (x.run.result?.verdict !== "PASS" && !x.row.knownGap));
   const gaps = results.filter((x) => x.run?.result?.verdict !== "PASS" && x.row.knownGap);
-  lines.push("", `**${results.length - unexpected.length - gaps.length}/${results.length}** behaved as expected · **${gaps.length}** known gaps · **${unexpected.length}** unexpected.`, "");
+  lines.push(
+    "",
+    `**${results.length - unexpected.length - gaps.length}/${results.length}** behaved as expected · **${gaps.length}** known gaps · **${unexpected.length}** unexpected.`,
+    "",
+  );
   writeFileSync(REPORT, lines.join("\n"));
   console.log(`\nwrote ${REPORT}: ${unexpected.length} unexpected`);
   process.exit(unexpected.length ? 1 : 0);

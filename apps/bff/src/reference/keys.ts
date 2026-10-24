@@ -49,7 +49,10 @@ export interface HolderKey {
 }
 
 export async function newHolderKey(kind: "ed25519" | "p256"): Promise<HolderKey> {
-  const { privateKey, publicKey } = await generateKeyPair(kind === "ed25519" ? "EdDSA" : "ES256", { extractable: true, crv: kind === "ed25519" ? "Ed25519" : undefined });
+  const { privateKey, publicKey } = await generateKeyPair(kind === "ed25519" ? "EdDSA" : "ES256", {
+    extractable: true,
+    crv: kind === "ed25519" ? "Ed25519" : undefined,
+  });
   const privateJwk = await exportJWK(privateKey);
   const publicJwk = await exportJWK(publicKey);
   return fromJwks(kind, privateJwk, publicJwk);
@@ -86,12 +89,26 @@ export function resolveLocalDid(did: string): Record<string, unknown> | undefine
   if (did.startsWith("did:jwk:")) {
     const jwk = JSON.parse(new TextDecoder().decode(b64urlToBytes(did.slice(8))));
     const id = `${did}#0`;
-    return { "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/jws-2020/v1"], id: did, verificationMethod: [{ id, type: "JsonWebKey2020", controller: did, publicKeyJwk: jwk }], assertionMethod: [id], authentication: [id] };
+    return {
+      "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/jws-2020/v1"],
+      id: did,
+      verificationMethod: [{ id, type: "JsonWebKey2020", controller: did, publicKeyJwk: jwk }],
+      assertionMethod: [id],
+      authentication: [id],
+    };
   }
   if (did.startsWith("did:key:z6Mk")) {
     const mb = did.slice(8);
     const id = `${did}#${mb}`;
-    return { "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2020/v1"], id: did, verificationMethod: [{ id, type: "Ed25519VerificationKey2020", controller: did, publicKeyMultibase: mb }], assertionMethod: [id], authentication: [id] };
+    return {
+      "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
+      id: did,
+      verificationMethod: [
+        { id, type: "Ed25519VerificationKey2020", controller: did, publicKeyMultibase: mb },
+      ],
+      assertionMethod: [id],
+      authentication: [id],
+    };
   }
   return undefined;
 }

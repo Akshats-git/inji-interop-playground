@@ -264,10 +264,18 @@ export function RunBuilderPage() {
   }, [walletInfo, verifierInfo, mode, tamper]);
 
   const grouped = useMemo(() => {
-    const m = new Map<string, { name: string; origin: CatalogType["origin"]; env?: string; types: CatalogType[] }>();
+    const m = new Map<
+      string,
+      { name: string; origin: CatalogType["origin"]; env?: string; types: CatalogType[] }
+    >();
     for (const t of catalog.data ?? []) {
       const key = `${t.origin}:${t.issuerId}`;
-      const g = m.get(key) ?? { name: t.issuerName, origin: t.origin, env: t.hosted?.environmentName, types: [] };
+      const g = m.get(key) ?? {
+        name: t.issuerName,
+        origin: t.origin,
+        env: t.hosted?.environmentName,
+        types: [],
+      };
       g.types.push(t);
       m.set(key, g);
     }
@@ -307,14 +315,26 @@ export function RunBuilderPage() {
   };
 
   // A verifier asked in a query language it does not speak: the run sends it anyway, and the refusal is the finding.
-  const queryUnsupported = mode !== "direct-share" && verifierInfo && !verifierInfo.ownQuery && !verifierInfo.accepts.includes(query);
+  const queryUnsupported =
+    mode !== "direct-share" &&
+    verifierInfo &&
+    !verifierInfo.ownQuery &&
+    !verifierInfo.accepts.includes(query);
   const canAutoLogin = Boolean(hosted?.autoLogin);
   const walletCannotCollect = hosted && wallet === "reference-wallet" && !canAutoLogin;
   const formatMismatch =
     verifierInfo?.origin === "external" && type && !verifierInfo.formats.includes(type.format);
   const directShareOk =
     (walletInfo?.supportsDirectShare ?? true) && (verifierInfo?.supportsDirectShare ?? true);
-  const presets = catalog.data ? PRESETS.filter((p) => catalog.data.some(p.match) && (!p.verifier.endsWith("-verify") || p.verifier === "inji-verify" || verifiers.some((v) => v.id === p.verifier))) : [];
+  const presets = catalog.data
+    ? PRESETS.filter(
+        (p) =>
+          catalog.data.some(p.match) &&
+          (!p.verifier.endsWith("-verify") ||
+            p.verifier === "inji-verify" ||
+            verifiers.some((v) => v.id === p.verifier)),
+      )
+    : [];
 
   return (
     <>
@@ -360,8 +380,8 @@ export function RunBuilderPage() {
                     <Link className="text-issue underline" to="/studio">
                       Issuer Studio
                     </Link>
-                    , or declare an external issuer in <code className="font-mono">infra/parties.yaml</code>. If you just
-                    started the stack, the demo types appear once Inji Certify is ready.
+                    , or declare an external issuer in <code className="font-mono">infra/parties.yaml</code>.
+                    If you just started the stack, the demo types appear once Inji Certify is ready.
                   </Empty>
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -378,7 +398,16 @@ export function RunBuilderPage() {
                       {(id) => (
                         <Select id={id} value={typeId} onChange={(e) => setTypeId(e.target.value)}>
                           {grouped.map(([issuerId, g]) => (
-                            <optgroup key={issuerId} label={g.origin === "external" ? `${g.name} (external)` : g.origin === "hosted" ? `${g.name} (${g.env}, hosted)` : g.name}>
+                            <optgroup
+                              key={issuerId}
+                              label={
+                                g.origin === "external"
+                                  ? `${g.name} (external)`
+                                  : g.origin === "hosted"
+                                    ? `${g.name} (${g.env}, hosted)`
+                                    : g.name
+                              }
+                            >
                               {g.types.map((t) => (
                                 <option key={t.id} value={t.id}>
                                   {t.displayName}
@@ -392,19 +421,42 @@ export function RunBuilderPage() {
                     {hosted ? (
                       <div className="flex flex-col gap-3">
                         <p className="text-sm">
-                          The holder signs in at <strong>{hostOf(hosted.authorizationServer)}</strong> (eSignet) and the claims come from that identity.
+                          The holder signs in at <strong>{hostOf(hosted.authorizationServer)}</strong>{" "}
+                          (eSignet) and the claims come from that identity.
                         </p>
                         {wallet === "reference-wallet" &&
                           (canAutoLogin ? (
                             <>
-                              <div role="radiogroup" aria-label="How the Reference Wallet signs in" className="grid gap-2">
-                                <Choice name="login" value={"auto" as const} current={loginMode} onChange={setLoginMode} title="Automatically" note={`As a demo identity with ${env?.name ?? "the environment"}'s test OTP. No person needed.`} />
-                                <Choice name="login" value={"interactive" as const} current={loginMode} onChange={setLoginMode} title="I'll sign in myself" note="eSignet's own page opens in a tab; it sends you back here." />
+                              <div
+                                role="radiogroup"
+                                aria-label="How the Reference Wallet signs in"
+                                className="grid gap-2"
+                              >
+                                <Choice
+                                  name="login"
+                                  value={"auto" as const}
+                                  current={loginMode}
+                                  onChange={setLoginMode}
+                                  title="Automatically"
+                                  note={`As a demo identity with ${env?.name ?? "the environment"}'s test OTP. No person needed.`}
+                                />
+                                <Choice
+                                  name="login"
+                                  value={"interactive" as const}
+                                  current={loginMode}
+                                  onChange={setLoginMode}
+                                  title="I'll sign in myself"
+                                  note="eSignet's own page opens in a tab; it sends you back here."
+                                />
                               </div>
                               {loginMode === "auto" && identities.length > 0 && (
                                 <Field label="Demo identity">
                                   {(id) => (
-                                    <Select id={id} value={identity} onChange={(e) => setIdentity(e.target.value)}>
+                                    <Select
+                                      id={id}
+                                      value={identity}
+                                      onChange={(e) => setIdentity(e.target.value)}
+                                    >
                                       {identities.map((i, n) => (
                                         <option key={i.id} value={n === 0 ? "" : i.id}>
                                           {i.id}, {i.label}
@@ -417,7 +469,9 @@ export function RunBuilderPage() {
                             </>
                           ) : (
                             <Notice tone="warn">
-                              The Reference Wallet has no OAuth client at {hostOf(hosted.authorizationServer)}, so it cannot collect this one. Choose <strong>Inji Wallet (mobile)</strong>: it signs in through {hosted.environmentName}'s Mimoto.
+                              The Reference Wallet has no OAuth client at {hostOf(hosted.authorizationServer)}
+                              , so it cannot collect this one. Choose <strong>Inji Wallet (mobile)</strong>:
+                              it signs in through {hosted.environmentName}'s Mimoto.
                             </Notice>
                           ))}
                       </div>
@@ -430,18 +484,29 @@ export function RunBuilderPage() {
                             : "4–8 letters or digits. The wallet must enter it to collect the credential (tx_code)."
                         }
                       >
-                        {(id) => <Input id={id} value={txCode} onChange={(e) => setTxCode(e.target.value)} maxLength={8} autoComplete="off" placeholder="e.g. 4821" />}
+                        {(id) => (
+                          <Input
+                            id={id}
+                            value={txCode}
+                            onChange={(e) => setTxCode(e.target.value)}
+                            maxLength={8}
+                            autoComplete="off"
+                            placeholder="e.g. 4821"
+                          />
+                        )}
                       </Field>
                     )}
                     {type?.origin === "external" && down(`issuer:${type.issuerId}`) && (
                       <Notice tone="warn">
-                        {type.issuerName} is not reachable right now ({health[`issuer:${type.issuerId}`]!.detail}). Start the external lab with{" "}
+                        {type.issuerName} is not reachable right now (
+                        {health[`issuer:${type.issuerId}`]!.detail}). Start the external lab with{" "}
                         <code className="font-mono">./playground.sh up --external</code>.
                       </Notice>
                     )}
                     {type?.origin === "external" && !type.canIssue && (
                       <Notice>
-                        This issuer has no offer API in the parties file. The run will ask you to get an offer from it
+                        This issuer has no offer API in the parties file. The run will ask you to get an offer
+                        from it
                         {type.offerPage ? (
                           <>
                             {" "}
@@ -499,7 +564,15 @@ export function RunBuilderPage() {
                         current={verifier}
                         onChange={setVerifier}
                         title={v.origin === "external" ? `${v.label} (external)` : v.label}
-                        note={down(v.origin === "hosted" ? `hosted:${v.environmentId}:verify` : `verifier:${v.id}`) ? (v.origin === "hosted" ? "Not reachable right now: check the internet connection." : "Not reachable: start the external lab.") : v.note}
+                        note={
+                          down(
+                            v.origin === "hosted" ? `hosted:${v.environmentId}:verify` : `verifier:${v.id}`,
+                          )
+                            ? v.origin === "hosted"
+                              ? "Not reachable right now: check the internet connection."
+                              : "Not reachable: start the external lab."
+                            : v.note
+                        }
                         accent="present"
                       />
                     ))}
@@ -522,62 +595,112 @@ export function RunBuilderPage() {
                       onChange={setMode}
                       disabled={!directShareOk}
                       title="Direct share"
-                      note={directShareOk ? "The holder shows the whole credential as a PixelPass QR code." : "Needs Inji Verify and a wallet that can show a credential's QR code."}
+                      note={
+                        directShareOk
+                          ? "The holder shows the whole credential as a PixelPass QR code."
+                          : "Needs Inji Verify and a wallet that can show a credential's QR code."
+                      }
                       accent="present"
                     />
                   </div>
                   {mode !== "direct-share" &&
                     (verifierInfo?.ownQuery ? (
                       <p className="text-sm text-muted">
-                        {verifierInfo.label} writes its own request (its query language is its choice, shown in the inspector). The parties file tells it which
-                        credential to ask for.
+                        {verifierInfo.label} writes its own request (its query language is its choice, shown
+                        in the inspector). The parties file tells it which credential to ask for.
                       </p>
                     ) : (
                       <div role="radiogroup" aria-label="Query language" className="grid gap-2">
                         <span className="text-sm font-bold">Query language</span>
-                        <Choice name="query" value={"presentation_exchange" as QueryLanguage} current={query} onChange={setQuery} title="Presentation Exchange" note="OpenID4VP drafts 21–23, Inji 0.x." accent="present" />
-                        <Choice name="query" value={"dcql" as QueryLanguage} current={query} onChange={setQuery} title="DCQL" note="OpenID4VP 1.0, Inji 1.0 line." accent="present" />
+                        <Choice
+                          name="query"
+                          value={"presentation_exchange" as QueryLanguage}
+                          current={query}
+                          onChange={setQuery}
+                          title="Presentation Exchange"
+                          note="OpenID4VP drafts 21–23, Inji 0.x."
+                          accent="present"
+                        />
+                        <Choice
+                          name="query"
+                          value={"dcql" as QueryLanguage}
+                          current={query}
+                          onChange={setQuery}
+                          title="DCQL"
+                          note="OpenID4VP 1.0, Inji 1.0 line."
+                          accent="present"
+                        />
                       </div>
                     ))}
-                  {verifier === "inji-verify" && mode !== "direct-share" && query === "presentation_exchange" && (
-                    <div role="radiogroup" aria-label="How Inji Verify sends its request" className="grid gap-2">
-                      <span className="text-sm font-bold">How Inji Verify sends its request</span>
-                      <Choice
-                        name="verifyRequest"
-                        value={"signed" as VerifyRequestStyle}
-                        current={verifyRequest}
-                        onChange={setVerifyRequest}
-                        title="Signed, by reference"
-                        note="client_id is Verify's did:web; the wallet fetches a signed request object. Small QR. Best for phones."
-                        accent="present"
-                      />
-                      <Choice
-                        name="verifyRequest"
-                        value={"by-value" as VerifyRequestStyle}
-                        current={verifyRequest}
-                        onChange={setVerifyRequest}
-                        title="Unsigned, by value"
-                        note="A pre-registered client id with the whole request in the QR, as the SDK does by default (gap G25)."
-                        accent="present"
-                      />
-                    </div>
-                  )}
-                  {mode !== "direct-share" && !verifierInfo?.ownQuery && query === "dcql" && type?.format === "ldp_vc" && (
-                    <div role="radiogroup" aria-label="DCQL claim paths" className="grid gap-2">
-                      <span className="text-sm font-bold">DCQL claim paths</span>
-                      <Choice name="dcqlPaths" value={"spec" as const} current={dcqlPaths} onChange={setDcqlPaths} title="From the credential" note={'["credentialSubject", "x"], as OpenID4VP 1.0 says.'} accent="present" />
-                      <Choice name="dcqlPaths" value={"inji" as const} current={dcqlPaths} onChange={setDcqlPaths} title="From credentialSubject" note={'["x"], as Inji\'s guide and Inji Verify 1.0 expect (gap G36).'} accent="present" />
-                    </div>
-                  )}
+                  {verifier === "inji-verify" &&
+                    mode !== "direct-share" &&
+                    query === "presentation_exchange" && (
+                      <div
+                        role="radiogroup"
+                        aria-label="How Inji Verify sends its request"
+                        className="grid gap-2"
+                      >
+                        <span className="text-sm font-bold">How Inji Verify sends its request</span>
+                        <Choice
+                          name="verifyRequest"
+                          value={"signed" as VerifyRequestStyle}
+                          current={verifyRequest}
+                          onChange={setVerifyRequest}
+                          title="Signed, by reference"
+                          note="client_id is Verify's did:web; the wallet fetches a signed request object. Small QR. Best for phones."
+                          accent="present"
+                        />
+                        <Choice
+                          name="verifyRequest"
+                          value={"by-value" as VerifyRequestStyle}
+                          current={verifyRequest}
+                          onChange={setVerifyRequest}
+                          title="Unsigned, by value"
+                          note="A pre-registered client id with the whole request in the QR, as the SDK does by default (gap G25)."
+                          accent="present"
+                        />
+                      </div>
+                    )}
+                  {mode !== "direct-share" &&
+                    !verifierInfo?.ownQuery &&
+                    query === "dcql" &&
+                    type?.format === "ldp_vc" && (
+                      <div role="radiogroup" aria-label="DCQL claim paths" className="grid gap-2">
+                        <span className="text-sm font-bold">DCQL claim paths</span>
+                        <Choice
+                          name="dcqlPaths"
+                          value={"spec" as const}
+                          current={dcqlPaths}
+                          onChange={setDcqlPaths}
+                          title="From the credential"
+                          note={'["credentialSubject", "x"], as OpenID4VP 1.0 says.'}
+                          accent="present"
+                        />
+                        <Choice
+                          name="dcqlPaths"
+                          value={"inji" as const}
+                          current={dcqlPaths}
+                          onChange={setDcqlPaths}
+                          title="From credentialSubject"
+                          note={'["x"], as Inji\'s guide and Inji Verify 1.0 expect (gap G36).'}
+                          accent="present"
+                        />
+                      </div>
+                    )}
                   {queryUnsupported && verifierInfo && (
                     <Notice tone="warn">
-                      {verifierInfo.label} only understands {verifierInfo.accepts.map((a) => (a === "dcql" ? "DCQL" : "Presentation Exchange")).join(" and ")}. The run will send the{" "}
-                      {query === "dcql" ? "DCQL" : "Presentation Exchange"} request anyway and record how the verifier answers, which is the point of testing it.
+                      {verifierInfo.label} only understands{" "}
+                      {verifierInfo.accepts
+                        .map((a) => (a === "dcql" ? "DCQL" : "Presentation Exchange"))
+                        .join(" and ")}
+                      . The run will send the {query === "dcql" ? "DCQL" : "Presentation Exchange"} request
+                      anyway and record how the verifier answers, which is the point of testing it.
                     </Notice>
                   )}
                   {formatMismatch && (
                     <Notice tone="warn">
-                      {verifierInfo!.label} is configured for {verifierInfo!.formats.join(", ")} only; this credential is {type!.format}.
+                      {verifierInfo!.label} is configured for {verifierInfo!.formats.join(", ")} only; this
+                      credential is {type!.format}.
                     </Notice>
                   )}
                 </div>
@@ -590,38 +713,48 @@ export function RunBuilderPage() {
                   {hosted ? (
                     <div className="flex min-w-0 flex-col gap-3">
                       <p className="text-sm">
-                        <strong>{type.issuerName}</strong> fills the claims from its own records for the person who signs in, so there is nothing to type here. It
-                        advertises {type.fields.length} claim{type.fields.length === 1 ? "" : "s"}: {type.fields.map((f) => f.label).join(", ") || "none listed"}.
+                        <strong>{type.issuerName}</strong> fills the claims from its own records for the
+                        person who signs in, so there is nothing to type here. It advertises{" "}
+                        {type.fields.length} claim{type.fields.length === 1 ? "" : "s"}:{" "}
+                        {type.fields.map((f) => f.label).join(", ") || "none listed"}.
                       </p>
-                      {(wallet !== "reference-wallet" || loginMode === "interactive") && <TestData environment={hosted.environmentId} issuerId={type.issuerId} />}
+                      {(wallet !== "reference-wallet" || loginMode === "interactive") && (
+                        <TestData environment={hosted.environmentId} issuerId={type.issuerId} />
+                      )}
                     </div>
                   ) : (
-                  <fieldset>
-                    <legend className="mb-2 text-sm font-bold">Claim values the issuer signs (synthetic)</legend>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {type.fields.map((f) => (
-                        <Field key={f.name} label={f.label}>
-                          {(id) =>
-                            f.kind === "choice" ? (
-                              <Select id={id} value={claims[f.name] ?? ""} onChange={(e) => setClaims({ ...claims, [f.name]: e.target.value })}>
-                                {f.options?.map((o) => (
-                                  <option key={o}>{o}</option>
-                                ))}
-                              </Select>
-                            ) : (
-                              <Input
-                                id={id}
-                                type={f.kind === "date" ? "date" : f.kind === "number" ? "number" : "text"}
-                                step="any"
-                                value={claims[f.name] ?? ""}
-                                onChange={(e) => setClaims({ ...claims, [f.name]: e.target.value })}
-                              />
-                            )
-                          }
-                        </Field>
-                      ))}
-                    </div>
-                  </fieldset>
+                    <fieldset>
+                      <legend className="mb-2 text-sm font-bold">
+                        Claim values the issuer signs (synthetic)
+                      </legend>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {type.fields.map((f) => (
+                          <Field key={f.name} label={f.label}>
+                            {(id) =>
+                              f.kind === "choice" ? (
+                                <Select
+                                  id={id}
+                                  value={claims[f.name] ?? ""}
+                                  onChange={(e) => setClaims({ ...claims, [f.name]: e.target.value })}
+                                >
+                                  {f.options?.map((o) => (
+                                    <option key={o}>{o}</option>
+                                  ))}
+                                </Select>
+                              ) : (
+                                <Input
+                                  id={id}
+                                  type={f.kind === "date" ? "date" : f.kind === "number" ? "number" : "text"}
+                                  step="any"
+                                  value={claims[f.name] ?? ""}
+                                  onChange={(e) => setClaims({ ...claims, [f.name]: e.target.value })}
+                                />
+                              )
+                            }
+                          </Field>
+                        ))}
+                      </div>
+                    </fieldset>
                   )}
                   {mode !== "direct-share" && !verifierInfo?.ownQuery && (
                     <fieldset>
@@ -632,15 +765,25 @@ export function RunBuilderPage() {
                             <input
                               type="checkbox"
                               checked={requested.includes(f.name)}
-                              onChange={(e) => setRequested(e.target.checked ? [...requested, f.name] : requested.filter((x) => x !== f.name))}
+                              onChange={(e) =>
+                                setRequested(
+                                  e.target.checked
+                                    ? [...requested, f.name]
+                                    : requested.filter((x) => x !== f.name),
+                                )
+                              }
                             />
                             {f.label}
-                            {type.format === "vc+sd-jwt" && !f.selectivelyDisclosable && <Tag>always visible</Tag>}
+                            {type.format === "vc+sd-jwt" && !f.selectivelyDisclosable && (
+                              <Tag>always visible</Tag>
+                            )}
                           </label>
                         ))}
                       </div>
                       <p className="mt-2 text-sm text-muted">
-                        {type.format === "vc+sd-jwt" ? "SD-JWT reveals only these claims." : "JSON-LD credentials are shared whole; the request still names the claims it needs."}
+                        {type.format === "vc+sd-jwt"
+                          ? "SD-JWT reveals only these claims."
+                          : "JSON-LD credentials are shared whole; the request still names the claims it needs."}
                       </p>
                     </fieldset>
                   )}
@@ -650,9 +793,19 @@ export function RunBuilderPage() {
 
             {walletInfo?.supportsTamper && (
               <Panel title="Tamper (optional)">
-                <Field label="Make the wallet misbehave" hint={TAMPER_PRESETS[tamper].explain + (tamper !== "none" ? " A correct verifier rejects this." : "")}>
+                <Field
+                  label="Make the wallet misbehave"
+                  hint={
+                    TAMPER_PRESETS[tamper].explain +
+                    (tamper !== "none" ? " A correct verifier rejects this." : "")
+                  }
+                >
                   {(id) => (
-                    <Select id={id} value={tamper} onChange={(e) => setTamper(e.target.value as TamperPreset)}>
+                    <Select
+                      id={id}
+                      value={tamper}
+                      onChange={(e) => setTamper(e.target.value as TamperPreset)}
+                    >
                       {Object.entries(TAMPER_PRESETS).map(([k, v]) => (
                         <option key={k} value={k}>
                           {v.label}
@@ -664,14 +817,30 @@ export function RunBuilderPage() {
               </Panel>
             )}
 
-            {start.error && <Notice tone="error">{start.error instanceof ApiError ? start.error.message : "The run could not start."}</Notice>}
+            {start.error && (
+              <Notice tone="error">
+                {start.error instanceof ApiError ? start.error.message : "The run could not start."}
+              </Notice>
+            )}
             <div className="flex flex-wrap items-center gap-3">
-              <Button tone="primary" type="submit" busy={start.isPending} disabled={!typeId || Boolean(formatMismatch) || Boolean(walletCannotCollect)} className="min-h-12 px-6 text-base">
+              <Button
+                tone="primary"
+                type="submit"
+                busy={start.isPending}
+                disabled={!typeId || Boolean(formatMismatch) || Boolean(walletCannotCollect)}
+                className="min-h-12 px-6 text-base"
+              >
                 Start run
               </Button>
               <span className="text-sm text-muted">
-                {type && walletInfo && verifierInfo ? `${type.issuerName} → ${walletInfo.label} → ${verifierInfo.label}. ` : ""}
-                {walletInfo?.interactive ? "You will be shown QR codes to scan." : hosted && loginMode === "interactive" ? "You will sign in at eSignet in a new tab." : "Runs on its own in a few seconds."}
+                {type && walletInfo && verifierInfo
+                  ? `${type.issuerName} → ${walletInfo.label} → ${verifierInfo.label}. `
+                  : ""}
+                {walletInfo?.interactive
+                  ? "You will be shown QR codes to scan."
+                  : hosted && loginMode === "interactive"
+                    ? "You will sign in at eSignet in a new tab."
+                    : "Runs on its own in a few seconds."}
               </span>
             </div>
           </form>
@@ -686,7 +855,10 @@ export function RunBuilderPage() {
               </Link>
             </div>
             {runs.data?.length ? (
-              <ul className="grid overflow-hidden rounded-[10px] border border-hairline bg-hairline sm:grid-cols-2 xl:grid-cols-4" style={{ gap: 1 }}>
+              <ul
+                className="grid overflow-hidden rounded-[10px] border border-hairline bg-hairline sm:grid-cols-2 xl:grid-cols-4"
+                style={{ gap: 1 }}
+              >
                 {runs.data.slice(0, 8).map((r) => (
                   <RecentRun key={r.id} run={r} />
                 ))}
@@ -702,10 +874,33 @@ export function RunBuilderPage() {
 }
 
 /** One column of the Issuer → Wallet → Verifier selector, with an arrow to the next on wide screens. */
-function Column({ step, title, accent, arrow, action, children }: { step: number; title: string; accent?: "issue" | "present"; arrow?: boolean; action?: React.ReactNode; children: React.ReactNode }) {
+function Column({
+  step,
+  title,
+  accent,
+  arrow,
+  action,
+  children,
+}: {
+  step: number;
+  title: string;
+  accent?: "issue" | "present";
+  arrow?: boolean;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <section aria-labelledby={`col-${step}`} className="relative flex min-w-0 flex-col rounded-[10px] border border-hairline bg-surface">
-      <div className={cx("h-1.5 rounded-t-[10px]", accent === "issue" ? "bg-issue" : accent === "present" ? "bg-present" : "bg-ink")} aria-hidden />
+    <section
+      aria-labelledby={`col-${step}`}
+      className="relative flex min-w-0 flex-col rounded-[10px] border border-hairline bg-surface"
+    >
+      <div
+        className={cx(
+          "h-1.5 rounded-t-[10px]",
+          accent === "issue" ? "bg-issue" : accent === "present" ? "bg-present" : "bg-ink",
+        )}
+        aria-hidden
+      />
       <div className="flex items-baseline justify-between gap-3 border-b border-hairline px-4 py-3">
         <h2 id={`col-${step}`} className="text-lg">
           <span className="text-muted">{step}.</span> {title}
@@ -714,7 +909,10 @@ function Column({ step, title, accent, arrow, action, children }: { step: number
       </div>
       <div className="flex-1 p-4">{children}</div>
       {arrow && (
-        <span aria-hidden className="absolute top-7 -right-[1.15rem] z-10 hidden size-8 place-items-center rounded-full border border-hairline bg-surface text-lg font-black lg:grid">
+        <span
+          aria-hidden
+          className="absolute top-7 -right-[1.15rem] z-10 hidden size-8 place-items-center rounded-full border border-hairline bg-surface text-lg font-black lg:grid"
+        >
           →
         </span>
       )}
@@ -740,7 +938,10 @@ export function verdictMark(r: Run) {
 function RecentRun({ run }: { run: Run }) {
   return (
     <li>
-      <Link to={`/runs/${run.id}`} className="flex h-full flex-col gap-1 bg-surface px-3 py-2.5 hover:bg-sunken">
+      <Link
+        to={`/runs/${run.id}`}
+        className="flex h-full flex-col gap-1 bg-surface px-3 py-2.5 hover:bg-sunken"
+      >
         <span className="flex items-center justify-between gap-2">
           <span className="min-w-0 truncate font-bold">{run.labels.typeName}</span>
           {verdictMark(run)}

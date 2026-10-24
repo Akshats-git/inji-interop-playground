@@ -31,7 +31,10 @@ export function certifyRoute(target: string): Route {
     // Certify's servlet path the way upstream's certify-nginx does.
     rewrite: (p) => (p.startsWith("/.well-known/") ? `/v1/certify${p}` : p),
     allow: [
-      ["GET", /^\/v1\/certify\/(issuance\/)?\.well-known\/(openid-credential-issuer|oauth-authorization-server|did\.json|jwks\.json)$/],
+      [
+        "GET",
+        /^\/v1\/certify\/(issuance\/)?\.well-known\/(openid-credential-issuer|oauth-authorization-server|did\.json|jwks\.json)$/,
+      ],
       ["GET", /^\/v1\/certify\/credential-offer-data\/[\w-]+$/],
       ["POST", /^\/v1\/certify\/oauth\/token$/],
       ["POST", /^\/v1\/certify\/issuance\/(vd1[12]\/)?credential$/],
@@ -61,74 +64,118 @@ export function verifyRoute(target: string): Route {
   };
 }
 
-const HOP_BY_HOP = new Set(["host", "connection", "keep-alive", "transfer-encoding", "upgrade", "proxy-authorization", "te", "trailer", "content-length", "accept-encoding", "x-playground-run", "x-playground-actor"]);
+const HOP_BY_HOP = new Set([
+  "host",
+  "connection",
+  "keep-alive",
+  "transfer-encoding",
+  "upgrade",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "content-length",
+  "accept-encoding",
+  "x-playground-run",
+  "x-playground-actor",
+]);
 
 export function recordingProxy(route: Route, recorder: Recorder): Router {
   const router = express.Router();
-  router.use(route.prefix, express.raw({ type: () => true, limit: "4mb" }), async (req: Request, res: Response) => {
-    const publicPath = req.path;
-    const upstreamPath = route.rewrite(publicPath);
-    const allowed = route.allow.some(([m, re]) => (m === req.method || (req.method === "HEAD" && m === "GET")) && re.test(upstreamPath));
-    if (req.method === "OPTIONS") {
-      res.set({ "access-control-allow-origin": req.headers.origin ?? "*", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "content-type, authorization", "access-control-allow-credentials": "true" });
-      res.sendStatus(204);
-      return;
-    }
-    if (!allowed) {
-      res.status(404).json({ error: "not_exposed", error_description: `${req.method} ${route.prefix}${publicPath} is not a wallet-facing endpoint, so the playground gateway does not expose it.` });
-      return;
-    }
+  router.use(
+    route.prefix,
+    express.raw({ type: () => true, limit: "4mb" }),
+    async (req: Request, res: Response) => {
+      const publicPath = req.path;
+      const upstreamPath = route.rewrite(publicPath);
+      const allowed = route.allow.some(
+        ([m, re]) => (m === req.method || (req.method === "HEAD" && m === "GET")) && re.test(upstreamPath),
+      );
+      if (req.method === "OPTIONS") {
+        res.set({
+          "access-control-allow-origin": req.headers.origin ?? "*",
+          "access-control-allow-methods": "GET, POST, OPTIONS",
+          "access-control-allow-headers": "content-type, authorization",
+          "access-control-allow-credentials": "true",
+        });
+        res.sendStatus(204);
+        return;
+      }
+      if (!allowed) {
+        res
+          .status(404)
+          .json({
+            error: "not_exposed",
+            error_description: `${req.method} ${route.prefix}${publicPath} is not a wallet-facing endpoint, so the playground gateway does not expose it.`,
+          });
+        return;
+      }
 
-    const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
-    const headers = new Headers();
-    for (const [k, v] of Object.entries(req.headers)) if (v !== undefined && !HOP_BY_HOP.has(k)) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
-    headers.set("x-forwarded-host", req.headers.host ?? "");
-    headers.set("x-forwarded-proto", req.protocol);
-    const raw = Buffer.isBuffer(req.body) && req.body.length ? (req.body as Buffer) : undefined;
+      const query = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(req.headers))
+        if (v !== undefined && !HOP_BY_HOP.has(k)) headers.set(k, Array.isArray(v) ? v.join(", ") : v);
+      headers.set("x-forwarded-host", req.headers.host ?? "");
+      headers.set("x-forwarded-proto", req.protocol);
+      const raw = Buffer.isBuffer(req.body) && req.body.length ? (req.body as Buffer) : undefined;
 
-    const startedAt = new Date().toISOString();
-    const started = performance.now();
-    let upstream: globalThis.Response;
-    try {
-      upstream = await fetch(`${route.target}${upstreamPath}${query}`, { method: req.method, headers, body: raw, redirect: "manual", signal: AbortSignal.timeout(65_000) });
-    } catch (e) {
-      log.warn({ err: (e as Error).message, path: upstreamPath }, "upstream unreachable");
-      res.status(502).json({ error: "upstream_unavailable", error_description: `${route.upstream} is not reachable from the playground (is its container healthy?).` });
-      return;
-    }
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    const durationMs = performance.now() - started;
+      const startedAt = new Date().toISOString();
+      const started = performance.now();
+      let upstream: globalThis.Response;
+      try {
+        upstream = await fetch(`${route.target}${upstreamPath}${query}`, {
+          method: req.method,
+          headers,
+          body: raw,
+          redirect: "manual",
+          signal: AbortSignal.timeout(65_000),
+        });
+      } catch (e) {
+        log.warn({ err: (e as Error).message, path: upstreamPath }, "upstream unreachable");
+        res
+          .status(502)
+          .json({
+            error: "upstream_unavailable",
+            error_description: `${route.upstream} is not reachable from the playground (is its container healthy?).`,
+          });
+        return;
+      }
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      const durationMs = performance.now() - started;
 
-    res.status(upstream.status);
-    upstream.headers.forEach((v, k) => {
-      if (!["content-encoding", "content-length", "transfer-encoding", "connection", "set-cookie"].includes(k)) res.setHeader(k, v);
-    });
-    const cookies = upstream.headers.getSetCookie();
-    if (cookies.length) res.setHeader("set-cookie", cookies);
-    res.end(buf);
+      res.status(upstream.status);
+      upstream.headers.forEach((v, k) => {
+        if (
+          !["content-encoding", "content-length", "transfer-encoding", "connection", "set-cookie"].includes(k)
+        )
+          res.setHeader(k, v);
+      });
+      const cookies = upstream.headers.getSetCookie();
+      if (cookies.length) res.setHeader("set-cookie", cookies);
+      res.end(buf);
 
-    const reqParsed = parseBody(req.headers["content-type"], raw);
-    const resParsed = parseBody(upstream.headers.get("content-type") ?? undefined, buf);
-    const responseHeaders: Record<string, string> = {};
-    upstream.headers.forEach((v, k) => (responseHeaders[k] = v));
-    void recorder
-      .record({
-        upstream: route.upstream,
-        method: req.method,
-        path: upstreamPath + query,
-        status: upstream.status,
-        durationMs,
-        at: startedAt,
-        requestHeaders: req.headers,
-        responseHeaders,
-        requestBody: reqParsed.body,
-        requestText: reqParsed.text,
-        responseBody: resParsed.body,
-        responseText: resParsed.text,
-        actorHeader: req.headers["x-playground-actor"] as string | undefined,
-        runId: (req.headers["x-playground-run"] as string | undefined) ?? undefined,
-      })
-      .catch((e) => log.warn({ err: (e as Error).message }, "record failed"));
-  });
+      const reqParsed = parseBody(req.headers["content-type"], raw);
+      const resParsed = parseBody(upstream.headers.get("content-type") ?? undefined, buf);
+      const responseHeaders: Record<string, string> = {};
+      upstream.headers.forEach((v, k) => (responseHeaders[k] = v));
+      void recorder
+        .record({
+          upstream: route.upstream,
+          method: req.method,
+          path: upstreamPath + query,
+          status: upstream.status,
+          durationMs,
+          at: startedAt,
+          requestHeaders: req.headers,
+          responseHeaders,
+          requestBody: reqParsed.body,
+          requestText: reqParsed.text,
+          responseBody: resParsed.body,
+          responseText: resParsed.text,
+          actorHeader: req.headers["x-playground-actor"] as string | undefined,
+          runId: (req.headers["x-playground-run"] as string | undefined) ?? undefined,
+        })
+        .catch((e) => log.warn({ err: (e as Error).message }, "record failed"));
+    },
+  );
   return router;
 }

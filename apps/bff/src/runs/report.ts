@@ -1,15 +1,37 @@
 /** Per-run interop report (PS2 task 7): issuer, wallet, verifier, format, proof type, outcome, error detail. */
-import { credentialStatusLabel, KNOWN_GAPS, knownGapOf, PARTY_LABEL, type EventSummary, type Run } from "@playground/core";
+import {
+  credentialStatusLabel,
+  KNOWN_GAPS,
+  knownGapOf,
+  PARTY_LABEL,
+  type EventSummary,
+  type Run,
+} from "@playground/core";
 
 export function redactRun(run: Run): Run {
-  return { ...run, spec: { ...run.spec, claims: Object.fromEntries(Object.keys(run.spec.claims).map((k) => [k, "‹redacted›"])), txCode: run.spec.txCode ? "‹redacted›" : undefined } };
+  return {
+    ...run,
+    spec: {
+      ...run.spec,
+      claims: Object.fromEntries(Object.keys(run.spec.claims).map((k) => [k, "‹redacted›"])),
+      txCode: run.spec.txCode ? "‹redacted›" : undefined,
+    },
+  };
 }
 
 export function runReportMarkdown(run: Run, events: EventSummary[]): string {
   const r = run.result;
   const gap = knownGapOf(run);
-  const verdict = r ? (r.verdict === "PASS" ? "✅ PASS" : gap ? `⚠️ FAIL (known gap ${gap})` : "❌ FAIL") : "⏳ in progress";
-  const issuerSoftware = run.labels.external?.issuer ? (run.labels.versions[run.labels.issuerName] ?? "external issuer") : `Inji Certify ${run.labels.versions["Inji Certify"]}`;
+  const verdict = r
+    ? r.verdict === "PASS"
+      ? "✅ PASS"
+      : gap
+        ? `⚠️ FAIL (known gap ${gap})`
+        : "❌ FAIL"
+    : "⏳ in progress";
+  const issuerSoftware = run.labels.external?.issuer
+    ? (run.labels.versions[run.labels.issuerName] ?? "external issuer")
+    : `Inji Certify ${run.labels.versions["Inji Certify"]}`;
   const lines = [
     `# Interop run ${run.id}: ${verdict}`,
     "",
@@ -41,15 +63,27 @@ export function runReportMarkdown(run: Run, events: EventSummary[]): string {
     ...run.steps.map((s) => `- **${s.name}**: ${s.status}${s.note ? `. ${s.note}` : ""}`),
     "",
   ];
-  if (r?.checks.length) lines.push("## Checks", "", ...r.checks.map((c) => `- ${c.ok ? "✅" : "❌"} ${c.name}${c.detail ? `: ${c.detail}` : ""}`), "");
+  if (r?.checks.length)
+    lines.push(
+      "## Checks",
+      "",
+      ...r.checks.map((c) => `- ${c.ok ? "✅" : "❌"} ${c.name}${c.detail ? `: ${c.detail}` : ""}`),
+      "",
+    );
   lines.push(
     "## Protocol messages",
     "",
     "| # | Time | From → To | Message | HTTP | Labels |",
     "|---|---|---|---|---|---|",
-    ...events.map((e) => `| ${e.seq} | ${e.at.slice(11, 23)} | ${PARTY_LABEL[e.from]} → ${PARTY_LABEL[e.to]} | ${e.title} | ${e.status} | ${e.labels.join(", ")} |`),
+    ...events.map(
+      (e) =>
+        `| ${e.seq} | ${e.at.slice(11, 23)} | ${PARTY_LABEL[e.from]} → ${PARTY_LABEL[e.to]} | ${e.title} | ${e.status} | ${e.labels.join(", ")} |`,
+    ),
     "",
-    "Versions: " + Object.entries(run.labels.versions).map(([k, v]) => `${k} ${v}`).join(" · "),
+    "Versions: " +
+      Object.entries(run.labels.versions)
+        .map(([k, v]) => `${k} ${v}`)
+        .join(" · "),
     "",
   );
   return lines.join("\n");

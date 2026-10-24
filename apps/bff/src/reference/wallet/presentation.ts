@@ -9,8 +9,25 @@ import { compactVerify, decodeProtectedHeader, importJWK, SignJWT, type JWK } fr
 import * as vc from "@digitalbazaar/vc";
 import { Ed25519Signature2020 } from "@digitalbazaar/ed25519-signature-2020";
 import { Ed25519VerificationKey2020 } from "@digitalbazaar/ed25519-verification-key-2020";
-import { decodeJwt, decodeSdJwt, filterMatches, isSdJwtFormat, jsonPath, parseAuthorizationRequest, type DcqlQuery, type PresentationDefinition, type TamperPreset } from "@playground/core";
-import { base58btcDecode, ed25519Multibase, fromJwks, newHolderKey, privateKeyOf, type HolderKey } from "../keys.js";
+import {
+  decodeJwt,
+  decodeSdJwt,
+  filterMatches,
+  isSdJwtFormat,
+  jsonPath,
+  parseAuthorizationRequest,
+  type DcqlQuery,
+  type PresentationDefinition,
+  type TamperPreset,
+} from "@playground/core";
+import {
+  base58btcDecode,
+  ed25519Multibase,
+  fromJwks,
+  newHolderKey,
+  privateKeyOf,
+  type HolderKey,
+} from "../keys.js";
 import { makeDocumentLoader } from "../ld.js";
 import { credentialClaims } from "./issuance.js";
 import type { WalletHttp } from "./http.js";
@@ -47,7 +64,11 @@ export class PresentationError extends Error {
 }
 
 /** Resolve an openid4vp:// URI (or bare query) to the request parameters, fetching request_uri if present. */
-export async function resolveRequest(http: WalletHttp, uri: string, resolveDid: (did: string) => Promise<Record<string, unknown>>): Promise<AuthorizationRequest> {
+export async function resolveRequest(
+  http: WalletHttp,
+  uri: string,
+  resolveDid: (did: string) => Promise<Record<string, unknown>>,
+): Promise<AuthorizationRequest> {
   const params = parseAuthorizationRequest(uri);
   if (!params) throw new PresentationError("invalid_request", "Not an OpenID4VP authorization request URI.");
   let p: Record<string, unknown> = { ...params };
@@ -59,7 +80,11 @@ export async function resolveRequest(http: WalletHttp, uri: string, resolveDid: 
     const jwt = decodeJwt(text.trim());
     if (jwt) {
       p = { ...params, ...jwt.payload };
-      signed = { alg: String(jwt.header.alg), kid: jwt.header.kid as string | undefined, verified: "skipped" };
+      signed = {
+        alg: String(jwt.header.alg),
+        kid: jwt.header.kid as string | undefined,
+        verified: "skipped",
+      };
       try {
         signed.verified = await verifyRequestObject(text.trim(), String(p.client_id ?? ""), resolveDid);
       } catch (e) {
@@ -76,15 +101,27 @@ export async function resolveRequest(http: WalletHttp, uri: string, resolveDid: 
   }
   const parseMaybe = (v: unknown) => (typeof v === "string" ? JSON.parse(v) : v);
   let presentationDefinition = parseMaybe(p.presentation_definition) as PresentationDefinition | undefined;
-  if (!presentationDefinition && typeof p.presentation_definition_uri === "string") presentationDefinition = (await http.getJson(p.presentation_definition_uri)) as PresentationDefinition;
+  if (!presentationDefinition && typeof p.presentation_definition_uri === "string")
+    presentationDefinition = (await http.getJson(p.presentation_definition_uri)) as PresentationDefinition;
   const dcqlQuery = parseMaybe(p.dcql_query) as DcqlQuery | undefined;
-  if (!presentationDefinition && !dcqlQuery) throw new PresentationError("invalid_request", "The request has neither presentation_definition nor dcql_query.");
+  if (!presentationDefinition && !dcqlQuery)
+    throw new PresentationError(
+      "invalid_request",
+      "The request has neither presentation_definition nor dcql_query.",
+    );
   const clientId = String(p.client_id ?? "");
   const responseUri = String(p.response_uri ?? p.redirect_uri ?? "");
   if (!responseUri) throw new PresentationError("invalid_request", "The request has no response_uri.");
   return {
     clientId,
-    clientIdScheme: String(p.client_id_scheme ?? (clientId.startsWith("did:") ? "did" : clientId.includes(":") ? clientId.split(":")[0] : "pre-registered")),
+    clientIdScheme: String(
+      p.client_id_scheme ??
+        (clientId.startsWith("did:")
+          ? "did"
+          : clientId.includes(":")
+            ? clientId.split(":")[0]
+            : "pre-registered"),
+    ),
     nonce: String(p.nonce ?? ""),
     state: p.state as string | undefined,
     responseUri,
@@ -101,7 +138,11 @@ export async function resolveRequest(http: WalletHttp, uri: string, resolveDid: 
 export const didOfClientId = (clientId: string) => clientId.replace(/^decentralized_identifier:/, "");
 
 /** Check a signed request object against the verifier's DID (did:web / did:key / did:jwk). */
-async function verifyRequestObject(jwt: string, clientId: string, resolveDid: (did: string) => Promise<Record<string, unknown>>): Promise<boolean> {
+async function verifyRequestObject(
+  jwt: string,
+  clientId: string,
+  resolveDid: (did: string) => Promise<Record<string, unknown>>,
+): Promise<boolean> {
   const header = decodeProtectedHeader(jwt);
   const kid = didOfClientId(String(header.kid ?? ""));
   const did = (kid || didOfClientId(clientId)).split("#")[0]!;
@@ -119,7 +160,8 @@ async function verifyRequestObject(jwt: string, clientId: string, resolveDid: (d
 
 function multibaseToJwk(mb: string): JWK | undefined {
   const bytes = base58btcDecode(mb.slice(1));
-  if (bytes[0] === 0xed && bytes[1] === 0x01) return { kty: "OKP", crv: "Ed25519", x: Buffer.from(bytes.slice(2)).toString("base64url") };
+  if (bytes[0] === 0xed && bytes[1] === 0x01)
+    return { kty: "OKP", crv: "Ed25519", x: Buffer.from(bytes.slice(2)).toString("base64url") };
   return undefined;
 }
 
@@ -142,13 +184,20 @@ export function match(req: AuthorizationRequest, held: WalletCredential[]): Matc
   if (req.dcqlQuery) {
     const out: Match[] = [];
     for (const q of req.dcqlQuery.credentials) {
-      const candidates = held.filter((h) => (isSdJwtFormat(q.format) ? isSdJwtFormat(h.format) : h.format === q.format));
+      const candidates = held.filter((h) =>
+        isSdJwtFormat(q.format) ? isSdJwtFormat(h.format) : h.format === q.format,
+      );
       const found = candidates.find((h) => {
-        if (q.meta?.vct_values) return q.meta.vct_values.includes(String(sdJwtView(h.credential as string).vct));
+        if (q.meta?.vct_values)
+          return q.meta.vct_values.includes(String(sdJwtView(h.credential as string).vct));
         if (q.meta?.type_values) {
           const types = ((h.credential as Record<string, unknown>).type as string[]) ?? [];
           // type_values hold expanded IRIs; compare by IRI or by the term's local name.
-          return q.meta.type_values.some((set) => set.every((iri) => types.some((t) => iri === t || iri.endsWith(`#${t}`) || iri.endsWith(`/${t}`))));
+          return q.meta.type_values.some((set) =>
+            set.every((iri) =>
+              types.some((t) => iri === t || iri.endsWith(`#${t}`) || iri.endsWith(`/${t}`)),
+            ),
+          );
         }
         return true;
       });
@@ -168,9 +217,16 @@ export function match(req: AuthorizationRequest, held: WalletCredential[]): Matc
     const formats = Object.keys(d.format ?? pd.format ?? {});
     const found = held.find((h) => {
       // vc+sd-jwt and dc+sd-jwt are the same credential under two media types (drafts vs. Inji 1.0), so either matches.
-      if (formats.length && !formats.includes(h.format) && !(isSdJwtFormat(h.format) && formats.some(isSdJwtFormat))) return false;
+      if (
+        formats.length &&
+        !formats.includes(h.format) &&
+        !(isSdJwtFormat(h.format) && formats.some(isSdJwtFormat))
+      )
+        return false;
       const view = h.format === "ldp_vc" ? h.credential : sdJwtView(h.credential as string);
-      return d.constraints.fields.every((f) => f.optional || f.path.some((p) => filterMatches(f.filter, jsonPath(view, p))));
+      return d.constraints.fields.every(
+        (f) => f.optional || f.path.some((p) => filterMatches(f.filter, jsonPath(view, p))),
+      );
     });
     if (found)
       out.push({
@@ -191,24 +247,52 @@ export function match(req: AuthorizationRequest, held: WalletCredential[]): Matc
  * Certify's defaults and on MOSIP Collab's issuers). Rather than stop, the wallet then signs leniently, as Inji's
  * own processors do, and says so, so the run shows what the verifier makes of it.
  */
-async function signLdpPresentation(http: WalletHttp, credential: Record<string, unknown>, holder: HolderKey, challenge: string, domain: string): Promise<{ vp: unknown; lenient: boolean }> {
+async function signLdpPresentation(
+  http: WalletHttp,
+  credential: Record<string, unknown>,
+  holder: HolderKey,
+  challenge: string,
+  domain: string,
+): Promise<{ vp: unknown; lenient: boolean }> {
   try {
-    return { vp: await signLdpPresentationWith(http, credential, holder, challenge, domain, false), lenient: false };
+    return {
+      vp: await signLdpPresentationWith(http, credential, holder, challenge, domain, false),
+      lenient: false,
+    };
   } catch (e) {
     if (!/safe mode/i.test((e as Error).message)) throw e;
-    return { vp: await signLdpPresentationWith(http, credential, holder, challenge, domain, true), lenient: true };
+    return {
+      vp: await signLdpPresentationWith(http, credential, holder, challenge, domain, true),
+      lenient: true,
+    };
   }
 }
 
-async function signLdpPresentationWith(http: WalletHttp, credential: Record<string, unknown>, holder: HolderKey, challenge: string, domain: string, lenient: boolean) {
+async function signLdpPresentationWith(
+  http: WalletHttp,
+  credential: Record<string, unknown>,
+  holder: HolderKey,
+  challenge: string,
+  domain: string,
+  lenient: boolean,
+) {
   const { publicKeyMultibase, privateKeyMultibase } = ed25519Multibase(holder);
-  const key = await Ed25519VerificationKey2020.from({ id: holder.kid, controller: holder.did, type: "Ed25519VerificationKey2020", publicKeyMultibase, privateKeyMultibase });
+  const key = await Ed25519VerificationKey2020.from({
+    id: holder.kid,
+    controller: holder.did,
+    type: "Ed25519VerificationKey2020",
+    publicKeyMultibase,
+    privateKeyMultibase,
+  });
   const suite = new Ed25519Signature2020({ key });
   // jsonld-signatures spreads canonizeOptions after its own safe: true, so this is its supported override.
   if (lenient) suite.canonizeOptions = { safe: false };
   const v2 = ((credential["@context"] as string[]) ?? [])[0] === "https://www.w3.org/ns/credentials/v2";
   const presentation = {
-    "@context": [v2 ? "https://www.w3.org/ns/credentials/v2" : "https://www.w3.org/2018/credentials/v1", "https://w3id.org/security/suites/ed25519-2020/v1"],
+    "@context": [
+      v2 ? "https://www.w3.org/ns/credentials/v2" : "https://www.w3.org/2018/credentials/v1",
+      "https://w3id.org/security/suites/ed25519-2020/v1",
+    ],
     type: ["VerifiablePresentation"],
     holder: holder.did,
     verifiableCredential: [credential],
@@ -218,7 +302,13 @@ async function signLdpPresentationWith(http: WalletHttp, credential: Record<stri
 }
 
 /** Holder-selected SD-JWT presentation: chosen disclosures plus a key-binding JWT over nonce and aud. */
-async function sdJwtPresentation(cred: string, holder: HolderKey, requested: string[], aud: string, nonce: string) {
+async function sdJwtPresentation(
+  cred: string,
+  holder: HolderKey,
+  requested: string[],
+  aud: string,
+  nonce: string,
+) {
   const d = decodeSdJwt(cred);
   if (!d) throw new PresentationError("invalid_credential", "Held SD-JWT could not be parsed.");
   const keep = d.disclosures.filter((x) => !requested.length || (x.name && requested.includes(x.name)));
@@ -232,7 +322,11 @@ async function sdJwtPresentation(cred: string, holder: HolderKey, requested: str
     .setProtectedHeader({ alg: holder.alg, typ: "kb+jwt", kid })
     .setIssuedAt()
     .sign(await privateKeyOf(holder));
-  return { token: presented + kb, disclosed: keep.map((x) => x.name ?? "?"), withheld: d.disclosures.filter((x) => !keep.includes(x)).map((x) => x.name ?? "?") };
+  return {
+    token: presented + kb,
+    disclosed: keep.map((x) => x.name ?? "?"),
+    withheld: d.disclosures.filter((x) => !keep.includes(x)).map((x) => x.name ?? "?"),
+  };
 }
 
 export interface PresentationOutcome {
@@ -247,12 +341,26 @@ export interface PresentationOutcome {
   tamper: TamperPreset;
 }
 
-export async function present(http: WalletHttp, req: AuthorizationRequest, held: WalletCredential[], tamper: TamperPreset = "none"): Promise<PresentationOutcome> {
+export async function present(
+  http: WalletHttp,
+  req: AuthorizationRequest,
+  held: WalletCredential[],
+  tamper: TamperPreset = "none",
+): Promise<PresentationOutcome> {
   const matches = match(req, held);
   if (!matches.length) {
     // Tell the verifier, as OpenID4VP §7.5 suggests, instead of leaving it waiting.
-    const response = await http.postForm(req.responseUri, { error: "access_denied", error_description: "No credential in the Reference Wallet matches the request.", ...(req.state ? { state: req.state } : {}) }).catch((e) => e);
-    throw Object.assign(new PresentationError("no_matching_credential", "No held credential matches the verifier's request."), { response });
+    const response = await http
+      .postForm(req.responseUri, {
+        error: "access_denied",
+        error_description: "No credential in the Reference Wallet matches the request.",
+        ...(req.state ? { state: req.state } : {}),
+      })
+      .catch((e) => e);
+    throw Object.assign(
+      new PresentationError("no_matching_credential", "No held credential matches the verifier's request."),
+      { response },
+    );
   }
   const nonce = tamper === "wrong-nonce" ? randomBytes(12).toString("base64url") : req.nonce;
   const tokens: { id: string; token: unknown; format: string }[] = [];
@@ -261,17 +369,30 @@ export async function present(http: WalletHttp, req: AuthorizationRequest, held:
   let withheld: string[] | undefined;
 
   for (const m of matches) {
-    let holder = fromJwks(m.credential.holder.kind, m.credential.holder.privateJwk, m.credential.holder.publicJwk);
+    let holder = fromJwks(
+      m.credential.holder.kind,
+      m.credential.holder.privateJwk,
+      m.credential.holder.publicJwk,
+    );
     if (tamper === "foreign-holder") holder = await newHolderKey(holder.kind);
     if (m.credential.format === "ldp_vc") {
       const credential = structuredClone(m.credential.credential) as Record<string, unknown>;
       if (tamper === "alter-claim") alterFirstClaim(credential.credentialSubject as Record<string, unknown>);
-      const vp = tamper === "no-holder-proof"
-        ? { "@context": ["https://www.w3.org/2018/credentials/v1"], type: ["VerifiablePresentation"], holder: holder.did, verifiableCredential: [credential] }
-        : await signLdpPresentation(http, credential, holder, nonce, req.clientId).then((r) => {
-            if (r.lenient) notes.push("The credential is not valid JSON-LD in strict (safe) mode: its proof uses terms its @context does not define (gap G15). The wallet signed the presentation in lenient mode, as Inji's processors do.");
-            return r.vp;
-          });
+      const vp =
+        tamper === "no-holder-proof"
+          ? {
+              "@context": ["https://www.w3.org/2018/credentials/v1"],
+              type: ["VerifiablePresentation"],
+              holder: holder.did,
+              verifiableCredential: [credential],
+            }
+          : await signLdpPresentation(http, credential, holder, nonce, req.clientId).then((r) => {
+              if (r.lenient)
+                notes.push(
+                  "The credential is not valid JSON-LD in strict (safe) mode: its proof uses terms its @context does not define (gap G15). The wallet signed the presentation in lenient mode, as Inji's processors do.",
+                );
+              return r.vp;
+            });
       tokens.push({ id: m.queryId, token: vp, format: "ldp_vp" });
     } else {
       let cred = String(m.credential.credential);
@@ -279,8 +400,14 @@ export async function present(http: WalletHttp, req: AuthorizationRequest, held:
       if (tamper === "self-signed-sdjwt") cred = await forgeSdJwt(cred);
       if (tamper === "no-holder-proof") {
         const d = decodeSdJwt(cred)!;
-        const keep = d.disclosures.filter((x) => !m.requested.length || (x.name && m.requested.includes(x.name)));
-        tokens.push({ id: m.queryId, token: [d.issuerJwtRaw, ...keep.map((x) => x.raw)].join("~") + "~", format: "vc+sd-jwt" });
+        const keep = d.disclosures.filter(
+          (x) => !m.requested.length || (x.name && m.requested.includes(x.name)),
+        );
+        tokens.push({
+          id: m.queryId,
+          token: [d.issuerJwtRaw, ...keep.map((x) => x.raw)].join("~") + "~",
+          format: "vc+sd-jwt",
+        });
         continue;
       }
       const p = await sdJwtPresentation(cred, holder, m.requested, req.clientId, nonce);
@@ -304,7 +431,15 @@ export async function present(http: WalletHttp, req: AuthorizationRequest, held:
         id: t.id,
         format: t.format,
         path: single ? "$" : `$[${i}]`,
-        ...(t.format === "ldp_vp" ? { path_nested: { id: t.id, format: "ldp_vc", path: `${single ? "$" : `$[${i}]`}.verifiableCredential[0]` } } : {}),
+        ...(t.format === "ldp_vp"
+          ? {
+              path_nested: {
+                id: t.id,
+                format: "ldp_vc",
+                path: `${single ? "$" : `$[${i}]`}.verifiableCredential[0]`,
+              },
+            }
+          : {}),
       })),
     });
   }
@@ -338,7 +473,11 @@ function alterSdJwtDisclosure(cred: string, requested: string[]) {
   for (let i = 1; i < parts.length; i++) {
     try {
       const arr = JSON.parse(Buffer.from(parts[i]!, "base64url").toString("utf8"));
-      if (Array.isArray(arr) && arr.length === 3 && (!requested.length || requested.includes(String(arr[1])))) {
+      if (
+        Array.isArray(arr) &&
+        arr.length === 3 &&
+        (!requested.length || requested.includes(String(arr[1])))
+      ) {
         arr[2] = typeof arr[2] === "string" ? `${arr[2]} (altered)` : 0;
         parts[i] = Buffer.from(JSON.stringify(arr)).toString("base64url");
         return parts.join("~");
@@ -358,7 +497,8 @@ async function forgeSdJwt(cred: string) {
   const d = decodeSdJwt(cred)!;
   const { privateKey, certB64 } = await selfSignedCert("CN=www.example.com (ROOT)");
   const payload = { ...d.issuerJwt.payload, issuer_name: "Forged Issuer" };
-  const jwt = await new SignJWT(payload).setProtectedHeader({ alg: "ES256", typ: String(d.issuerJwt.header.typ ?? "vc+sd-jwt"), x5c: [certB64] }).sign(privateKey);
+  const jwt = await new SignJWT(payload)
+    .setProtectedHeader({ alg: "ES256", typ: String(d.issuerJwt.header.typ ?? "vc+sd-jwt"), x5c: [certB64] })
+    .sign(privateKey);
   return [jwt, ...d.disclosures.map((x) => x.raw)].join("~") + "~";
 }
-

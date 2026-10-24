@@ -17,6 +17,8 @@ await build({
   outfile: "dist/main.js",
   external,
   // Bundled CommonJS helpers (none today, but cheap insurance) need `require` in an ES module.
-  banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" },
+  banner: {
+    js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
+  },
   logLevel: "info",
 });

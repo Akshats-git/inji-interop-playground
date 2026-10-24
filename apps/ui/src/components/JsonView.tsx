@@ -26,9 +26,26 @@ function Str({ v }: { v: string }) {
   );
 }
 
-function Node({ k, v, depth, highlight, openDepth }: { k?: string; v: unknown; depth: number; highlight?: (k: string) => boolean; openDepth: number }) {
+function Node({
+  k,
+  v,
+  depth,
+  highlight,
+  openDepth,
+}: {
+  k?: string;
+  v: unknown;
+  depth: number;
+  highlight?: (k: string) => boolean;
+  openDepth: number;
+}) {
   const key = k !== undefined && (
-    <span className={cx("text-issue", highlight?.(k) && "rounded bg-present-soft px-0.5 font-semibold text-present-ink")}>
+    <span
+      className={cx(
+        "text-issue",
+        highlight?.(k) && "rounded bg-present-soft px-0.5 font-semibold text-present-ink",
+      )}
+    >
       {/^\d+$/.test(k) ? "" : `"${k}": `}
     </span>
   );
@@ -52,7 +69,10 @@ function Node({ k, v, depth, highlight, openDepth }: { k?: string; v: unknown; d
   return (
     <details open={depth < openDepth} className="group">
       <summary className="cursor-pointer list-none marker:hidden [&::-webkit-details-marker]:hidden">
-        <span className="mr-1 inline-block w-3 text-muted transition-transform group-open:rotate-90" aria-hidden>
+        <span
+          className="mr-1 inline-block w-3 text-muted transition-transform group-open:rotate-90"
+          aria-hidden
+        >
           ›
         </span>
         {key}
@@ -72,7 +92,17 @@ function Node({ k, v, depth, highlight, openDepth }: { k?: string; v: unknown; d
   );
 }
 
-export function JsonView({ value, highlight, maxHeight = "28rem", openDepth = 3 }: { value: unknown; highlight?: (k: string) => boolean; maxHeight?: string; openDepth?: number }) {
+export function JsonView({
+  value,
+  highlight,
+  maxHeight = "28rem",
+  openDepth = 3,
+}: {
+  value: unknown;
+  highlight?: (k: string) => boolean;
+  maxHeight?: string;
+  openDepth?: number;
+}) {
   const [copied, setCopied] = useState(false);
   const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
   return (
@@ -88,7 +118,11 @@ export function JsonView({ value, highlight, maxHeight = "28rem", openDepth = 3 
         {copied ? "Copied" : "Copy"}
       </button>
       <div className="overflow-auto p-3 pr-16 font-mono text-[0.8rem] leading-relaxed" style={{ maxHeight }}>
-        {typeof value === "string" ? <span className="break-all whitespace-pre-wrap">{value}</span> : <Node v={value} depth={0} highlight={highlight} openDepth={openDepth} />}
+        {typeof value === "string" ? (
+          <span className="break-all whitespace-pre-wrap">{value}</span>
+        ) : (
+          <Node v={value} depth={0} highlight={highlight} openDepth={openDepth} />
+        )}
       </div>
     </div>
   );

@@ -16,7 +16,17 @@ import { now, uuid } from "../util/ids.js";
 import { actorFrom, classify, type Exchange, type Upstream } from "./classify.js";
 
 const MAX_BODY = 256 * 1024;
-const LEARNABLE = ["access_token", "c_nonce", "requestId", "transactionId", "request_id", "transaction_id", "state", "nonce", "pre-authorized_code"];
+const LEARNABLE = [
+  "access_token",
+  "c_nonce",
+  "requestId",
+  "transactionId",
+  "request_id",
+  "transaction_id",
+  "state",
+  "nonce",
+  "pre-authorized_code",
+];
 
 export interface RecordInput extends Exchange {
   durationMs: number;
@@ -45,10 +55,15 @@ export class Recorder extends EventEmitter {
 
   /** Mark a run as waiting for a human wallet on these upstreams (e.g. phone scanning an offer). */
   await(runId: string, upstreams: Upstream[]) {
-    for (const u of upstreams) this.waiting.set(u, [...(this.waiting.get(u) ?? []).filter((r) => r !== runId), runId]);
+    for (const u of upstreams)
+      this.waiting.set(u, [...(this.waiting.get(u) ?? []).filter((r) => r !== runId), runId]);
   }
   release(runId: string) {
-    for (const [u, list] of this.waiting) this.waiting.set(u, list.filter((r) => r !== runId));
+    for (const [u, list] of this.waiting)
+      this.waiting.set(
+        u,
+        list.filter((r) => r !== runId),
+      );
     for (const [k, v] of this.keys) if (v.runId === runId) this.keys.delete(k);
   }
 
@@ -71,7 +86,14 @@ export class Recorder extends EventEmitter {
     // Verify's request_uri ends in the request id; credential offer URIs end in the offer id.
     if (body && typeof body === "object") {
       const b = body as Record<string, unknown>;
-      for (const k of ["requestUri", "credential_offer_uri"]) if (typeof b[k] === "string") this.bind(runId, decodeURIComponent(b[k] as string).split("/").pop());
+      for (const k of ["requestUri", "credential_offer_uri"])
+        if (typeof b[k] === "string")
+          this.bind(
+            runId,
+            decodeURIComponent(b[k] as string)
+              .split("/")
+              .pop(),
+          );
     }
   }
 
@@ -105,7 +127,12 @@ export class Recorder extends EventEmitter {
   }
 
   /** Record a call the BFF made itself (admin APIs over the internal network, reference verifier traffic). */
-  async recordInternal(input: Omit<RecordInput, "requestHeaders" | "responseHeaders"> & { requestHeaders?: RecordInput["requestHeaders"]; responseHeaders?: Record<string, string> }) {
+  async recordInternal(
+    input: Omit<RecordInput, "requestHeaders" | "responseHeaders"> & {
+      requestHeaders?: RecordInput["requestHeaders"];
+      responseHeaders?: Record<string, string>;
+    },
+  ) {
     try {
       return await this.record({ requestHeaders: {}, responseHeaders: {}, ...input });
     } catch (e) {
@@ -115,14 +142,52 @@ export class Recorder extends EventEmitter {
   }
 }
 
-const HIDDEN_HEADERS = new Set(["host", "connection", "content-length", "accept-encoding", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto", "sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform", "sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "priority", "x-playground-run", "x-playground-actor", "transfer-encoding", "keep-alive", "date", "vary", "x-content-type-options", "x-xss-protection", "pragma", "expires", "cache-control", "x-frame-options", "accept-language"]);
+const HIDDEN_HEADERS = new Set([
+  "host",
+  "connection",
+  "content-length",
+  "accept-encoding",
+  "x-forwarded-for",
+  "x-forwarded-host",
+  "x-forwarded-proto",
+  "sec-ch-ua",
+  "sec-ch-ua-mobile",
+  "sec-ch-ua-platform",
+  "sec-fetch-site",
+  "sec-fetch-mode",
+  "sec-fetch-dest",
+  "priority",
+  "x-playground-run",
+  "x-playground-actor",
+  "transfer-encoding",
+  "keep-alive",
+  "date",
+  "vary",
+  "x-content-type-options",
+  "x-xss-protection",
+  "pragma",
+  "expires",
+  "cache-control",
+  "x-frame-options",
+  "accept-language",
+]);
 
-function toMessage(headers: Record<string, string | string[] | undefined>, body: unknown, text?: string): HttpMessage {
+function toMessage(
+  headers: Record<string, string | string[] | undefined>,
+  body: unknown,
+  text?: string,
+): HttpMessage {
   const h: Record<string, string> = {};
-  for (const [k, v] of Object.entries(headers)) if (v !== undefined && !HIDDEN_HEADERS.has(k.toLowerCase())) h[k.toLowerCase()] = Array.isArray(v) ? v.join(", ") : v;
+  for (const [k, v] of Object.entries(headers))
+    if (v !== undefined && !HIDDEN_HEADERS.has(k.toLowerCase()))
+      h[k.toLowerCase()] = Array.isArray(v) ? v.join(", ") : v;
   const msg: HttpMessage = { headers: h };
   if (body !== undefined) msg.body = body;
-  else if (text) msg.text = text.length > MAX_BODY ? `${text.slice(0, MAX_BODY)}… [truncated ${text.length - MAX_BODY} bytes]` : text;
+  else if (text)
+    msg.text =
+      text.length > MAX_BODY
+        ? `${text.slice(0, MAX_BODY)}… [truncated ${text.length - MAX_BODY} bytes]`
+        : text;
   return msg;
 }
 
@@ -133,10 +198,14 @@ const safeJson = (v: unknown) => {
     return "";
   }
 };
-const headerText = (h: Record<string, string | string[] | undefined>) => String(h.authorization ?? "") + String(h.cookie ?? "");
+const headerText = (h: Record<string, string | string[] | undefined>) =>
+  String(h.authorization ?? "") + String(h.cookie ?? "");
 
 /** Parse a body for display and correlation: JSON, form-encoded (with JSON-valued fields expanded), or text. */
-export function parseBody(contentType: string | undefined, raw: Buffer | string | undefined): { body?: unknown; text?: string } {
+export function parseBody(
+  contentType: string | undefined,
+  raw: Buffer | string | undefined,
+): { body?: unknown; text?: string } {
   if (raw === undefined || raw.length === 0) return {};
   const text = typeof raw === "string" ? raw : raw.toString("utf8");
   const ct = (contentType ?? "").toLowerCase();
@@ -174,5 +243,9 @@ export function parseBody(contentType: string | undefined, raw: Buffer | string 
 
 /** What the inspector API returns: secrets masked unless the caller asked to reveal (loopback only). */
 export function presentEvent(e: ProtocolEvent, reveal: boolean): ProtocolEvent {
-  return { ...e, request: e.request && maskSecrets(e.request, reveal), response: e.response && maskSecrets(e.response, reveal) };
+  return {
+    ...e,
+    request: e.request && maskSecrets(e.request, reveal),
+    response: e.response && maskSecrets(e.response, reveal),
+  };
 }

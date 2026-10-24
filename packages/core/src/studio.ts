@@ -8,7 +8,25 @@ export const SLUG = /^[a-z][a-z0-9-]{1,30}[a-z0-9]$/;
 /** Field names become Velocity variables and JSON keys, so keep them to a safe identifier alphabet. */
 export const FIELD_NAME = /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/;
 const TYPE_NAME = /^[A-Z][A-Za-z0-9]{2,59}$/;
-const RESERVED_FIELDS = new Set(["id", "type", "issuer", "holder", "proof", "validFrom", "validUntil", "credentialStatus", "cnf", "vct", "iss", "iat", "exp", "nbf", "sub", "_sd", "_sd_alg"]);
+const RESERVED_FIELDS = new Set([
+  "id",
+  "type",
+  "issuer",
+  "holder",
+  "proof",
+  "validFrom",
+  "validUntil",
+  "credentialStatus",
+  "cnf",
+  "vct",
+  "iss",
+  "iat",
+  "exp",
+  "nbf",
+  "sub",
+  "_sd",
+  "_sd_alg",
+]);
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export const IssuerProfileInput = z.object({
@@ -36,8 +54,14 @@ export const FieldDef = z
     selectivelyDisclosable: z.boolean().default(true),
     example: z.string().max(200).optional(),
   })
-  .refine((f) => !RESERVED_FIELDS.has(f.name), { message: "this name is reserved by the VC data model", path: ["name"] })
-  .refine((f) => f.kind !== "choice" || (f.options?.length ?? 0) >= 2, { message: "a choice needs at least two options", path: ["options"] });
+  .refine((f) => !RESERVED_FIELDS.has(f.name), {
+    message: "this name is reserved by the VC data model",
+    path: ["name"],
+  })
+  .refine((f) => f.kind !== "choice" || (f.options?.length ?? 0) >= 2, {
+    message: "a choice needs at least two options",
+    path: ["options"],
+  });
 export type FieldDef = z.infer<typeof FieldDef>;
 
 export const Format = z.enum(["ldp_vc", "vc+sd-jwt"]);
@@ -88,7 +112,10 @@ export const CredentialTypeInput = z
     /** ISO date to hard-code as the expiry (e.g. a past date to test "valid but expired"); empty = Certify's default (2 years). */
     expiresAt: z.string().datetime().or(z.literal("")).default(""),
   })
-  .refine((t) => new Set(t.fields.map((f) => f.name)).size === t.fields.length, { message: "field names must be unique", path: ["fields"] });
+  .refine((t) => new Set(t.fields.map((f) => f.name)).size === t.fields.length, {
+    message: "field names must be unique",
+    path: ["fields"],
+  });
 export type CredentialTypeInput = z.infer<typeof CredentialTypeInput>;
 export type CredentialType = CredentialTypeInput & {
   id: string;
@@ -138,18 +165,28 @@ export function shortTypeId(issuerSlug: string, typeName: string): string {
 export function vctFor(baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName">): string {
   const base = baseUrl.replace(/\/+$/, "");
   const readable = `${base}/pub/issuers/${t.issuerSlug}/types/${t.typeName}`;
-  return readable.length <= CERTIFY_VCT_MAX ? readable : `${base}/pub/vct/${shortTypeId(t.issuerSlug, t.typeName)}`;
+  return readable.length <= CERTIFY_VCT_MAX
+    ? readable
+    : `${base}/pub/vct/${shortTypeId(t.issuerSlug, t.typeName)}`;
 }
 
 /** Where a type's public artefacts live. did:web needs HTTPS, so plain-HTTP local runs use URL-based keys. */
-export function publicUrlsFor(baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName" | "format" | "ldpSuite" | "sdJwtAlg">): PublicUrls {
+export function publicUrlsFor(
+  baseUrl: string,
+  t: Pick<CredentialTypeInput, "issuerSlug" | "typeName" | "format" | "ldpSuite" | "sdJwtAlg">,
+): PublicUrls {
   const base = baseUrl.replace(/\/+$/, "");
   const url = new URL(base);
   const issuerPath = `/pub/issuers/${t.issuerSlug}`;
   const alg = signingAlgOf(t);
   if (url.protocol === "https:") {
     const did = `did:web:${encodeURIComponent(url.host)}${(url.pathname.replace(/\/$/, "") + issuerPath).split("/").join(":")}`;
-    return { context: `${base}/pub/contexts/${t.issuerSlug}/${t.typeName}.jsonld`, issuerId: did, keyBase: did, vct: vctFor(base, t) };
+    return {
+      context: `${base}/pub/contexts/${t.issuerSlug}/${t.typeName}.jsonld`,
+      issuerId: did,
+      keyBase: did,
+      vct: vctFor(base, t),
+    };
   }
   return {
     context: `${base}/pub/contexts/${t.issuerSlug}/${t.typeName}.jsonld`,
@@ -159,13 +196,18 @@ export function publicUrlsFor(baseUrl: string, t: Pick<CredentialTypeInput, "iss
   };
 }
 
-const vocabOf = (baseUrl: string, issuerSlug: string) => `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuerSlug}/vocab#`;
+const vocabOf = (baseUrl: string, issuerSlug: string) =>
+  `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuerSlug}/vocab#`;
 
 /** The type's expanded IRI under its generated context: what DCQL's type_values must hold for it. */
-export const typeIriFor = (baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName">) => `${vocabOf(baseUrl, t.issuerSlug)}${t.typeName}`;
+export const typeIriFor = (baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName">) =>
+  `${vocabOf(baseUrl, t.issuerSlug)}${t.typeName}`;
 
 /** A JSON-LD context for the type: its terms map into an issuer-specific vocabulary. */
-export function buildContextDocument(baseUrl: string, t: Pick<CredentialTypeInput, "issuerSlug" | "typeName" | "fields">) {
+export function buildContextDocument(
+  baseUrl: string,
+  t: Pick<CredentialTypeInput, "issuerSlug" | "typeName" | "fields">,
+) {
   const vocab = vocabOf(baseUrl, t.issuerSlug);
   // Only the type's own terms: VCDM terms (id, type, name, description…) are protected by the base context.
   const terms: Record<string, unknown> = { [t.typeName]: `${vocab}${t.typeName}` };
@@ -174,7 +216,8 @@ export function buildContextDocument(baseUrl: string, t: Pick<CredentialTypeInpu
 }
 
 /** Literal text inside the template: JSON-escaped, with Velocity's `$` and `#` neutralised via Certify's EscapeTool. */
-const literal = (s: string) => JSON.stringify(s).slice(1, -1).replace(/\$/g, "${_esc.d}").replace(/#/g, "${_esc.h}");
+const literal = (s: string) =>
+  JSON.stringify(s).slice(1, -1).replace(/\$/g, "${_esc.d}").replace(/#/g, "${_esc.h}");
 
 /**
  * The Velocity template Certify renders at issuance. Claims sent to /pre-authorized-data fill the field
@@ -182,7 +225,11 @@ const literal = (s: string) => JSON.stringify(s).slice(1, -1).replace(/\$/g, "${
  * `credentialStatus` (DM 2.0 + revocation) or, for SD-JWT, `iss`/`cnf`/`vct` itself.
  * String claims go through `$_esc.java(...)` (JSON-compatible escaping; Certify's Velocity Tools has no json()) so a value containing quotes cannot break out of the JSON.
  */
-export function buildVelocityTemplate(urls: PublicUrls, t: CredentialTypeInput, issuer: Pick<IssuerProfile, "name">): string {
+export function buildVelocityTemplate(
+  urls: PublicUrls,
+  t: CredentialTypeInput,
+  issuer: Pick<IssuerProfile, "name">,
+): string {
   // Quiet references ($!) render an omitted optional claim as "" (strings) or null (numbers/booleans).
   const value = (f: FieldDef) =>
     f.kind === "number" || f.kind === "boolean"
@@ -201,12 +248,16 @@ export function buildVelocityTemplate(urls: PublicUrls, t: CredentialTypeInput, 
   // A credential that is meant to be expired gets a validity window wholly in the past (one year long),
   // so it is consistent (validFrom before validUntil) and fails only on expiry.
   const pastExpiry = t.expiresAt && new Date(t.expiresAt).getTime() < Date.now();
-  const start = pastExpiry ? iso(new Date(new Date(t.expiresAt).getTime() - 365 * 86400_000)) : `"\${validFrom}"`;
+  const start = pastExpiry
+    ? iso(new Date(new Date(t.expiresAt).getTime() - 365 * 86400_000))
+    : `"\${validFrom}"`;
   return [
     "{",
     `  "@context": ${JSON.stringify(buildContextList(urls, t))},`,
     `  "type": ["VerifiableCredential", "${t.typeName}"],`,
-    t.issuerForm === "object" ? `  "issuer": { "id": "${urls.issuerId}", "name": "${literal(issuer.name)}" },` : `  "issuer": "${urls.issuerId}",`,
+    t.issuerForm === "object"
+      ? `  "issuer": { "id": "${urls.issuerId}", "name": "${literal(issuer.name)}" },`
+      : `  "issuer": "${urls.issuerId}",`,
     v2 ? `  "validFrom": ${start},` : `  "issuanceDate": ${start},`,
     v2 ? `  "validUntil": ${expiry},` : `  "expirationDate": ${expiry},`,
     `  "credentialSubject": {`,
@@ -246,7 +297,11 @@ const toBase64 = (s: string) => {
 };
 
 /** The exact payload sent to Certify's POST /credential-configurations. */
-export function buildCertifyConfiguration(baseUrl: string, t: CredentialTypeInput, issuer: IssuerProfile): CertifyCredentialConfiguration {
+export function buildCertifyConfiguration(
+  baseUrl: string,
+  t: CredentialTypeInput,
+  issuer: IssuerProfile,
+): CertifyCredentialConfiguration {
   const urls = publicUrlsFor(baseUrl, t);
   const alg = signingAlgOf(t);
   const keys = KEY_ALIASES[alg];
@@ -262,10 +317,15 @@ export function buildCertifyConfiguration(baseUrl: string, t: CredentialTypeInpu
       {
         name: t.displayName,
         locale: "en",
-        logo: { url: issuer.logoUrl || `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuer.slug}/logo.svg`, alt_text: `${issuer.name} logo` },
+        logo: {
+          url: issuer.logoUrl || `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuer.slug}/logo.svg`,
+          alt_text: `${issuer.name} logo`,
+        },
         background_color: issuer.backgroundColor,
         text_color: issuer.textColor,
-        background_image: { uri: issuer.logoUrl || `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuer.slug}/logo.svg` },
+        background_image: {
+          uri: issuer.logoUrl || `${baseUrl.replace(/\/+$/, "")}/pub/issuers/${issuer.slug}/logo.svg`,
+        },
       },
     ],
     displayOrder: t.fields.map((f) => f.name),
@@ -276,8 +336,13 @@ export function buildCertifyConfiguration(baseUrl: string, t: CredentialTypeInpu
       ...common,
       credentialFormat: "vc+sd-jwt",
       sdJwtVct: urls.vct,
-      sdClaim: t.fields.filter((f) => f.selectivelyDisclosable).map((f) => `$.${f.name}`).join(","),
-      sdJwtClaims: Object.fromEntries(t.fields.map((f) => [f.name, { display: [{ name: f.label, locale: "en" }] }])),
+      sdClaim: t.fields
+        .filter((f) => f.selectivelyDisclosable)
+        .map((f) => `$.${f.name}`)
+        .join(","),
+      sdJwtClaims: Object.fromEntries(
+        t.fields.map((f) => [f.name, { display: [{ name: f.label, locale: "en" }] }]),
+      ),
     };
   }
   return {
@@ -298,7 +363,11 @@ export function buildCertifyConfiguration(baseUrl: string, t: CredentialTypeInpu
  */
 export function buildContextList(urls: PublicUrls, t: Pick<CredentialTypeInput, "dataModel" | "ldpSuite">) {
   const v2 = t.dataModel === "2.0";
-  return [v2 ? W3C_V2 : W3C_V1, urls.context, ...(t.ldpSuite === "Ed25519Signature2020" ? [ED25519_2020_CONTEXT] : [])];
+  return [
+    v2 ? W3C_V2 : W3C_V1,
+    urls.context,
+    ...(t.ldpSuite === "Ed25519Signature2020" ? [ED25519_2020_CONTEXT] : []),
+  ];
 }
 
 /** Turn form input (strings) into typed claims for /pre-authorized-data, validating against the type. */

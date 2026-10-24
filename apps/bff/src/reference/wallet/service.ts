@@ -4,7 +4,13 @@ import type { Store, HeldCredential } from "../../store/types.js";
 import { now, uuid } from "../../util/ids.js";
 import { resolveLocalDid } from "../keys.js";
 import { walletHttp } from "./http.js";
-import { receiveOffer, receiveWithAuthorization, type ReceivedCredential, type SignIn, type WalletClient } from "./issuance.js";
+import {
+  receiveOffer,
+  receiveWithAuthorization,
+  type ReceivedCredential,
+  type SignIn,
+  type WalletClient,
+} from "./issuance.js";
 import { present, resolveRequest, type WalletCredential } from "./presentation.js";
 
 interface RawHeld {
@@ -24,7 +30,13 @@ export class ReferenceWallet {
   ) {}
 
   private http(runId?: string | null) {
-    return walletHttp({ publicBaseUrl: this.urls.publicBaseUrl(), selfUrl: this.urls.selfUrl, runId, recorder: this.recorder, partyOf: this.partyOf });
+    return walletHttp({
+      publicBaseUrl: this.urls.publicBaseUrl(),
+      selfUrl: this.urls.selfUrl,
+      runId,
+      recorder: this.recorder,
+      partyOf: this.partyOf,
+    });
   }
 
   /** did:web over HTTPS, with a plain-HTTP fallback for *.localhost so local runs work without a tunnel. */
@@ -44,8 +56,20 @@ export class ReferenceWallet {
   }
 
   /** Authorization code issuance: the wallet signs the holder in (through `signIn`) and collects the credential. */
-  async receiveAuthorized(o: { credentialIssuer: string; configId: string; client: WalletClient; signIn: (p: SignIn) => Promise<string>; runId?: string | null; typeId?: string }) {
-    const got = await receiveWithAuthorization(this.http(o.runId), { credentialIssuer: o.credentialIssuer, configId: o.configId, client: o.client, signIn: o.signIn });
+  async receiveAuthorized(o: {
+    credentialIssuer: string;
+    configId: string;
+    client: WalletClient;
+    signIn: (p: SignIn) => Promise<string>;
+    runId?: string | null;
+    typeId?: string;
+  }) {
+    const got = await receiveWithAuthorization(this.http(o.runId), {
+      credentialIssuer: o.credentialIssuer,
+      configId: o.configId,
+      client: o.client,
+      signIn: o.signIn,
+    });
     return this.keep(got, o);
   }
 
@@ -60,7 +84,10 @@ export class ReferenceWallet {
       holder: got.holder.did,
       title: got.title,
       runId: opts.runId ?? undefined,
-      raw: { credential: got.credential, holder: { kind: got.holder.kind, privateJwk: got.holder.privateJwk, publicJwk: got.holder.publicJwk } } satisfies RawHeld,
+      raw: {
+        credential: got.credential,
+        holder: { kind: got.holder.kind, privateJwk: got.holder.privateJwk, publicJwk: got.holder.publicJwk },
+      } satisfies RawHeld,
     };
     await this.store.putHeld(held);
     return { held, credential: got.credential };
@@ -78,7 +105,10 @@ export class ReferenceWallet {
     return out;
   }
 
-  async present(requestUri: string, opts: { heldId?: string; tamper?: TamperPreset; runId?: string | null } = {}) {
+  async present(
+    requestUri: string,
+    opts: { heldId?: string; tamper?: TamperPreset; runId?: string | null } = {},
+  ) {
     const http = this.http(opts.runId);
     const req = await resolveRequest(http, requestUri, (did) => this.resolveDidWeb(did, opts.runId));
     const held = await this.walletCredentials(opts.heldId);

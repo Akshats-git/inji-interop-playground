@@ -27,17 +27,35 @@ function CopyValue({ value, label }: { value: string; label: string }) {
   );
 }
 
-export function TestData({ environment, issuerId, authorizationServer, className }: { environment: string; issuerId?: string; authorizationServer?: string; className?: string }) {
+export function TestData({
+  environment,
+  issuerId,
+  authorizationServer,
+  className,
+}: {
+  environment: string;
+  issuerId?: string;
+  authorizationServer?: string;
+  className?: string;
+}) {
   const q = useQuery({ queryKey: ["hosted"], queryFn: api.hosted, staleTime: 5 * 60_000 });
   const env = q.data?.environments.find((e) => e.id === environment);
   if (!env) return q.isLoading ? <div className={cx("min-h-40", className)} aria-hidden /> : null;
   const t = env.testData;
-  const identities = t.identities.filter((i) => !i.authorizationServers || !authorizationServer || i.authorizationServers.includes(authorizationServer));
+  const identities = t.identities.filter(
+    (i) =>
+      !i.authorizationServers || !authorizationServer || i.authorizationServers.includes(authorizationServer),
+  );
   const notes = t.notes.filter((n) => !n.issuer || n.issuer === issuerId);
   return (
-    <section aria-label={`Test data for ${env.name}`} className={cx("rounded-md border border-hairline bg-sunken p-3 text-sm", className)}>
+    <section
+      aria-label={`Test data for ${env.name}`}
+      className={cx("rounded-md border border-hairline bg-sunken p-3 text-sm", className)}
+    >
       <h3 className="mb-2 text-base">Test data for {env.name}</h3>
-      <p className="mb-2 text-muted">Public mock data from MOSIP. Sign in at eSignet with a demo UIN, then the OTP.</p>
+      <p className="mb-2 text-muted">
+        Public mock data from MOSIP. Sign in at eSignet with a demo UIN, then the OTP.
+      </p>
       <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
         {t.otp && (
           <>
@@ -69,7 +87,12 @@ export function TestData({ environment, issuerId, authorizationServer, className
       {t.selfRegistration && (
         <p className="mt-2 text-muted">
           Your own UIN:{" "}
-          <a href={t.selfRegistration} target="_blank" rel="noreferrer" className="font-bold text-issue underline">
+          <a
+            href={t.selfRegistration}
+            target="_blank"
+            rel="noreferrer"
+            className="font-bold text-issue underline"
+          >
             self-register on Collab
           </a>
           ; its OTP is emailed to you. Never share it in a demo.

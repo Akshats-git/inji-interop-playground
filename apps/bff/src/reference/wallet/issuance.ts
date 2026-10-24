@@ -53,34 +53,51 @@ async function issuerMetadata(http: WalletHttp, credentialIssuer: string): Promi
       continue; // try the next well-known form
     }
     if (metadata.credential_issuer !== credentialIssuer)
-      throw new IssuanceError("issuer_mismatch", `Metadata credential_issuer (${String(metadata.credential_issuer)}) differs from the expected one (${credentialIssuer}).`);
+      throw new IssuanceError(
+        "issuer_mismatch",
+        `Metadata credential_issuer (${String(metadata.credential_issuer)}) differs from the expected one (${credentialIssuer}).`,
+      );
     return metadata;
   }
-  throw new IssuanceError("metadata_unavailable", `No issuer metadata at ${credentialIssuer}/.well-known/openid-credential-issuer.`);
+  throw new IssuanceError(
+    "metadata_unavailable",
+    `No issuer metadata at ${credentialIssuer}/.well-known/openid-credential-issuer.`,
+  );
 }
 
 function configurationOf(metadata: Json, configId: string): Json {
-  const config = (metadata.credential_configurations_supported as Record<string, Json> | undefined)?.[configId];
+  const config = (metadata.credential_configurations_supported as Record<string, Json> | undefined)?.[
+    configId
+  ];
   if (!config) throw new IssuanceError("unknown_configuration", `Issuer metadata does not list ${configId}.`);
   return config;
 }
 
 /** RFC 8414 metadata of the authorization server (or its OpenID Connect discovery document). */
-async function authorizationServerMetadata(http: WalletHttp, as: string): Promise<{ token_endpoint: string; authorization_endpoint?: string }> {
+async function authorizationServerMetadata(
+  http: WalletHttp,
+  as: string,
+): Promise<{ token_endpoint: string; authorization_endpoint?: string }> {
   for (const suffix of ["oauth-authorization-server", "openid-configuration"])
     for (const url of wellKnownCandidates(as, suffix)) {
       try {
         const m = (await http.getJson(url)) as { token_endpoint?: string; authorization_endpoint?: string };
-        if (m.token_endpoint) return { token_endpoint: m.token_endpoint, authorization_endpoint: m.authorization_endpoint };
+        if (m.token_endpoint)
+          return { token_endpoint: m.token_endpoint, authorization_endpoint: m.authorization_endpoint };
       } catch {
         /* next */
       }
     }
-  throw new IssuanceError("token_endpoint_unavailable", `No token_endpoint in ${as}'s authorization server metadata.`);
+  throw new IssuanceError(
+    "token_endpoint_unavailable",
+    `No token_endpoint in ${as}'s authorization server metadata.`,
+  );
 }
 
 const titleOf = (config: Json, configId: string) =>
-  ((config.display as { name?: string }[] | undefined) ?? ((config.credential_metadata as Json | undefined)?.display as { name?: string }[] | undefined))?.[0]?.name ?? configId;
+  ((config.display as { name?: string }[] | undefined) ??
+    ((config.credential_metadata as Json | undefined)?.display as { name?: string }[] | undefined))?.[0]
+    ?.name ?? configId;
 
 /**
  * Prove possession of a fresh holder key over a nonce and ask for the credential. An issuer with a nonce endpoint
@@ -89,34 +106,57 @@ const titleOf = (config: Json, configId: string) =>
  */
 async function requestCredential(
   http: WalletHttp,
-  o: { metadata: Json; configId: string; config: Json; credentialIssuer: string; token: { access_token: string; token_type?: string; c_nonce?: string } },
+  o: {
+    metadata: Json;
+    configId: string;
+    config: Json;
+    credentialIssuer: string;
+    token: { access_token: string; token_type?: string; c_nonce?: string };
+  },
 ): Promise<{ credential: unknown; holder: HolderKey }> {
   const format = String(o.config.format);
   const holder = await newHolderKey(format === "ldp_vc" ? "ed25519" : "p256");
   // Sign the proof with an algorithm the issuer lists. Ed25519 has two JOSE names: "EdDSA" (RFC 8037, what most
   // issuers list) and "Ed25519" (RFC 9864), which some Certify 0.x deployments list instead.
-  const listed = ((o.config.proof_types_supported as { jwt?: { proof_signing_alg_values_supported?: string[] } } | undefined)?.jwt?.proof_signing_alg_values_supported ?? []);
-  const alg = holder.alg === "EdDSA" && listed.length && !listed.includes("EdDSA") && listed.includes("Ed25519") ? "Ed25519" : holder.alg;
+  const listed =
+    (
+      o.config.proof_types_supported as
+        { jwt?: { proof_signing_alg_values_supported?: string[] } } | undefined
+    )?.jwt?.proof_signing_alg_values_supported ?? [];
+  const alg =
+    holder.alg === "EdDSA" && listed.length && !listed.includes("EdDSA") && listed.includes("Ed25519")
+      ? "Ed25519"
+      : holder.alg;
   // Name the holder key the way the issuer binds credentials: a DID URL (did:key / did:jwk), or the bare public JWK
   // when it binds only to "jwk" (an mDoc's device key, for example).
   const binding = (o.config.cryptographic_binding_methods_supported as string[] | undefined) ?? [];
   const byJwk = binding.length > 0 && !binding.some((b) => b.startsWith("did:")) && binding.includes("jwk");
   const proofJwt = async (nonce?: string) =>
     new SignJWT({ nonce, aud: o.credentialIssuer })
-      .setProtectedHeader({ alg, typ: "openid4vci-proof+jwt", ...(byJwk ? { jwk: holder.publicJwk } : { kid: holder.kid }) })
+      .setProtectedHeader({
+        alg,
+        typ: "openid4vci-proof+jwt",
+        ...(byJwk ? { jwk: holder.publicJwk } : { kid: holder.kid }),
+      })
       .setIssuedAt()
       .setExpirationTime("5m")
       .sign(await privateKeyOf(holder));
 
   const v1 = typeof o.metadata.nonce_endpoint === "string";
-  const freshNonce = async () => (v1 ? ((await http.postJson(String(o.metadata.nonce_endpoint), {})) as { c_nonce?: string }).c_nonce : undefined);
+  const freshNonce = async () =>
+    v1
+      ? ((await http.postJson(String(o.metadata.nonce_endpoint), {})) as { c_nonce?: string }).c_nonce
+      : undefined;
   const draft13: Json = { format };
   if (format === "ldp_vc") {
     const def = (o.config.credential_definition ?? {}) as Json;
     draft13.credential_definition = { "@context": def["@context"], type: def.type };
   } else if (format === "vc+sd-jwt" || format === "dc+sd-jwt") draft13.vct = o.config.vct;
   else if (format === "mso_mdoc") draft13.doctype = o.config.doctype;
-  const body = async (nonce?: string) => (v1 ? { credential_configuration_id: o.configId, proofs: { jwt: [await proofJwt(nonce)] } } : { ...draft13, proof: { proof_type: "jwt", jwt: await proofJwt(nonce) } });
+  const body = async (nonce?: string) =>
+    v1
+      ? { credential_configuration_id: o.configId, proofs: { jwt: [await proofJwt(nonce)] } }
+      : { ...draft13, proof: { proof_type: "jwt", jwt: await proofJwt(nonce) } };
 
   // Certify 0.14 fetches W3C contexts from the internet while signing (gap G16); a transient fetch failure
   // surfaces as ERROR_SIGNING_QR_DATA. Retry that case twice with a fresh proof; every attempt is recorded.
@@ -124,11 +164,14 @@ async function requestCredential(
   let res: { credential?: unknown; credentials?: ({ credential: unknown } | string)[] } | undefined;
   for (let attempt = 0; ; attempt++) {
     try {
-      res = (await http.postJson(String(o.metadata.credential_endpoint), await body(nonce), { authorization: `${o.token.token_type ?? "Bearer"} ${o.token.access_token}` })) as typeof res;
+      res = (await http.postJson(String(o.metadata.credential_endpoint), await body(nonce), {
+        authorization: `${o.token.token_type ?? "Bearer"} ${o.token.access_token}`,
+      })) as typeof res;
       break;
     } catch (e) {
       const err = (e as { body?: Json }).body;
-      const transient = err?.error === "ERROR_SIGNING_QR_DATA" && /canonicali/i.test(String(err?.error_description ?? ""));
+      const transient =
+        err?.error === "ERROR_SIGNING_QR_DATA" && /canonicali/i.test(String(err?.error_description ?? ""));
       if (!transient || attempt >= 2) throw e;
       nonce = typeof err?.c_nonce === "string" ? err.c_nonce : ((await freshNonce()) ?? nonce);
       await new Promise((r) => setTimeout(r, 500));
@@ -136,12 +179,17 @@ async function requestCredential(
   }
   const first = res?.credentials?.[0];
   const credential = res?.credential ?? (typeof first === "object" && first ? first.credential : first);
-  if (!credential) throw new IssuanceError("no_credential", "The credential response holds no credential.", res);
+  if (!credential)
+    throw new IssuanceError("no_credential", "The credential response holds no credential.", res);
   return { credential, holder };
 }
 
 /** Issuer-initiated issuance from an openid-credential-offer:// URI (pre-authorized code). */
-export async function receiveOffer(http: WalletHttp, offerUri: string, opts: { txCode?: string } = {}): Promise<ReceivedCredential> {
+export async function receiveOffer(
+  http: WalletHttp,
+  offerUri: string,
+  opts: { txCode?: string } = {},
+): Promise<ReceivedCredential> {
   const parsed = parseCredentialOffer(offerUri);
   if (!parsed) throw new IssuanceError("invalid_offer", "Not an openid-credential-offer URI.");
 
@@ -170,17 +218,32 @@ export async function receiveOffer(http: WalletHttp, offerUri: string, opts: { t
   const { token_endpoint } = await authorizationServerMetadata(http, as);
 
   // 3. Exchange the pre-authorized code.
-  if (grant.tx_code && !opts.txCode) throw new IssuanceError("tx_code_required", "The offer requires a PIN (tx_code), but none was given.");
+  if (grant.tx_code && !opts.txCode)
+    throw new IssuanceError("tx_code_required", "The offer requires a PIN (tx_code), but none was given.");
   const token = (await http.postForm(token_endpoint, {
     grant_type: PRE_AUTH_GRANT,
     "pre-authorized_code": String(grant["pre-authorized_code"]),
     ...(opts.txCode ? { tx_code: opts.txCode } : {}),
   })) as { access_token: string; c_nonce?: string; token_type?: string };
-  if (!token.access_token) throw new IssuanceError("no_access_token", "The token response has no access_token.", token);
+  if (!token.access_token)
+    throw new IssuanceError("no_access_token", "The token response has no access_token.", token);
 
   // 4. Proof of possession and the credential.
-  const { credential, holder } = await requestCredential(http, { metadata, configId, config, credentialIssuer: offer.credential_issuer, token });
-  return { configId, format: String(config.format), credential, holder, issuer: offer.credential_issuer, title: titleOf(config, configId) };
+  const { credential, holder } = await requestCredential(http, {
+    metadata,
+    configId,
+    config,
+    credentialIssuer: offer.credential_issuer,
+    token,
+  });
+  return {
+    configId,
+    format: String(config.format),
+    credential,
+    holder,
+    issuer: offer.credential_issuer,
+    title: titleOf(config, configId),
+  };
 }
 
 /** What the wallet hands its sign-in step: eSignet's login page parameters, or the automatic equivalent. */
@@ -201,7 +264,8 @@ export interface WalletClient {
 }
 
 /** RS256 for an RSA key, ES256 for P-256, EdDSA for Ed25519: what the client assertion is signed with. */
-const algOf = (jwk: JWK) => (jwk.kty === "RSA" ? "RS256" : jwk.kty === "OKP" ? "EdDSA" : jwk.crv === "P-384" ? "ES384" : "ES256");
+const algOf = (jwk: JWK) =>
+  jwk.kty === "RSA" ? "RS256" : jwk.kty === "OKP" ? "EdDSA" : jwk.crv === "P-384" ? "ES384" : "ES256";
 
 /**
  * Wallet-initiated issuance with the authorization code flow: discover the issuer, sign the holder in at its
@@ -211,13 +275,22 @@ const algOf = (jwk: JWK) => (jwk.kty === "RSA" ? "RS256" : jwk.kty === "OKP" ? "
  */
 export async function receiveWithAuthorization(
   http: WalletHttp,
-  o: { credentialIssuer: string; configId: string; client: WalletClient; signIn: (p: SignIn) => Promise<string> },
+  o: {
+    credentialIssuer: string;
+    configId: string;
+    client: WalletClient;
+    signIn: (p: SignIn) => Promise<string>;
+  },
 ): Promise<ReceivedCredential> {
   const metadata = await issuerMetadata(http, o.credentialIssuer);
   const config = configurationOf(metadata, o.configId);
   const as = (metadata.authorization_servers as string[] | undefined)?.[0] ?? o.credentialIssuer;
   const asMeta = await authorizationServerMetadata(http, as);
-  if (!asMeta.authorization_endpoint) throw new IssuanceError("authorization_endpoint_unavailable", `${as} advertises no authorization_endpoint.`);
+  if (!asMeta.authorization_endpoint)
+    throw new IssuanceError(
+      "authorization_endpoint_unavailable",
+      `${as} advertises no authorization_endpoint.`,
+    );
 
   const verifier = randomBytes(32).toString("base64url");
   const code = await o.signIn({
@@ -248,15 +321,30 @@ export async function receiveWithAuthorization(
     client_assertion: assertion,
     code_verifier: verifier,
   })) as { access_token: string; c_nonce?: string; token_type?: string };
-  if (!token.access_token) throw new IssuanceError("no_access_token", "The token response has no access_token.", token);
+  if (!token.access_token)
+    throw new IssuanceError("no_access_token", "The token response has no access_token.", token);
 
-  const { credential, holder } = await requestCredential(http, { metadata, configId: o.configId, config, credentialIssuer: o.credentialIssuer, token });
-  return { configId: o.configId, format: String(config.format), credential, holder, issuer: o.credentialIssuer, title: titleOf(config, o.configId) };
+  const { credential, holder } = await requestCredential(http, {
+    metadata,
+    configId: o.configId,
+    config,
+    credentialIssuer: o.credentialIssuer,
+    token,
+  });
+  return {
+    configId: o.configId,
+    format: String(config.format),
+    credential,
+    holder,
+    issuer: o.credentialIssuer,
+    title: titleOf(config, o.configId),
+  };
 }
 
 /** Claims in a held credential, for display and for presentation matching. */
 export function credentialClaims(format: string, credential: unknown): Record<string, unknown> {
-  if (format === "ldp_vc") return ((credential as Record<string, unknown>)?.credentialSubject as Record<string, unknown>) ?? {};
+  if (format === "ldp_vc")
+    return ((credential as Record<string, unknown>)?.credentialSubject as Record<string, unknown>) ?? {};
   if (typeof credential === "string") {
     const d = decodeSdJwt(credential);
     if (d) {

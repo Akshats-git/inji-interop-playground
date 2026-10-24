@@ -18,7 +18,8 @@ export class HttpError extends Error {
   get detail(): string | undefined {
     const b = this.body as Record<string, unknown> | undefined;
     const first = Array.isArray(b?.errors) ? (b!.errors as Record<string, unknown>[])[0] : undefined;
-    return (first?.errorMessage ?? b?.errorMessage ?? b?.error_description ?? b?.message) as string | undefined;
+    return (first?.errorMessage ?? b?.errorMessage ?? b?.error_description ?? b?.message) as
+      string | undefined;
   }
 }
 
@@ -33,7 +34,10 @@ export interface CallOptions {
 }
 
 /** fetch + JSON + optional recording. Throws HttpError on non-2xx. */
-export async function call<T = unknown>(url: string, o: CallOptions = {}): Promise<{ status: number; body: T; headers: Headers }> {
+export async function call<T = unknown>(
+  url: string,
+  o: CallOptions = {},
+): Promise<{ status: number; body: T; headers: Headers }> {
   const headers: Record<string, string> = { accept: "application/json", ...o.headers };
   let body: string | undefined;
   if (o.json !== undefined) {
@@ -45,7 +49,12 @@ export async function call<T = unknown>(url: string, o: CallOptions = {}): Promi
   }
   const at = new Date().toISOString();
   const started = performance.now();
-  const res = await fetch(url, { method: o.method ?? (body ? "POST" : "GET"), headers, body, signal: AbortSignal.timeout(o.timeoutMs ?? 30_000) });
+  const res = await fetch(url, {
+    method: o.method ?? (body ? "POST" : "GET"),
+    headers,
+    body,
+    signal: AbortSignal.timeout(o.timeoutMs ?? 30_000),
+  });
   const text = await res.text();
   const parsed = parseBody(res.headers.get("content-type") ?? undefined, text);
   if (o.record) {
@@ -72,7 +81,8 @@ export async function call<T = unknown>(url: string, o: CallOptions = {}): Promi
   // MOSIP services wrap results as {responseTime, response, errors[]} and report failures with HTTP 200.
   const env = value as { response?: unknown; errors?: unknown[]; responseTime?: string } | undefined;
   if (env && typeof env === "object" && "responseTime" in env && "response" in env) {
-    if (Array.isArray(env.errors) && env.errors.length) throw new HttpError(res.status, value, `${o.method ?? "GET"} ${url} → error envelope`);
+    if (Array.isArray(env.errors) && env.errors.length)
+      throw new HttpError(res.status, value, `${o.method ?? "GET"} ${url} → error envelope`);
     return { status: res.status, body: env.response as T, headers: res.headers };
   }
   return { status: res.status, body: value, headers: res.headers };

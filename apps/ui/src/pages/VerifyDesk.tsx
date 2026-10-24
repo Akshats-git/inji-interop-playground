@@ -2,11 +2,31 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { OpenID4VPVerification, QRCodeVerification } from "@injistack/react-inji-verify-sdk";
-import { explainMapping, toDcql, toPresentationDefinition, validateDcql, type CatalogType, type DcqlPathStyle, type PeDialect, type QuerySpec } from "@playground/core";
+import {
+  explainMapping,
+  toDcql,
+  toPresentationDefinition,
+  validateDcql,
+  type CatalogType,
+  type DcqlPathStyle,
+  type PeDialect,
+  type QuerySpec,
+} from "@playground/core";
 import { api } from "../lib/api";
 import { formatLabel } from "../lib/format";
 import { JsonView } from "../components/JsonView";
-import { Button, cx, Empty, Field, Notice, PageHeader, Panel, Select, StatusMark, Tag } from "../components/ui";
+import {
+  Button,
+  cx,
+  Empty,
+  Field,
+  Notice,
+  PageHeader,
+  Panel,
+  Select,
+  StatusMark,
+  Tag,
+} from "../components/ui";
 
 /** The SDK talks to Inji Verify through the playground's recording gateway, so every call shows up in Live traffic. */
 const VERIFY_SERVICE_URL = "/pub/verify/v1/verify";
@@ -50,7 +70,9 @@ function Results({ results }: { results: SdkResult[] }) {
           <div key={i} className="flex flex-col gap-2 rounded-md border border-hairline p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-bold">{String(types[0] ?? vc?.vct ?? "Credential")}</span>
-              <StatusMark mark={s === "SUCCESS" ? "pass" : s === "EXPIRED" ? "warn" : "fail"}>{s === "SUCCESS" ? "Valid" : s.toLowerCase()}</StatusMark>
+              <StatusMark mark={s === "SUCCESS" ? "pass" : s === "EXPIRED" ? "warn" : "fail"}>
+                {s === "SUCCESS" ? "Valid" : s.toLowerCase()}
+              </StatusMark>
             </div>
             <JsonView value={r.verificationResponse} maxHeight="12rem" />
           </div>
@@ -60,15 +82,39 @@ function Results({ results }: { results: SdkResult[] }) {
   );
 }
 
-function RequestBuilder({ types, type, setTypeId, claims, setClaims }: { types: CatalogType[]; type?: CatalogType; setTypeId: (id: string) => void; claims: string[]; setClaims: (c: string[]) => void }) {
-  const groups = [...new Set(types.map((t) => t.issuerId))].map((issuerId) => types.filter((t) => t.issuerId === issuerId));
+function RequestBuilder({
+  types,
+  type,
+  setTypeId,
+  claims,
+  setClaims,
+}: {
+  types: CatalogType[];
+  type?: CatalogType;
+  setTypeId: (id: string) => void;
+  claims: string[];
+  setClaims: (c: string[]) => void;
+}) {
+  const groups = [...new Set(types.map((t) => t.issuerId))].map((issuerId) =>
+    types.filter((t) => t.issuerId === issuerId),
+  );
   return (
     <div className="grid gap-4 md:grid-cols-[minmax(0,20rem)_1fr]">
-      <Field label="Ask for" hint={type ? `${formatLabel(type.format, type.dataModel)}${type.origin === "external" ? `, issued by ${type.issuerName} (external)` : ""}` : undefined}>
+      <Field
+        label="Ask for"
+        hint={
+          type
+            ? `${formatLabel(type.format, type.dataModel)}${type.origin === "external" ? `, issued by ${type.issuerName} (external)` : ""}`
+            : undefined
+        }
+      >
         {(id) => (
           <Select id={id} value={type?.id ?? ""} onChange={(e) => setTypeId(e.target.value)}>
             {groups.map((g) => (
-              <optgroup key={g[0]!.issuerId} label={g[0]!.origin === "external" ? `${g[0]!.issuerName} (external)` : g[0]!.issuerName}>
+              <optgroup
+                key={g[0]!.issuerId}
+                label={g[0]!.origin === "external" ? `${g[0]!.issuerName} (external)` : g[0]!.issuerName}
+              >
                 {g.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.displayName}
@@ -85,7 +131,13 @@ function RequestBuilder({ types, type, setTypeId, claims, setClaims }: { types: 
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {type.fields.map((f) => (
               <label key={f.name} className="flex items-center gap-2">
-                <input type="checkbox" checked={claims.includes(f.name)} onChange={(e) => setClaims(e.target.checked ? [...claims, f.name] : claims.filter((x) => x !== f.name))} />
+                <input
+                  type="checkbox"
+                  checked={claims.includes(f.name)}
+                  onChange={(e) =>
+                    setClaims(e.target.checked ? [...claims, f.name] : claims.filter((x) => x !== f.name))
+                  }
+                />
                 {f.label}
               </label>
             ))}
@@ -115,16 +167,37 @@ function LiveRequest({ spec }: { spec: QuerySpec }) {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted">
-        This uses MOSIP's own <code className="font-mono">@injistack/react-inji-verify-sdk</code> against the bundled Inji Verify, exactly as a relying party's website would. Scan the QR code with Inji Wallet, or copy the request into the <Link to="/wallet" className="text-issue underline">Reference Wallet</Link>.
+        This uses MOSIP's own <code className="font-mono">@injistack/react-inji-verify-sdk</code> against the
+        bundled Inji Verify, exactly as a relying party's website would. Scan the QR code with Inji Wallet, or
+        copy the request into the{" "}
+        <Link to="/wallet" className="text-issue underline">
+          Reference Wallet
+        </Link>
+        .
       </p>
-      <div role="radiogroup" aria-label="How Inji Verify sends its request" className="flex flex-wrap gap-1 self-start rounded-md bg-sunken p-1 text-sm">
+      <div
+        role="radiogroup"
+        aria-label="How Inji Verify sends its request"
+        className="flex flex-wrap gap-1 self-start rounded-md bg-sunken p-1 text-sm"
+      >
         {(
           [
             ["signed", "Signed, by reference"],
             ["by-value", "Unsigned, by value"],
           ] as const
         ).map(([v, l]) => (
-          <button key={v} type="button" role="radio" aria-checked={style === v} disabled={v === "signed" && !didClientId} onClick={() => setStyle(v)} className={cx("rounded px-2.5 py-0.5 font-bold disabled:opacity-50", style === v ? "bg-surface shadow-sm" : "text-muted hover:text-ink")}>
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={style === v}
+            disabled={v === "signed" && !didClientId}
+            onClick={() => setStyle(v)}
+            className={cx(
+              "rounded px-2.5 py-0.5 font-bold disabled:opacity-50",
+              style === v ? "bg-surface shadow-sm" : "text-muted hover:text-ink",
+            )}
+          >
             {l}
           </button>
         ))}
@@ -142,7 +215,14 @@ function LiveRequest({ spec }: { spec: QuerySpec }) {
           clientId={clientId}
           presentationDefinition={pd as never}
           isSameDeviceFlowEnabled={IS_PHONE}
-          qrCodeStyles={{ size: 220, level: "M", fgColor: "#16233F", bgColor: "#FFFFFF", margin: 8, borderRadius: 8 }}
+          qrCodeStyles={{
+            size: 220,
+            level: "M",
+            fgColor: "#16233F",
+            bgColor: "#FFFFFF",
+            margin: 8,
+            borderRadius: 8,
+          }}
           triggerElement={<Button tone="primary">Create presentation request</Button>}
           onVPProcessed={(r) => setResults(r as unknown as SdkResult[])}
           onQrCodeExpired={() => setExpired(true)}
@@ -181,14 +261,30 @@ type Check = { name: string; ok: boolean; detail?: string };
 
 /** Inji Verify's v2 answer, check by check (the SDK only passes on the first error's message). */
 function checksOf(body: Record<string, unknown>): Check[] {
-  const err = (e: unknown) => (e && typeof e === "object" ? `${String((e as Record<string, unknown>).errorCode ?? "")}: ${String((e as Record<string, unknown>).errorMessage ?? "")}` : undefined);
+  const err = (e: unknown) =>
+    e && typeof e === "object"
+      ? `${String((e as Record<string, unknown>).errorCode ?? "")}: ${String((e as Record<string, unknown>).errorMessage ?? "")}`
+      : undefined;
   const sig = body.schemaAndSignatureCheck as { valid?: boolean; error?: unknown } | undefined;
   const exp = body.expiryCheck as { valid?: boolean } | null | undefined;
-  const status = (body.statusCheck as { purpose?: string; valid?: boolean; error?: unknown }[] | undefined) ?? [];
+  const status =
+    (body.statusCheck as { purpose?: string; valid?: boolean; error?: unknown }[] | undefined) ?? [];
   return [
-    ...(sig ? [{ name: "Issuer signature and schema", ok: Boolean(sig.valid), detail: sig.error ? err(sig.error) : undefined }] : []),
+    ...(sig
+      ? [
+          {
+            name: "Issuer signature and schema",
+            ok: Boolean(sig.valid),
+            detail: sig.error ? err(sig.error) : undefined,
+          },
+        ]
+      : []),
     ...(exp ? [{ name: "Not expired", ok: Boolean(exp.valid) }] : []),
-    ...status.map((st) => ({ name: `Status (${st.purpose ?? "revocation"})`, ok: Boolean(st.valid), detail: st.error ? err(st.error) : undefined })),
+    ...status.map((st) => ({
+      name: `Status (${st.purpose ?? "revocation"})`,
+      ok: Boolean(st.valid),
+      detail: st.error ? err(st.error) : undefined,
+    })),
   ];
 }
 
@@ -202,7 +298,9 @@ function DirectShareError({ message }: { message: string }) {
     let live = true;
     void (async () => {
       const recent = await api.events("?limit=20").catch(() => []);
-      const hit = recent.find((e) => e.title.startsWith("Verify credential") && Date.now() - new Date(e.at).getTime() < 60_000);
+      const hit = recent.find(
+        (e) => e.title.startsWith("Verify credential") && Date.now() - new Date(e.at).getTime() < 60_000,
+      );
       if (!hit) return;
       const ev = await api.event(hit.id).catch(() => undefined);
       const body = ev?.response?.body;
@@ -221,7 +319,10 @@ function DirectShareError({ message }: { message: string }) {
           <ul className="mt-1 flex flex-col gap-1">
             {checks.map((c) => (
               <li key={c.name} className="flex gap-2">
-                <span className={cx("font-black", c.ok ? "text-pass" : "text-fail")} aria-label={c.ok ? "passed" : "failed"}>
+                <span
+                  className={cx("font-black", c.ok ? "text-pass" : "text-fail")}
+                  aria-label={c.ok ? "passed" : "failed"}
+                >
                   {c.ok ? "✓" : "✕"}
                 </span>
                 <span>
@@ -245,7 +346,11 @@ function DirectShare() {
   const [camera, setCamera] = useState(false);
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted">Scan or upload a credential's own QR code (PixelPass). No OpenID4VP exchange: the verifier checks the issuer's signature, expiry and status directly. Inji Verify reads up to QR version 27 by camera and 32 by upload.</p>
+      <p className="text-sm text-muted">
+        Scan or upload a credential's own QR code (PixelPass). No OpenID4VP exchange: the verifier checks the
+        issuer's signature, expiry and status directly. Inji Verify reads up to QR version 27 by camera and 32
+        by upload.
+      </p>
       <div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-md bg-sunken p-4">
         <QRCodeVerification
           key={`${attempt}-${camera}`}
@@ -292,7 +397,15 @@ function QueryCompare({ spec }: { spec: QuerySpec }) {
   const dcql = useMemo(() => toDcql(spec, { pathStyle: paths }), [spec, paths]);
   const problems = validateDcql(dcql);
   const mapping = explainMapping(spec);
-  const hl = (k: string) => ["path", "filter", "type_values", "vct_values", "require_cryptographic_holder_binding", "limit_disclosure"].includes(k);
+  const hl = (k: string) =>
+    [
+      "path",
+      "filter",
+      "type_values",
+      "vct_values",
+      "require_cryptographic_holder_binding",
+      "limit_disclosure",
+    ].includes(k);
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-4 lg:grid-cols-2">
@@ -301,20 +414,37 @@ function QueryCompare({ spec }: { spec: QuerySpec }) {
             <h3 id="pe-title" className="text-base">
               Presentation Exchange <Tag tone="present">Inji 0.x, OpenID4VP drafts</Tag>
             </h3>
-            <div role="radiogroup" aria-label="Type filter style" className="flex gap-1 rounded-md bg-sunken p-1 text-sm">
+            <div
+              role="radiogroup"
+              aria-label="Type filter style"
+              className="flex gap-1 rounded-md bg-sunken p-1 text-sm"
+            >
               {(
                 [
                   ["inji", "Inji style"],
                   ["spec", "Spec style"],
                 ] as const
               ).map(([d, l]) => (
-                <button key={d} role="radio" aria-checked={dialect === d} onClick={() => setDialect(d)} className={cx("rounded px-2.5 py-0.5 font-bold", dialect === d ? "bg-surface shadow-sm" : "text-muted hover:text-ink")}>
+                <button
+                  key={d}
+                  role="radio"
+                  aria-checked={dialect === d}
+                  onClick={() => setDialect(d)}
+                  className={cx(
+                    "rounded px-2.5 py-0.5 font-bold",
+                    dialect === d ? "bg-surface shadow-sm" : "text-muted hover:text-ink",
+                  )}
+                >
                   {l}
                 </button>
               ))}
             </div>
           </div>
-          <p className="text-sm text-muted">{dialect === "inji" ? "Inji writes the type filter as a regex pattern on $.type. It works with Inji's wallets, but it is not valid JSON Schema for an array." : "The PE spec's examples write it as an array that contains the type. Some Inji components do not match this form."}</p>
+          <p className="text-sm text-muted">
+            {dialect === "inji"
+              ? "Inji writes the type filter as a regex pattern on $.type. It works with Inji's wallets, but it is not valid JSON Schema for an array."
+              : "The PE spec's examples write it as an array that contains the type. Some Inji components do not match this form."}
+          </p>
           <JsonView value={pe} highlight={hl} maxHeight="30rem" openDepth={10} />
         </section>
         <section aria-labelledby="dcql-title" className="flex min-w-0 flex-col gap-2">
@@ -323,14 +453,27 @@ function QueryCompare({ spec }: { spec: QuerySpec }) {
               DCQL <Tag tone="present">OpenID4VP 1.0, Inji 1.0 line</Tag>
             </h3>
             {spec.format === "ldp_vc" && (
-              <div role="radiogroup" aria-label="Claim path style" className="flex gap-1 rounded-md bg-sunken p-1 text-sm">
+              <div
+                role="radiogroup"
+                aria-label="Claim path style"
+                className="flex gap-1 rounded-md bg-sunken p-1 text-sm"
+              >
                 {(
                   [
                     ["spec", "Spec style"],
                     ["inji", "Inji 1.0 style"],
                   ] as const
                 ).map(([d, l]) => (
-                  <button key={d} role="radio" aria-checked={paths === d} onClick={() => setPaths(d)} className={cx("rounded px-2.5 py-0.5 font-bold", paths === d ? "bg-surface shadow-sm" : "text-muted hover:text-ink")}>
+                  <button
+                    key={d}
+                    role="radio"
+                    aria-checked={paths === d}
+                    onClick={() => setPaths(d)}
+                    className={cx(
+                      "rounded px-2.5 py-0.5 font-bold",
+                      paths === d ? "bg-surface shadow-sm" : "text-muted hover:text-ink",
+                    )}
+                  >
                     {l}
                   </button>
                 ))}
@@ -338,7 +481,8 @@ function QueryCompare({ spec }: { spec: QuerySpec }) {
             )}
           </div>
           <p className="text-sm text-muted">
-            The same question in DCQL. Paths become arrays, and the type is matched by {spec.format === "ldp_vc" ? "expanded JSON-LD type IRIs" : "an exact vct string"}.
+            The same question in DCQL. Paths become arrays, and the type is matched by{" "}
+            {spec.format === "ldp_vc" ? "expanded JSON-LD type IRIs" : "an exact vct string"}.
             {spec.format === "ldp_vc" &&
               (paths === "spec"
                 ? " OpenID4VP 1.0 reads claim paths from the credential's root, so they start with credentialSubject."
@@ -390,21 +534,38 @@ export default function VerifyDeskPage() {
     if (!typeId && types.data?.length) setTypeId(types.data[0]!.id);
   }, [types.data, typeId]);
   useEffect(() => {
-    if (type) setClaims(type.fields.some((f) => f.name === "primaryCropType") ? ["primaryCropType"] : type.fields.slice(0, 1).map((f) => f.name));
+    if (type)
+      setClaims(
+        type.fields.some((f) => f.name === "primaryCropType")
+          ? ["primaryCropType"]
+          : type.fields.slice(0, 1).map((f) => f.name),
+      );
   }, [type?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const spec = useMemo(() => (type ? specFor(type, claims) : null), [type, claims]);
 
   return (
     <>
-      <PageHeader title="Verifier desk" lede="Stand where a relying party stands: ask a wallet for a credential with Inji Verify's own SDK, check a credential's QR code directly, and see the same request written in both query languages." />
+      <PageHeader
+        title="Verifier desk"
+        lede="Stand where a relying party stands: ask a wallet for a credential with Inji Verify's own SDK, check a credential's QR code directly, and see the same request written in both query languages."
+      />
       {types.isLoading ? (
         <p className="text-muted">Loading credential types…</p>
       ) : !types.data?.length || !spec ? (
-        <Empty title="No credential types to ask for">Design one in the Issuer Studio, or declare an external issuer in infra/parties.yaml; the verifier needs to know what it is asking for.</Empty>
+        <Empty title="No credential types to ask for">
+          Design one in the Issuer Studio, or declare an external issuer in infra/parties.yaml; the verifier
+          needs to know what it is asking for.
+        </Empty>
       ) : (
         <div className="flex flex-col gap-6">
           <Panel title="What the verifier asks for">
-            <RequestBuilder types={types.data} type={type} setTypeId={setTypeId} claims={claims} setClaims={setClaims} />
+            <RequestBuilder
+              types={types.data}
+              type={type}
+              setTypeId={setTypeId}
+              claims={claims}
+              setClaims={setClaims}
+            />
           </Panel>
           <div className="grid gap-6 lg:grid-cols-2">
             <Panel title="Ask a wallet (OpenID4VP)" className="border-t-4 border-t-present">

@@ -14,7 +14,8 @@ export class Sealer {
 
   constructor(base64Key: string) {
     const key = Buffer.from(base64Key, "base64");
-    if (key.length !== 32) throw new Error("EVENT_ENCRYPTION_KEY must be 32 bytes, base64-encoded (openssl rand -base64 32)");
+    if (key.length !== 32)
+      throw new Error("EVENT_ENCRYPTION_KEY must be 32 bytes, base64-encoded (openssl rand -base64 32)");
     this.key = key;
   }
 

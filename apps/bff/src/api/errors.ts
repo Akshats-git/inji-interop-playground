@@ -30,7 +30,13 @@ export class ApiError extends Error {
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ZodError) {
-    res.status(400).json({ error: "validation_failed", message: "Some fields are invalid.", issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })) });
+    res
+      .status(400)
+      .json({
+        error: "validation_failed",
+        message: "Some fields are invalid.",
+        issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+      });
     return;
   }
   if (err instanceof StudioError || err instanceof ApiError) {
@@ -38,24 +44,38 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     return;
   }
   if (err instanceof RunError) {
-    res.status(err.code.startsWith("unknown_") ? 404 : 400).json({ error: err.code, message: err.message, detail: err.detail });
+    res
+      .status(err.code.startsWith("unknown_") ? 404 : 400)
+      .json({ error: err.code, message: err.message, detail: err.detail });
     return;
   }
   if (err instanceof PartyError) {
-    res.status(err.code === "config_error" ? 400 : 502).json({ error: err.code, message: err.message, detail: err.detail });
+    res
+      .status(err.code === "config_error" ? 400 : 502)
+      .json({ error: err.code, message: err.message, detail: err.detail });
     return;
   }
   // The Reference Wallet could not do what it was asked: say why instead of "something went wrong".
   if (err instanceof PresentationError || err instanceof IssuanceError) {
-    res.status(422).json({ error: err.code, message: err.message, detail: err instanceof IssuanceError ? err.detail : undefined });
+    res
+      .status(422)
+      .json({
+        error: err.code,
+        message: err.message,
+        detail: err instanceof IssuanceError ? err.detail : undefined,
+      });
     return;
   }
   if (err instanceof EsignetError || err instanceof HostedError || err instanceof HostedVerifyError) {
-    res.status(err instanceof HostedError && err.code === "no_client" ? 400 : 502).json({ error: err.code, message: err.message });
+    res
+      .status(err instanceof HostedError && err.code === "no_client" ? 400 : 502)
+      .json({ error: err.code, message: err.message });
     return;
   }
   if (err instanceof HttpError) {
-    res.status(502).json({ error: err.code ?? "upstream_error", message: err.detail ?? err.message, detail: err.body });
+    res
+      .status(502)
+      .json({ error: err.code ?? "upstream_error", message: err.detail ?? err.message, detail: err.body });
     return;
   }
   if ((err as { code?: string })?.code === "unreachable") {

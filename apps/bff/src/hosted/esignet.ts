@@ -77,36 +77,103 @@ export async function signInAutomatically(
       cookies = [...cookies.split("; ").filter((x) => x && !x.startsWith(`${name}=`)), kv].join("; ");
     }
   };
-  const step = (title: string, labels: string[] = []) => ({ title, phase: "issuance" as const, from: "wallet" as const, to: "esignet" as const, labels: ["eSignet", ...labels] });
+  const step = (title: string, labels: string[] = []) => ({
+    title,
+    phase: "issuance" as const,
+    from: "wallet" as const,
+    to: "esignet" as const,
+    labels: ["eSignet", ...labels],
+  });
 
-  const csrf = await recordedFetch(rec.recorder, { url: `${api}/csrf/token`, runId: rec.runId, record: step("eSignet: CSRF token") });
+  const csrf = await recordedFetch(rec.recorder, {
+    url: `${api}/csrf/token`,
+    runId: rec.runId,
+    record: step("eSignet: CSRF token"),
+  });
   keep(csrf.headers);
   const xsrf = String((csrf.body as { token?: string })?.token ?? "");
   const now = () => new Date().toISOString().replace(/\.\d+Z$/, ".000Z");
-  const call = async (path: string, request: Record<string, unknown>, title: string, labels: string[], extra: Record<string, string> = {}) => {
-    const r = await recordedFetch(rec.recorder, { url: `${api}${path}`, json: { requestTime: now(), request }, headers: { "x-xsrf-token": xsrf, cookie: cookies, ...extra }, runId: rec.runId, record: step(title, labels) });
+  const call = async (
+    path: string,
+    request: Record<string, unknown>,
+    title: string,
+    labels: string[],
+    extra: Record<string, string> = {},
+  ) => {
+    const r = await recordedFetch(rec.recorder, {
+      url: `${api}${path}`,
+      json: { requestTime: now(), request },
+      headers: { "x-xsrf-token": xsrf, cookie: cookies, ...extra },
+      runId: rec.runId,
+      record: step(title, labels),
+    });
     keep(r.headers);
-    const body = r.body as { response?: Record<string, unknown> | null; errors?: { errorCode: string; errorMessage?: string }[] };
+    const body = r.body as {
+      response?: Record<string, unknown> | null;
+      errors?: { errorCode: string; errorMessage?: string }[];
+    };
     const err = body?.errors?.[0];
     if (r.status >= 400 || err || !body?.response) {
       const code = err?.errorCode ?? `http_${r.status}`;
-      throw new EsignetError(code, `eSignet refused "${title.replace(/^eSignet: /, "")}": ${code}${WHAT[code] ? ` (${WHAT[code]})` : ""}.`);
+      throw new EsignetError(
+        code,
+        `eSignet refused "${title.replace(/^eSignet: /, "")}": ${code}${WHAT[code] ? ` (${WHAT[code]})` : ""}.`,
+      );
     }
     return body.response;
   };
 
   const details = await call(
     "/authorization/v2/oauth-details",
-    { clientId: p.clientId, scope: p.scope, responseType: "code", redirectUri: p.redirectUri, display: "page", prompt: "login", acrValues: p.acrValues, nonce: p.nonce, state: p.state, claimsLocales: "en", codeChallenge: p.codeChallenge, codeChallengeMethod: "S256" },
+    {
+      clientId: p.clientId,
+      scope: p.scope,
+      responseType: "code",
+      redirectUri: p.redirectUri,
+      display: "page",
+      prompt: "login",
+      acrValues: p.acrValues,
+      nonce: p.nonce,
+      state: p.state,
+      claimsLocales: "en",
+      codeChallenge: p.codeChallenge,
+      codeChallengeMethod: "S256",
+    },
     "eSignet: start login (authorization request)",
     ["authorization_code", "PKCE S256", `scope ${p.scope}`],
   );
   const tx = String(details.transactionId);
   // eSignet ties the next calls to this transaction by its id and a hash of the oauth-details answer.
-  const bound = { "oauth-details-key": tx, "oauth-details-hash": createHash("sha256").update(JSON.stringify(details)).digest("base64url") };
-  await call("/authorization/send-otp", { transactionId: tx, individualId: p.individualId, otpChannels: ["email", "phone"] }, "eSignet: send OTP", ["demo identity"], bound);
-  await call("/authorization/v3/authenticate", { transactionId: tx, individualId: p.individualId, challengeList: [{ authFactorType: "OTP", challenge: p.otp, format: "alpha-numeric" }] }, "eSignet: sign in with the OTP", ["demo identity", "static test OTP"], bound);
-  const granted = await call("/authorization/auth-code", { transactionId: tx, acceptedClaims: [], permittedAuthorizeScopes: [p.scope] }, "eSignet: authorization code", [`redirect to ${p.redirectUri}`], bound);
-  if (granted.state !== p.state) throw new EsignetError("state_mismatch", "eSignet answered with a different state than the wallet sent.");
+  const bound = {
+    "oauth-details-key": tx,
+    "oauth-details-hash": createHash("sha256").update(JSON.stringify(details)).digest("base64url"),
+  };
+  await call(
+    "/authorization/send-otp",
+    { transactionId: tx, individualId: p.individualId, otpChannels: ["email", "phone"] },
+    "eSignet: send OTP",
+    ["demo identity"],
+    bound,
+  );
+  await call(
+    "/authorization/v3/authenticate",
+    {
+      transactionId: tx,
+      individualId: p.individualId,
+      challengeList: [{ authFactorType: "OTP", challenge: p.otp, format: "alpha-numeric" }],
+    },
+    "eSignet: sign in with the OTP",
+    ["demo identity", "static test OTP"],
+    bound,
+  );
+  const granted = await call(
+    "/authorization/auth-code",
+    { transactionId: tx, acceptedClaims: [], permittedAuthorizeScopes: [p.scope] },
+    "eSignet: authorization code",
+    [`redirect to ${p.redirectUri}`],
+    bound,
+  );
+  if (granted.state !== p.state)
+    throw new EsignetError("state_mismatch", "eSignet answered with a different state than the wallet sent.");
   return String(granted.code);
 }

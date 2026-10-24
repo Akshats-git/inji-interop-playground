@@ -69,7 +69,10 @@ const REFRESH_MS = 15 * 60_000;
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
 
 async function getJson(url: string, timeoutMs = 15_000): Promise<Json> {
-  const res = await fetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(timeoutMs) });
+  const res = await fetch(url, {
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   if (!res.ok) throw new Error(`${url} answered HTTP ${res.status}`);
   return (await res.json()) as Json;
 }
@@ -84,7 +87,10 @@ const loader = makeDocumentLoader(async (url) => {
 /** The expanded IRI of a JSON-LD type under the given contexts, which DCQL's type_values need. */
 export async function expandType(context: unknown, typeName: string): Promise<string | undefined> {
   try {
-    const expanded = (await jsonld.expand({ "@context": context, "@id": "urn:x", "@type": typeName }, { documentLoader: loader })) as { "@type"?: string[] }[];
+    const expanded = (await jsonld.expand(
+      { "@context": context, "@id": "urn:x", "@type": typeName },
+      { documentLoader: loader },
+    )) as { "@type"?: string[] }[];
     const iri = expanded[0]?.["@type"]?.[0];
     return iri && iri !== typeName ? iri : undefined;
   } catch {
@@ -99,21 +105,32 @@ export function claimsOf(config: Json): CatalogField[] {
     if (!name || out.some((f) => f.name === name) || out.length >= 30) return;
     out.push({ name, label: display?.[0]?.name ?? name, kind: "text", selectivelyDisclosable: true });
   };
-  const meta = config.credential_metadata as { claims?: { path?: unknown[]; display?: { name?: string }[] }[] } | undefined;
-  for (const c of meta?.claims ?? []) add(String((c.path ?? []).filter((x) => typeof x === "string").pop() ?? ""), c.display);
-  const subject = ((config.credential_definition as Json | undefined)?.credentialSubject ?? config.claims) as Json | unknown[] | undefined;
-  if (Array.isArray(subject)) for (const c of subject as { path?: unknown[]; display?: { name?: string }[] }[]) add(String((c.path ?? []).filter((x) => typeof x === "string").pop() ?? ""), c.display);
-  else if (subject && typeof subject === "object") for (const [k, v] of Object.entries(subject)) add(k, (v as { display?: { name?: string }[] })?.display);
+  const meta = config.credential_metadata as
+    { claims?: { path?: unknown[]; display?: { name?: string }[] }[] } | undefined;
+  for (const c of meta?.claims ?? [])
+    add(String((c.path ?? []).filter((x) => typeof x === "string").pop() ?? ""), c.display);
+  const subject = ((config.credential_definition as Json | undefined)?.credentialSubject ?? config.claims) as
+    Json | unknown[] | undefined;
+  if (Array.isArray(subject))
+    for (const c of subject as { path?: unknown[]; display?: { name?: string }[] }[])
+      add(String((c.path ?? []).filter((x) => typeof x === "string").pop() ?? ""), c.display);
+  else if (subject && typeof subject === "object")
+    for (const [k, v] of Object.entries(subject)) add(k, (v as { display?: { name?: string }[] })?.display);
   return out;
 }
 
 const displayOf = (config: Json) =>
-  ((config.display as { name?: string }[] | undefined) ?? ((config.credential_metadata as Json | undefined)?.display as { name?: string }[] | undefined))?.[0]?.name;
+  ((config.display as { name?: string }[] | undefined) ??
+    ((config.credential_metadata as Json | undefined)?.display as { name?: string }[] | undefined))?.[0]
+    ?.name;
 
 export class HostedService {
   private state = new Map<string, EnvState>();
   private keys = new Map<string, { jwk?: JWK; problem?: string }>();
-  private pending = new Map<string, { resolve: (code: string) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }>();
+  private pending = new Map<
+    string,
+    { resolve: (code: string) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
+  >();
   private verifyClients = new Map<string, HostedVerifyClient>();
   private timer?: NodeJS.Timeout;
 
@@ -146,31 +163,63 @@ export class HostedService {
   }
 
   async refresh(): Promise<void> {
-    await Promise.all(this.environments.map((e) => this.refreshOne(e).catch((err) => log.warn({ env: e.id, err: (err as Error).message }, "hosted environment discovery failed"))));
+    await Promise.all(
+      this.environments.map((e) =>
+        this.refreshOne(e).catch((err) =>
+          log.warn({ env: e.id, err: (err as Error).message }, "hosted environment discovery failed"),
+        ),
+      ),
+    );
   }
 
   private async refreshOne(e: EnvironmentInput) {
     const st = this.state.get(e.id)!;
     // Issuers named in the parties file, in the shape of a Mimoto entry, then Mimoto's own list.
-    let list: Json[] = e.issuers.map((i) => ({ issuer_id: i.id, display: [{ name: i.name }], credential_issuer_host: i.credentialIssuer, listedBy: "parties file" }));
+    let list: Json[] = e.issuers.map((i) => ({
+      issuer_id: i.id,
+      display: [{ name: i.name }],
+      credential_issuer_host: i.credentialIssuer,
+      listedBy: "parties file",
+    }));
     if (e.mimoto) {
       try {
         const body = await getJson(`${e.mimoto.url.replace(/\/+$/, "")}/v1/mimoto/issuers`);
-        let listed = (((body.response as Json | undefined)?.issuers as Json[] | undefined) ?? []).filter((i) => String(i.protocol ?? "").toLowerCase() === "openid4vci" && String(i.enabled ?? "true") !== "false");
+        let listed = (((body.response as Json | undefined)?.issuers as Json[] | undefined) ?? []).filter(
+          (i) =>
+            String(i.protocol ?? "").toLowerCase() === "openid4vci" &&
+            String(i.enabled ?? "true") !== "false",
+        );
         if (e.mimoto.issuers) listed = listed.filter((i) => e.mimoto!.issuers!.includes(String(i.issuer_id)));
-        listed = listed.filter((i) => !e.mimoto!.exclude.includes(String(i.issuer_id)) && !list.some((x) => x.issuer_id === i.issuer_id));
-        st.mimoto = { ok: true, detail: `${listed.length} OpenID4VCI issuers listed by Mimoto${e.mimoto.exclude.length ? ` (${e.mimoto.exclude.length} left out by the parties file)` : ""}` };
+        listed = listed.filter(
+          (i) =>
+            !e.mimoto!.exclude.includes(String(i.issuer_id)) &&
+            !list.some((x) => x.issuer_id === i.issuer_id),
+        );
+        st.mimoto = {
+          ok: true,
+          detail: `${listed.length} OpenID4VCI issuers listed by Mimoto${e.mimoto.exclude.length ? ` (${e.mimoto.exclude.length} left out by the parties file)` : ""}`,
+        };
         list = [...list, ...listed.map((i) => ({ ...i, listedBy: "Mimoto" }))];
       } catch (err) {
-        st.mimoto = { ok: false, detail: `Mimoto's issuer list could not be read: ${(err as Error).message}` };
+        st.mimoto = {
+          ok: false,
+          detail: `Mimoto's issuer list could not be read: ${(err as Error).message}`,
+        };
       }
     }
     if (!list.length) return;
     const issuers = await Promise.all(list.map((i) => this.readIssuer(e, i)));
     // Issuers the parties file names come first (Collab's mock issuer, the one the PS2 brief points at), then Mimoto's.
-    st.issuers = issuers.sort((a, b) => Number(a.listedBy !== "parties file") - Number(b.listedBy !== "parties file") || a.name.localeCompare(b.name));
+    st.issuers = issuers.sort(
+      (a, b) =>
+        Number(a.listedBy !== "parties file") - Number(b.listedBy !== "parties file") ||
+        a.name.localeCompare(b.name),
+    );
     st.refreshedAt = new Date().toISOString();
-    log.info({ env: e.id, issuers: issuers.length, types: issuers.reduce((n, i) => n + i.types.length, 0) }, "hosted environment discovered");
+    log.info(
+      { env: e.id, issuers: issuers.length, types: issuers.reduce((n, i) => n + i.types.length, 0) },
+      "hosted environment discovered",
+    );
   }
 
   private async readIssuer(e: EnvironmentInput, entry: Json): Promise<HostedIssuer> {
@@ -193,39 +242,84 @@ export class HostedService {
       const authorizationServer = (metadata.authorization_servers as string[] | undefined)?.[0];
       const protocol = typeof metadata.nonce_endpoint === "string" ? "1.0" : "draft 13";
       const autoLogin = Boolean(authorizationServer && this.clientFor(e.id, authorizationServer));
-      const configs = Object.entries((metadata.credential_configurations_supported as Record<string, Json> | undefined) ?? {});
+      const configs = Object.entries(
+        (metadata.credential_configurations_supported as Record<string, Json> | undefined) ?? {},
+      );
       const types = await Promise.all(
         configs.map(async ([configId, c]): Promise<CatalogType> => {
           const format = String(c.format) as CredentialFormat;
           const def = (c.credential_definition ?? {}) as { type?: string[]; "@context"?: string[] };
           const typeName = def.type?.find((t) => t !== "VerifiableCredential");
-          const dataModel = format === "ldp_vc" ? (def["@context"]?.includes(W3C_V2) ? "2.0" : "1.1") : undefined;
+          const dataModel =
+            format === "ldp_vc" ? (def["@context"]?.includes(W3C_V2) ? "2.0" : "1.1") : undefined;
           const algs = ((c.credential_signing_alg_values_supported as string[] | undefined) ?? []).join(", ");
           const base = displayOf(c) ?? configId;
-          const suffix = format === "ldp_vc" ? ` (VCDM ${dataModel})` : isSdJwtFormat(format) ? " (SD-JWT)" : format === "mso_mdoc" ? " (mDoc)" : "";
+          const suffix =
+            format === "ldp_vc"
+              ? ` (VCDM ${dataModel})`
+              : isSdJwtFormat(format)
+                ? " (SD-JWT)"
+                : format === "mso_mdoc"
+                  ? " (mDoc)"
+                  : "";
           return {
             id: hostedTypeId(e.id, id, configId),
             origin: "hosted",
             issuerId: id,
             issuerName: name,
-            displayName: base.toLowerCase().includes(suffix.trim().slice(1, -1).toLowerCase()) ? base : `${base}${suffix}`,
+            displayName: base.toLowerCase().includes(suffix.trim().slice(1, -1).toLowerCase())
+              ? base
+              : `${base}${suffix}`,
             description: `${name}, an Inji Certify issuer on ${e.name} (OpenID4VCI ${protocol}). The holder signs in at ${authorizationServer ? new URL(authorizationServer).host : "the issuer"}; the claims come from that identity.`,
             format,
             dataModel,
             typeName,
-            typeIri: format === "ldp_vc" && typeName ? await expandType(def["@context"], typeName) : undefined,
+            typeIri:
+              format === "ldp_vc" && typeName ? await expandType(def["@context"], typeName) : undefined,
             vct: isSdJwtFormat(format) ? String(c.vct ?? "") || undefined : undefined,
-            proof: format === "ldp_vc" ? (/signature|20\d\d/i.test(algs) ? algs : `Data integrity (${algs || "issuer's choice"})`) : isSdJwtFormat(format) ? `SD-JWT ${algs || "issuer's choice"}` : `mDoc ${algs || ""}`.trim(),
+            proof:
+              format === "ldp_vc"
+                ? /signature|20\d\d/i.test(algs)
+                  ? algs
+                  : `Data integrity (${algs || "issuer's choice"})`
+                : isSdJwtFormat(format)
+                  ? `SD-JWT ${algs || "issuer's choice"}`
+                  : `mDoc ${algs || ""}`.trim(),
             fields: claimsOf(c),
             canIssue: autoLogin,
             configurationId: configId,
-            hosted: { environmentId: e.id, environmentName: e.name, credentialIssuer, scope: c.scope ? String(c.scope) : undefined, authorizationServer, protocol, autoLogin, claimsFromIdentity: true },
+            hosted: {
+              environmentId: e.id,
+              environmentName: e.name,
+              credentialIssuer,
+              scope: c.scope ? String(c.scope) : undefined,
+              authorizationServer,
+              protocol,
+              autoLogin,
+              claimsFromIdentity: true,
+            },
           };
         }),
       );
-      return { id, name, credentialIssuer, authorizationServer, protocol, types, note, listedBy: String(entry.listedBy ?? "Mimoto") };
+      return {
+        id,
+        name,
+        credentialIssuer,
+        authorizationServer,
+        protocol,
+        types,
+        note,
+        listedBy: String(entry.listedBy ?? "Mimoto"),
+      };
     } catch (err) {
-      return { id, name, credentialIssuer: String(entry.credential_issuer_host ?? ""), protocol: "draft 13", types: [], error: (err as Error).message };
+      return {
+        id,
+        name,
+        credentialIssuer: String(entry.credential_issuer_host ?? ""),
+        protocol: "draft 13",
+        types: [],
+        error: (err as Error).message,
+      };
     }
   }
 
@@ -263,7 +357,9 @@ export class HostedService {
   }
 
   /** The hosted verifier behind a verifier id, with its API client. */
-  verifier(id: string): { env: EnvironmentInput; info: VerifierInfo; client: HostedVerifyClient } | undefined {
+  verifier(
+    id: string,
+  ): { env: EnvironmentInput; info: VerifierInfo; client: HostedVerifyClient } | undefined {
     const info = this.verifiers().find((v) => v.id === id);
     const env = info && this.environment(info.environmentId!);
     const client = env && this.verifyClients.get(env.id);
@@ -296,10 +392,16 @@ export class HostedService {
     if (!e.client) return { problem: "No OAuth client is configured for this environment." };
     const cached = this.keys.get(e.id);
     if (cached?.jwk) return cached;
-    const file = isAbsolute(e.client.privateKeyFile) ? e.client.privateKeyFile : resolve(this.dir, e.client.privateKeyFile);
+    const file = isAbsolute(e.client.privateKeyFile)
+      ? e.client.privateKeyFile
+      : resolve(this.dir, e.client.privateKeyFile);
     let k: { jwk?: JWK; problem?: string };
     try {
-      k = existsSync(file) ? { jwk: createPrivateKey(readFileSync(file, "utf8")).export({ format: "jwk" }) as JWK } : { problem: `The client key ${e.client.privateKeyFile} has not been fetched yet (./playground.sh up does it).` };
+      k = existsSync(file)
+        ? { jwk: createPrivateKey(readFileSync(file, "utf8")).export({ format: "jwk" }) as JWK }
+        : {
+            problem: `The client key ${e.client.privateKeyFile} has not been fetched yet (./playground.sh up does it).`,
+          };
     } catch (err) {
       k = { problem: `The client key could not be read: ${(err as Error).message}` };
     }
@@ -310,9 +412,12 @@ export class HostedService {
   /** The OAuth client the Reference Wallet can use at this authorization server, if it is registered there. */
   clientFor(envId: string, authorizationServer: string): WalletClient | undefined {
     const e = this.environment(envId);
-    if (!e?.client || !e.client.authorizationServers.some((a) => sameOrigin(a, authorizationServer))) return undefined;
+    if (!e?.client || !e.client.authorizationServers.some((a) => sameOrigin(a, authorizationServer)))
+      return undefined;
     const { jwk } = this.key(e);
-    return jwk ? { clientId: e.client.clientId, redirectUri: e.client.redirectUri, privateJwk: jwk } : undefined;
+    return jwk
+      ? { clientId: e.client.clientId, redirectUri: e.client.redirectUri, privateJwk: jwk }
+      : undefined;
   }
 
   clientProblem(envId: string): string | undefined {
@@ -323,18 +428,53 @@ export class HostedService {
   /** Demo identities that can sign in at this authorization server. */
   identities(envId: string, authorizationServer?: string): TestIdentity[] {
     const e = this.environment(envId);
-    return (e?.testData.identities ?? []).filter((i) => !i.authorizationServers || !authorizationServer || i.authorizationServers.some((a) => sameOrigin(a, authorizationServer)));
+    return (e?.testData.identities ?? []).filter(
+      (i) =>
+        !i.authorizationServers ||
+        !authorizationServer ||
+        i.authorizationServers.some((a) => sameOrigin(a, authorizationServer)),
+    );
   }
 
   /** Sign in without a person: a demo identity and the environment's static OTP, through eSignet's own API. */
-  async signInAutomatically(envId: string, p: SignIn, opts: { individualId?: string; runId?: string | null }): Promise<string> {
+  async signInAutomatically(
+    envId: string,
+    p: SignIn,
+    opts: { individualId?: string; runId?: string | null },
+  ): Promise<string> {
     const e = this.environment(envId);
     const client = this.clientFor(envId, p.authorizationServer);
-    if (!e || !client) throw new HostedError("no_client", `The Reference Wallet has no OAuth client at ${p.authorizationServer}. ${this.clientProblem(envId) ?? "Its client is registered only at the servers listed in the parties file."}`);
-    if (!e.testData.otp) throw new HostedError("no_test_otp", `${e.name} publishes no static test OTP in the parties file, so the wallet cannot sign in by itself. Sign in yourself instead.`);
+    if (!e || !client)
+      throw new HostedError(
+        "no_client",
+        `The Reference Wallet has no OAuth client at ${p.authorizationServer}. ${this.clientProblem(envId) ?? "Its client is registered only at the servers listed in the parties file."}`,
+      );
+    if (!e.testData.otp)
+      throw new HostedError(
+        "no_test_otp",
+        `${e.name} publishes no static test OTP in the parties file, so the wallet cannot sign in by itself. Sign in yourself instead.`,
+      );
     const individualId = opts.individualId ?? this.identities(envId, p.authorizationServer)[0]?.id;
-    if (!individualId) throw new HostedError("no_identity", `No demo identity for ${p.authorizationServer} in the parties file.`);
-    return signInAutomatically(p.authorizationServer, { clientId: client.clientId, redirectUri: client.redirectUri, scope: p.scope, state: p.state, nonce: p.nonce, codeChallenge: p.codeChallenge, acrValues: e.client!.acrValues, individualId, otp: e.testData.otp }, { recorder: this.recorder, runId: opts.runId });
+    if (!individualId)
+      throw new HostedError(
+        "no_identity",
+        `No demo identity for ${p.authorizationServer} in the parties file.`,
+      );
+    return signInAutomatically(
+      p.authorizationServer,
+      {
+        clientId: client.clientId,
+        redirectUri: client.redirectUri,
+        scope: p.scope,
+        state: p.state,
+        nonce: p.nonce,
+        codeChallenge: p.codeChallenge,
+        acrValues: e.client!.acrValues,
+        individualId,
+        otp: e.testData.otp,
+      },
+      { recorder: this.recorder, runId: opts.runId },
+    );
   }
 
   /**
@@ -344,8 +484,21 @@ export class HostedService {
   startInteractive(envId: string, p: SignIn): { url: string; code: Promise<string> } {
     const e = this.environment(envId);
     const client = this.clientFor(envId, p.authorizationServer);
-    if (!e || !client) throw new HostedError("no_client", `The Reference Wallet has no OAuth client at ${p.authorizationServer}. ${this.clientProblem(envId) ?? ""}`.trim());
-    const url = authorizeUrl({ authorizationEndpoint: p.authorizationEndpoint, clientId: client.clientId, redirectUri: client.redirectUri, scope: p.scope, state: p.state, nonce: p.nonce, codeChallenge: p.codeChallenge, acrValues: e.client!.acrValues });
+    if (!e || !client)
+      throw new HostedError(
+        "no_client",
+        `The Reference Wallet has no OAuth client at ${p.authorizationServer}. ${this.clientProblem(envId) ?? ""}`.trim(),
+      );
+    const url = authorizeUrl({
+      authorizationEndpoint: p.authorizationEndpoint,
+      clientId: client.clientId,
+      redirectUri: client.redirectUri,
+      scope: p.scope,
+      state: p.state,
+      nonce: p.nonce,
+      codeChallenge: p.codeChallenge,
+      acrValues: e.client!.acrValues,
+    });
     const code = new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(p.state);
@@ -358,13 +511,22 @@ export class HostedService {
   }
 
   /** eSignet sent the browser back: hand the code (or the error) to the waiting sign-in. */
-  completeInteractive(state: string, answer: { code?: string; error?: string; description?: string }): boolean {
+  completeInteractive(
+    state: string,
+    answer: { code?: string; error?: string; description?: string },
+  ): boolean {
     const p = this.pending.get(state);
     if (!p) return false;
     this.pending.delete(state);
     clearTimeout(p.timer);
     if (answer.code) p.resolve(answer.code);
-    else p.reject(new HostedError(answer.error ?? "access_denied", `eSignet did not sign the holder in: ${answer.error ?? "no code"}${answer.description ? ` (${answer.description})` : ""}.`));
+    else
+      p.reject(
+        new HostedError(
+          answer.error ?? "access_denied",
+          `eSignet did not sign the holder in: ${answer.error ?? "no code"}${answer.description ? ` (${answer.description})` : ""}.`,
+        ),
+      );
     return true;
   }
 
@@ -431,9 +593,25 @@ export class HostedService {
         version: e.version,
         mimoto: e.mimoto && { url: e.mimoto.url, ...st.mimoto },
         refreshedAt: st.refreshedAt,
-        issuers: st.issuers.map((i) => ({ id: i.id, name: i.name, credentialIssuer: i.credentialIssuer, authorizationServer: i.authorizationServer, protocol: i.protocol, listedBy: i.listedBy, note: i.note, error: i.error, types: i.types })),
+        issuers: st.issuers.map((i) => ({
+          id: i.id,
+          name: i.name,
+          credentialIssuer: i.credentialIssuer,
+          authorizationServer: i.authorizationServer,
+          protocol: i.protocol,
+          listedBy: i.listedBy,
+          note: i.note,
+          error: i.error,
+          types: i.types,
+        })),
         verifier: e.verify ? this.verifiers().find((v) => v.environmentId === e.id) : undefined,
-        client: e.client && { clientId: e.client.clientId, redirectUri: e.client.redirectUri, authorizationServers: e.client.authorizationServers, ready: !problem, problem },
+        client: e.client && {
+          clientId: e.client.clientId,
+          redirectUri: e.client.redirectUri,
+          authorizationServers: e.client.authorizationServers,
+          ready: !problem,
+          problem,
+        },
         testData: e.testData,
       };
     });

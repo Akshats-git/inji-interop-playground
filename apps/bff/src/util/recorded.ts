@@ -24,7 +24,10 @@ export interface RecordedResponse {
   headers: Headers;
 }
 
-export async function recordedFetch(recorder: Recorder | undefined, c: RecordedCall): Promise<RecordedResponse> {
+export async function recordedFetch(
+  recorder: Recorder | undefined,
+  c: RecordedCall,
+): Promise<RecordedResponse> {
   const headers: Record<string, string> = { accept: "application/json", ...c.headers };
   let payload: string | undefined;
   let requestBody: unknown;
@@ -42,10 +45,19 @@ export async function recordedFetch(recorder: Recorder | undefined, c: RecordedC
   const started = performance.now();
   let res: Response;
   try {
-    res = await fetch(c.url, { method, headers, body: payload, redirect: "manual", signal: AbortSignal.timeout(c.timeoutMs ?? 30_000) });
+    res = await fetch(c.url, {
+      method,
+      headers,
+      body: payload,
+      redirect: "manual",
+      signal: AbortSignal.timeout(c.timeoutMs ?? 30_000),
+    });
   } catch (e) {
     const cause = (e as { cause?: { code?: string } }).cause?.code;
-    throw Object.assign(new Error(`${new URL(c.url).host} is not reachable (${cause ?? (e as Error).message}).`), { code: "unreachable" });
+    throw Object.assign(
+      new Error(`${new URL(c.url).host} is not reachable (${cause ?? (e as Error).message}).`),
+      { code: "unreachable" },
+    );
   }
   const text = await res.text();
   let body: unknown;
@@ -67,7 +79,13 @@ export async function recordedFetch(recorder: Recorder | undefined, c: RecordedC
     runId: c.runId ?? null,
     requestHeaders: headers,
     responseHeaders: Object.fromEntries(res.headers),
-    external: { title: c.record.title, phase: c.record.phase, from: c.record.from, to: c.record.to, labels: c.record.labels },
+    external: {
+      title: c.record.title,
+      phase: c.record.phase,
+      from: c.record.from,
+      to: c.record.to,
+      labels: c.record.labels,
+    },
   });
   return { status: res.status, body: body ?? text, text, headers: res.headers };
 }

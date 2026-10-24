@@ -26,13 +26,21 @@ import { walletHttp } from "./reference/wallet/http.js";
 import { Orchestrator } from "./runs/orchestrator.js";
 import { call } from "./util/http.js";
 
-export function createApp(config: Config, store: Store, parties: PartiesService = PartiesService.fromFile(config.partiesFile)) {
+export function createApp(
+  config: Config,
+  store: Store,
+  parties: PartiesService = PartiesService.fromFile(config.partiesFile),
+) {
   const publicBaseUrl = () => config.publicBaseUrl;
   const recorder = new Recorder(store);
   const certify = new CertifyClient(config.certifyUrl, recorder);
   const studio = new StudioService(store, certify, publicBaseUrl);
   // Hosted Inji deployments (MOSIP Collab) from the parties file; key files are relative to that file.
-  const hosted = new HostedService(parties.environments, parties.loaded.file ? dirname(parties.loaded.file) : process.cwd(), recorder);
+  const hosted = new HostedService(
+    parties.environments,
+    parties.loaded.file ? dirname(parties.loaded.file) : process.cwd(),
+    recorder,
+  );
   const wallet = new ReferenceWallet(store, { publicBaseUrl, selfUrl: config.selfUrl }, recorder);
   wallet.partyOf = (url) => hosted.partyOf(url);
   const injiVerify = new InjiVerifyClient(`${config.selfUrl}/pub/verify/v1/verify`, config.publicBaseUrl);
@@ -40,19 +48,47 @@ export function createApp(config: Config, store: Store, parties: PartiesService 
   // The Reference Verifier fetches public documents like any outside party would (through the gateway),
   // and trusts as SD-JWT issuers the playground's Certify (by its published JWKS) plus the external issuers whose
   // keys the parties file lists.
-  const verifierHttp = walletHttp({ publicBaseUrl: config.publicBaseUrl, selfUrl: config.selfUrl, actor: "reference-verifier", recorder, partyOf: (url) => hosted.partyOf(url) });
+  const verifierHttp = walletHttp({
+    publicBaseUrl: config.publicBaseUrl,
+    selfUrl: config.selfUrl,
+    actor: "reference-verifier",
+    recorder,
+    partyOf: (url) => hosted.partyOf(url),
+  });
   let jwksCache: { at: number; keys: JWK[] } | undefined;
-  const refVerifier = new ReferenceVerifier(publicBaseUrl, {
-    fetchJson: (url) => verifierHttp.getJson(url),
-    resolveDidWeb: (did) => wallet.resolveDidWeb(did),
-    trustedIssuerJwks: async () => {
-      // One unreachable source (the bundled Certify still booting) must not hide the others' keys.
-      if (!jwksCache || Date.now() - jwksCache.at > 60_000)
-        jwksCache = { at: Date.now(), keys: await call<{ keys: JWK[] }>(`${config.certifyUrl}/v1/certify/.well-known/jwks.json`, { timeoutMs: 5000 }).then((r) => r.body.keys, () => []) };
-      return [...jwksCache.keys, ...(await parties.trustedJwks()), ...(await hosted.trustedJwks())];
+  const refVerifier = new ReferenceVerifier(
+    publicBaseUrl,
+    {
+      fetchJson: (url) => verifierHttp.getJson(url),
+      resolveDidWeb: (did) => wallet.resolveDidWeb(did),
+      trustedIssuerJwks: async () => {
+        // One unreachable source (the bundled Certify still booting) must not hide the others' keys.
+        if (!jwksCache || Date.now() - jwksCache.at > 60_000)
+          jwksCache = {
+            at: Date.now(),
+            keys: await call<{ keys: JWK[] }>(`${config.certifyUrl}/v1/certify/.well-known/jwks.json`, {
+              timeoutMs: 5000,
+            }).then(
+              (r) => r.body.keys,
+              () => [],
+            ),
+          };
+        return [...jwksCache.keys, ...(await parties.trustedJwks()), ...(await hosted.trustedJwks())];
+      },
     },
-  }, recorder);
-  const orchestrator = new Orchestrator({ store, recorder, studio, wallet, refVerifier, injiVerify, parties, hosted, verifyDid: config.verifyDid });
+    recorder,
+  );
+  const orchestrator = new Orchestrator({
+    store,
+    recorder,
+    studio,
+    wallet,
+    refVerifier,
+    injiVerify,
+    parties,
+    hosted,
+    verifyDid: config.verifyDid,
+  });
 
   const app = express();
   app.disable("x-powered-by");
@@ -80,7 +116,13 @@ export function createApp(config: Config, store: Store, parties: PartiesService 
   // The built UI (single origin with the API and gateway). Client-side routes fall back to index.html.
   const uiDist = resolve(config.uiDist ?? join(import.meta.dirname, "../../ui/dist"));
   if (existsSync(uiDist)) {
-    app.use(express.static(uiDist, { index: false, maxAge: "1h", setHeaders: (res, path) => path.endsWith(".html") && res.setHeader("cache-control", "no-cache") }));
+    app.use(
+      express.static(uiDist, {
+        index: false,
+        maxAge: "1h",
+        setHeaders: (res, path) => path.endsWith(".html") && res.setHeader("cache-control", "no-cache"),
+      }),
+    );
     app.get(/^\/(?!api|pub|ws).*/, (_req, res) => res.sendFile(join(uiDist, "index.html")));
   }
 

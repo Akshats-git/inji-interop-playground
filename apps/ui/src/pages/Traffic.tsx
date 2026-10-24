@@ -28,7 +28,9 @@ function LiveFeed() {
     (m: { type: string; event?: EventSummary }) => {
       if (m.type !== "event" || !m.event) return;
       const e = m.event;
-      qc.setQueryData<EventSummary[]>(["events", "all"], (old = []) => (old.some((x) => x.id === e.id) ? old : [...old, e].slice(-KEEP)));
+      qc.setQueryData<EventSummary[]>(["events", "all"], (old = []) =>
+        old.some((x) => x.id === e.id) ? old : [...old, e].slice(-KEEP),
+      );
     },
     [qc],
   );
@@ -37,14 +39,23 @@ function LiveFeed() {
   // Pausing freezes what is on screen; new messages keep arriving underneath.
   useEffect(() => setFrozen(paused ? (q.data ?? []) : null), [paused]); // eslint-disable-line react-hooks/exhaustive-deps
   const all = frozen ?? q.data ?? [];
-  const shown = useMemo(() => all.filter((e) => phases.has(e.phase) && (!failuresOnly || isFailedEvent(e))), [all, phases, failuresOnly]);
+  const shown = useMemo(
+    () => all.filter((e) => phases.has(e.phase) && (!failuresOnly || isFailedEvent(e))),
+    [all, phases, failuresOnly],
+  );
   const behind = frozen ? (q.data?.length ?? 0) - frozen.length : 0;
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <span className="flex items-center gap-2 text-sm font-bold" aria-live="polite">
-          <span className={cx("inline-block size-2.5 rounded-full", connected ? "bg-pass motion-safe:animate-pulse" : "bg-muted")} aria-hidden />
+          <span
+            className={cx(
+              "inline-block size-2.5 rounded-full",
+              connected ? "bg-pass motion-safe:animate-pulse" : "bg-muted",
+            )}
+            aria-hidden
+          />
           {connected ? (paused ? "Paused" : "Live") : "Reconnecting…"}
         </span>
         <fieldset className="flex flex-wrap gap-1.5">
@@ -52,7 +63,17 @@ function LiveFeed() {
           {PHASES.map((p) => {
             const on = phases.has(p.id);
             return (
-              <label key={p.id} className={cx("cursor-pointer rounded-full border px-3 py-1 text-sm font-bold transition-colors duration-150 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[var(--focus)]", on ? (p.id === "issuance" || p.id === "setup" ? "border-issue bg-issue-soft text-issue" : "border-present bg-present-soft text-present-ink") : "border-hairline text-muted")}>
+              <label
+                key={p.id}
+                className={cx(
+                  "cursor-pointer rounded-full border px-3 py-1 text-sm font-bold transition-colors duration-150 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-[var(--focus)]",
+                  on
+                    ? p.id === "issuance" || p.id === "setup"
+                      ? "border-issue bg-issue-soft text-issue"
+                      : "border-present bg-present-soft text-present-ink"
+                    : "border-hairline text-muted",
+                )}
+              >
                 <input
                   type="checkbox"
                   className="sr-only"
@@ -73,7 +94,11 @@ function LiveFeed() {
           <input type="checkbox" checked={failuresOnly} onChange={(e) => setFailuresOnly(e.target.checked)} />
           Errors only
         </label>
-        <button className="ml-auto rounded-md border border-hairline bg-surface px-3 py-1 text-sm font-bold hover:border-ink" onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
+        <button
+          className="ml-auto rounded-md border border-hairline bg-surface px-3 py-1 text-sm font-bold hover:border-ink"
+          onClick={() => setPaused((p) => !p)}
+          aria-pressed={paused}
+        >
           {paused ? (behind > 0 ? `Resume (${behind} new)` : "Resume") : "Pause"}
         </button>
       </div>
@@ -84,14 +109,21 @@ function LiveFeed() {
         </p>
       ) : !all.length ? (
         <Empty title="No traffic yet">
-          Every request that passes through the gateway shows up here as it happens. <Link to="/" className="text-issue underline">Start a run</Link> or point a wallet at an offer.
+          Every request that passes through the gateway shows up here as it happens.{" "}
+          <Link to="/" className="text-issue underline">
+            Start a run
+          </Link>{" "}
+          or point a wallet at an offer.
         </Empty>
       ) : !shown.length ? (
         <Empty title="Nothing matches these filters">Turn a phase back on, or clear Errors only.</Empty>
       ) : (
         <Inspector events={shown} newestFirst />
       )}
-      <p className="text-sm text-muted">Showing the latest {Math.min(all.length, KEEP)} messages from every run and from wallets acting on their own. Open a run to see its messages alone.</p>
+      <p className="text-sm text-muted">
+        Showing the latest {Math.min(all.length, KEEP)} messages from every run and from wallets acting on
+        their own. Open a run to see its messages alone.
+      </p>
     </div>
   );
 }
@@ -125,7 +157,9 @@ function DecodedInput({ s }: { s: Sniffed & { raw: string } }) {
           <p>
             {s.value.byReference ? (
               <>
-                The offer is passed <strong>by reference</strong>: the QR code holds only a link, and the wallet downloads the offer from <code className="font-mono break-all">{s.value.credentialOfferUri}</code>.
+                The offer is passed <strong>by reference</strong>: the QR code holds only a link, and the
+                wallet downloads the offer from{" "}
+                <code className="font-mono break-all">{s.value.credentialOfferUri}</code>.
               </>
             ) : (
               <>
@@ -133,31 +167,57 @@ function DecodedInput({ s }: { s: Sniffed & { raw: string } }) {
               </>
             )}
           </p>
-          {s.value.credentialOffer && <JsonView value={s.value.credentialOffer} highlight={(k) => k === "pre-authorized_code" || k === "tx_code"} />}
+          {s.value.credentialOffer && (
+            <JsonView
+              value={s.value.credentialOffer}
+              highlight={(k) => k === "pre-authorized_code" || k === "tx_code"}
+            />
+          )}
           <Link to={`/wallet?offer=${encodeURIComponent(s.raw)}`} className="font-bold text-issue underline">
             Collect it with the Reference Wallet
           </Link>
         </div>
       );
     case "authorization-request": {
-      const params = Object.fromEntries(Object.entries(s.value).map(([k, v]) => [k, k === "presentation_definition" || k === "dcql_query" || k === "client_metadata" ? parseMaybe(v) : v]));
+      const params = Object.fromEntries(
+        Object.entries(s.value).map(([k, v]) => [
+          k,
+          k === "presentation_definition" || k === "dcql_query" || k === "client_metadata"
+            ? parseMaybe(v)
+            : v,
+        ]),
+      );
       return (
         <div className="flex flex-col gap-3 text-sm">
           <p>
             {s.value.request_uri ? (
               <>
-                The request is passed <strong>by reference</strong>. The wallet fetches the full request object from <code className="font-mono break-all">{s.value.request_uri}</code>
+                The request is passed <strong>by reference</strong>. The wallet fetches the full request
+                object from <code className="font-mono break-all">{s.value.request_uri}</code>
                 {s.value.request_uri_method === "post" ? " with a POST." : "."}
               </>
             ) : (
               <>
-                The request is passed <strong>by value</strong>, with the query in the link itself ({s.value.dcql_query ? "DCQL" : s.value.presentation_definition ? "Presentation Exchange" : "no query found"}).
+                The request is passed <strong>by value</strong>, with the query in the link itself (
+                {s.value.dcql_query
+                  ? "DCQL"
+                  : s.value.presentation_definition
+                    ? "Presentation Exchange"
+                    : "no query found"}
+                ).
               </>
             )}{" "}
-            It comes from <code className="font-mono break-all">{s.value.client_id ?? "an unnamed verifier"}</code>.
+            It comes from{" "}
+            <code className="font-mono break-all">{s.value.client_id ?? "an unnamed verifier"}</code>.
           </p>
-          <JsonView value={params} highlight={(k) => ["client_id", "request_uri", "nonce", "response_uri"].includes(k)} />
-          <Link to={`/wallet?request=${encodeURIComponent(s.raw)}`} className="font-bold text-issue underline">
+          <JsonView
+            value={params}
+            highlight={(k) => ["client_id", "request_uri", "nonce", "response_uri"].includes(k)}
+          />
+          <Link
+            to={`/wallet?request=${encodeURIComponent(s.raw)}`}
+            className="font-bold text-issue underline"
+          >
             Answer it with the Reference Wallet
           </Link>
         </div>
@@ -167,15 +227,21 @@ function DecodedInput({ s }: { s: Sniffed & { raw: string } }) {
       const o = s.value as Record<string, unknown> | null;
       const types = o && typeof o === "object" ? ([] as unknown[]).concat(o.type ?? []) : [];
       if (types.includes("VerifiablePresentation")) return <Decoded kind="vp" value={o} path="$" />;
-      if (o && typeof o === "object" && o.credentialSubject && o.proof) return <Decoded kind="vc" value={o} path="$" />;
+      if (o && typeof o === "object" && o.credentialSubject && o.proof)
+        return <Decoded kind="vc" value={o} path="$" />;
       return <JsonView value={s.value} />;
     }
     default:
-      return <p className="text-sm text-muted">This does not look like a JWT, SD-JWT, offer, OpenID4VP request, JSON or PixelPass text.</p>;
+      return (
+        <p className="text-sm text-muted">
+          This does not look like a JWT, SD-JWT, offer, OpenID4VP request, JSON or PixelPass text.
+        </p>
+      );
   }
 }
 
-type Result = (Sniffed & { raw: string }) | { kind: "pixelpass"; raw: string; inner: Sniffed & { raw: string } };
+type Result =
+  (Sniffed & { raw: string }) | { kind: "pixelpass"; raw: string; inner: Sniffed & { raw: string } };
 
 function Decoder() {
   const [input, setInput] = useState("");
@@ -193,7 +259,8 @@ function Decoder() {
       import("@injistack/pixelpass")
         .then(({ decode }) => {
           const inner = decode(text);
-          if (mine === seq.current) setResult({ kind: "pixelpass", raw: text, inner: { ...sniff(inner), raw: inner } });
+          if (mine === seq.current)
+            setResult({ kind: "pixelpass", raw: text, inner: { ...sniff(inner), raw: inner } });
         })
         .catch(() => mine === seq.current && setResult({ ...s, raw: text }));
     } else setResult({ ...s, raw: text });
@@ -205,12 +272,24 @@ function Decoder() {
         <label htmlFor="decode-input" className="text-sm font-bold">
           Paste a token, link or credential
         </label>
-        <Textarea id="decode-input" value={input} onChange={(e) => setInput(e.target.value)} spellCheck={false} placeholder="eyJhbGciOi…, openid-credential-offer://…, openid4vp://…, a credential's JSON, or PixelPass QR text" className="min-h-64" />
-        <p className="text-sm text-muted">Decoding happens in your browser. Nothing you paste here is sent or stored.</p>
+        <Textarea
+          id="decode-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          spellCheck={false}
+          placeholder="eyJhbGciOi…, openid-credential-offer://…, openid4vp://…, a credential's JSON, or PixelPass QR text"
+          className="min-h-64"
+        />
+        <p className="text-sm text-muted">
+          Decoding happens in your browser. Nothing you paste here is sent or stored.
+        </p>
       </div>
       <div aria-live="polite" className="min-w-0">
         {!result ? (
-          <Empty title="Decoded output appears here">The decoder recognises SD-JWTs, JWTs, credential offers, OpenID4VP requests, credentials, presentations and PixelPass QR text.</Empty>
+          <Empty title="Decoded output appears here">
+            The decoder recognises SD-JWTs, JWTs, credential offers, OpenID4VP requests, credentials,
+            presentations and PixelPass QR text.
+          </Empty>
         ) : (
           <div className="flex flex-col gap-3">
             <p className="text-sm">
@@ -229,13 +308,19 @@ function Decoder() {
 export default function TrafficPage() {
   return (
     <>
-      <PageHeader title="Live traffic" lede="Every protocol message crossing the playground's gateway, from any run or any wallet, as it happens. Secrets stay masked unless you reveal them on this computer." />
+      <PageHeader
+        title="Live traffic"
+        lede="Every protocol message crossing the playground's gateway, from any run or any wallet, as it happens. Secrets stay masked unless you reveal them on this computer."
+      />
       <div className="flex flex-col gap-6">
         <LiveFeed />
         <Panel title="Decoder">
           <Decoder />
         </Panel>
-        <Notice>Paste only synthetic test data. Real credentials and tokens belong to real people, even in a playground.</Notice>
+        <Notice>
+          Paste only synthetic test data. Real credentials and tokens belong to real people, even in a
+          playground.
+        </Notice>
       </div>
     </>
   );

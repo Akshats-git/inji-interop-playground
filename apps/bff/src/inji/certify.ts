@@ -13,7 +13,15 @@ export interface IssuerMetadata {
 
 export interface DidDocument {
   id: string;
-  verificationMethod?: { id: string; type: string; controller?: string; publicKeyMultibase?: string; publicKeyJwk?: Record<string, unknown>; publicKeyPem?: string; "@context"?: unknown }[];
+  verificationMethod?: {
+    id: string;
+    type: string;
+    controller?: string;
+    publicKeyMultibase?: string;
+    publicKeyJwk?: Record<string, unknown>;
+    publicKeyPem?: string;
+    "@context"?: unknown;
+  }[];
   [k: string]: unknown;
 }
 
@@ -31,7 +39,10 @@ export class CertifyClient {
     try {
       // Certify answers /actuator/health with HTTP 200 and an authentication-error envelope, so probe the
       // public issuer metadata instead.
-      const r = await call<{ credential_issuer?: string }>(this.url("/.well-known/openid-credential-issuer"), { timeoutMs: 3000 });
+      const r = await call<{ credential_issuer?: string }>(
+        this.url("/.well-known/openid-credential-issuer"),
+        { timeoutMs: 3000 },
+      );
       return Boolean(r.body.credential_issuer);
     } catch {
       return false;
@@ -52,29 +63,62 @@ export class CertifyClient {
 
   async getConfiguration(id: string): Promise<Record<string, unknown> | undefined> {
     try {
-      return (await call<Record<string, unknown>>(this.url(`/credential-configurations/${encodeURIComponent(id)}`))).body;
+      return (
+        await call<Record<string, unknown>>(this.url(`/credential-configurations/${encodeURIComponent(id)}`))
+      ).body;
     } catch (e) {
-      if (e instanceof HttpError && (e.status === 404 || e.status === 400 || e.code === "credential_configuration_not_found" || e.code === "invalid_request")) return undefined;
+      if (
+        e instanceof HttpError &&
+        (e.status === 404 ||
+          e.status === 400 ||
+          e.code === "credential_configuration_not_found" ||
+          e.code === "invalid_request")
+      )
+        return undefined;
       throw e;
     }
   }
 
   async createConfiguration(cfg: CertifyCredentialConfiguration, runId?: string) {
-    return (await call(this.url("/credential-configurations"), { json: cfg, record: { recorder: this.recorder, upstream: "studio", runId } })).body;
+    return (
+      await call(this.url("/credential-configurations"), {
+        json: cfg,
+        record: { recorder: this.recorder, upstream: "studio", runId },
+      })
+    ).body;
   }
 
   async updateConfiguration(cfg: CertifyCredentialConfiguration) {
-    return (await call(this.url(`/credential-configurations/${encodeURIComponent(cfg.credentialConfigKeyId)}`), { method: "PUT", json: cfg, record: { recorder: this.recorder, upstream: "studio" } })).body;
+    return (
+      await call(this.url(`/credential-configurations/${encodeURIComponent(cfg.credentialConfigKeyId)}`), {
+        method: "PUT",
+        json: cfg,
+        record: { recorder: this.recorder, upstream: "studio" },
+      })
+    ).body;
   }
 
   async deleteConfiguration(id: string) {
-    return (await call(this.url(`/credential-configurations/${encodeURIComponent(id)}`), { method: "DELETE", record: { recorder: this.recorder, upstream: "studio" } })).body;
+    return (
+      await call(this.url(`/credential-configurations/${encodeURIComponent(id)}`), {
+        method: "DELETE",
+        record: { recorder: this.recorder, upstream: "studio" },
+      })
+    ).body;
   }
 
   /** Issuer-initiated issuance: push the claims, get back an openid-credential-offer:// URI. */
-  async preAuthorize(req: { configId: string; claims: Record<string, unknown>; expiresIn?: number; txCode?: string }, runId?: string | null) {
+  async preAuthorize(
+    req: { configId: string; claims: Record<string, unknown>; expiresIn?: number; txCode?: string },
+    runId?: string | null,
+  ) {
     const body = await call<{ credential_offer_uri: string }>(this.url("/pre-authorized-data"), {
-      json: { credential_configuration_id: req.configId, claims: req.claims, expires_in: req.expiresIn ?? 600, ...(req.txCode ? { tx_code: req.txCode } : {}) },
+      json: {
+        credential_configuration_id: req.configId,
+        claims: req.claims,
+        expires_in: req.expiresIn ?? 600,
+        ...(req.txCode ? { tx_code: req.txCode } : {}),
+      },
       record: { recorder: this.recorder, upstream: "studio", runId },
     });
     return body.body.credential_offer_uri;
@@ -82,7 +126,12 @@ export class CertifyClient {
 
   /** Revoke through the status-list API (credential id comes from the ledger). */
   async ledgerSearch(credentialType: string) {
-    return (await call<unknown[]>(this.url("/ledger-search"), { json: { credentialType, indexedAttributesEquals: {} }, record: { recorder: this.recorder, upstream: "studio" } })).body;
+    return (
+      await call<unknown[]>(this.url("/ledger-search"), {
+        json: { credentialType, indexedAttributesEquals: {} },
+        record: { recorder: this.recorder, upstream: "studio" },
+      })
+    ).body;
   }
 
   async updateStatus(credentialId: string, status: boolean, runId?: string | null) {

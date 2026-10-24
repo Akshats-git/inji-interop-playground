@@ -10,8 +10,17 @@ import type { Config } from "../config.js";
 
 /** IPv4 default gateway from a /proc/net/route table (little-endian hex), if there is one. */
 export function defaultGatewayFromRoutes(table: string): string | undefined {
-  const hex = table.split("\n").map((l) => l.trim().split(/\s+/)).find((cols) => cols[1] === "00000000" && /^[0-9A-F]{8}$/i.test(cols[2] ?? ""))?.[2];
-  return hex && hex !== "00000000" ? hex.match(/../g)!.reverse().map((b) => parseInt(b, 16)).join(".") : undefined;
+  const hex = table
+    .split("\n")
+    .map((l) => l.trim().split(/\s+/))
+    .find((cols) => cols[1] === "00000000" && /^[0-9A-F]{8}$/i.test(cols[2] ?? ""))?.[2];
+  return hex && hex !== "00000000"
+    ? hex
+        .match(/../g)!
+        .reverse()
+        .map((b) => parseInt(b, 16))
+        .join(".")
+    : undefined;
 }
 
 // In a container, requests from the host's browser arrive from the Docker bridge gateway, not loopback (the
@@ -19,7 +28,9 @@ export function defaultGatewayFromRoutes(table: string): string | undefined {
 // gateway is a router, so it is never trusted there.
 const containerGateway = (() => {
   try {
-    return existsSync("/.dockerenv") ? defaultGatewayFromRoutes(readFileSync("/proc/net/route", "utf8")) : undefined;
+    return existsSync("/.dockerenv")
+      ? defaultGatewayFromRoutes(readFileSync("/proc/net/route", "utf8"))
+      : undefined;
   } catch {
     return undefined;
   }
@@ -39,7 +50,10 @@ export function isThisComputer(remoteAddress: string | undefined, gateway = cont
  * request, so one of them naming a local host must never outweigh another that names the public host
  * (otherwise `X-Forwarded-Host: localhost` through the tunnel would open the API).
  */
-export function isPublicHostRequest(config: Pick<Config, "publicBaseUrl">, req: Pick<IncomingMessage, "headers">) {
+export function isPublicHostRequest(
+  config: Pick<Config, "publicBaseUrl">,
+  req: Pick<IncomingMessage, "headers">,
+) {
   const pub = new URL(config.publicBaseUrl);
   if (pub.protocol !== "https:") return false;
   const h = req.headers;
@@ -56,6 +70,11 @@ export const isWalletFacing = (path: string) => path === "/pub" || path.startsWi
 export function publicExposureGuard(config: Pick<Config, "publicBaseUrl" | "publicUi">): RequestHandler {
   return (req, res, next) => {
     if (config.publicUi || isWalletFacing(req.path) || !isPublicHostRequest(config, req)) return next();
-    res.status(404).type("text/plain").send("Only the wallet-facing gateway (/pub/*) is reachable through the public URL. Open the playground on the computer running it.");
+    res
+      .status(404)
+      .type("text/plain")
+      .send(
+        "Only the wallet-facing gateway (/pub/*) is reachable through the public URL. Open the playground on the computer running it.",
+      );
   };
 }

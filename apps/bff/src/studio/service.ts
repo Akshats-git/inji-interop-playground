@@ -51,8 +51,10 @@ export class StudioService {
   // ---- issuers -------------------------------------------------------------------------------------
   async createIssuer(input: unknown): Promise<IssuerProfile> {
     const p = IssuerProfileInput.parse(input);
-    if (p.slug === RESERVED_ISSUER) throw new StudioError(409, "reserved_slug", `"${RESERVED_ISSUER}" is reserved for Certify's own keys.`);
-    if (await this.store.getIssuer(p.slug)) throw new StudioError(409, "issuer_exists", `An issuer called "${p.slug}" already exists.`);
+    if (p.slug === RESERVED_ISSUER)
+      throw new StudioError(409, "reserved_slug", `"${RESERVED_ISSUER}" is reserved for Certify's own keys.`);
+    if (await this.store.getIssuer(p.slug))
+      throw new StudioError(409, "issuer_exists", `An issuer called "${p.slug}" already exists.`);
     const profile: IssuerProfile = { ...p, id: uuid(), createdAt: now() };
     await this.store.putIssuer(profile);
     return profile;
@@ -100,8 +102,18 @@ export class StudioService {
     const issuer = await this.requireIssuer(t.issuerSlug);
     const configId = configIdOf(t);
     if ((await this.store.listTypes()).some((x) => x.configId === configId))
-      throw new StudioError(409, "type_exists", `${issuer.name} already has a ${t.format} type called ${t.typeName}.`);
-    const type: CredentialType = { ...t, id: uuid(), configId, createdAt: now(), syncedBaseUrl: this.baseUrl() };
+      throw new StudioError(
+        409,
+        "type_exists",
+        `${issuer.name} already has a ${t.format} type called ${t.typeName}.`,
+      );
+    const type: CredentialType = {
+      ...t,
+      id: uuid(),
+      configId,
+      createdAt: now(),
+      syncedBaseUrl: this.baseUrl(),
+    };
     await this.pushType(type, issuer, "create");
     await this.store.putType(type);
     return { type, advertised: await this.isAdvertised(configId) };
@@ -109,7 +121,13 @@ export class StudioService {
 
   async updateType(id: string, input: unknown) {
     const existing = await this.requireType(id);
-    const t = CredentialTypeInput.parse({ ...existing, ...(input as object), issuerSlug: existing.issuerSlug, typeName: existing.typeName, format: existing.format });
+    const t = CredentialTypeInput.parse({
+      ...existing,
+      ...(input as object),
+      issuerSlug: existing.issuerSlug,
+      typeName: existing.typeName,
+      format: existing.format,
+    });
     const issuer = await this.requireIssuer(t.issuerSlug);
     const type: CredentialType = { ...existing, ...t, syncedBaseUrl: this.baseUrl() };
     await this.pushType(type, issuer, "update");
@@ -122,7 +140,10 @@ export class StudioService {
     try {
       await this.certify.deleteConfiguration(t.configId);
     } catch (e) {
-      log.warn({ err: (e as Error).message, configId: t.configId }, "Certify delete failed; removing locally anyway");
+      log.warn(
+        { err: (e as Error).message, configId: t.configId },
+        "Certify delete failed; removing locally anyway",
+      );
     }
     await this.store.deleteType(t.id);
   }
@@ -141,8 +162,18 @@ export class StudioService {
       else await this.certify.createConfiguration(cfg);
       this.didCache = undefined;
     } catch (e) {
-      if (e instanceof HttpError) throw new StudioError(502, e.code ?? "certify_rejected", `Inji Certify rejected the credential configuration: ${e.detail ?? e.code ?? e.status}`, e.body);
-      throw new StudioError(503, "certify_unreachable", "Inji Certify is not reachable. Is the container running?");
+      if (e instanceof HttpError)
+        throw new StudioError(
+          502,
+          e.code ?? "certify_rejected",
+          `Inji Certify rejected the credential configuration: ${e.detail ?? e.code ?? e.status}`,
+          e.body,
+        );
+      throw new StudioError(
+        503,
+        "certify_unreachable",
+        "Inji Certify is not reachable. Is the container running?",
+      );
     }
   }
 
@@ -171,7 +202,10 @@ export class StudioService {
       if (!issuer) continue;
       const missing = !(t.configId in advertised);
       // Also re-sync when the generated vct changed although the host did not (e.g. the vct length rule).
-      const vctDrift = !missing && t.format === "vc+sd-jwt" && (advertised[t.configId] as { vct?: string }).vct !== vctFor(this.baseUrl(), t);
+      const vctDrift =
+        !missing &&
+        t.format === "vc+sd-jwt" &&
+        (advertised[t.configId] as { vct?: string }).vct !== vctFor(this.baseUrl(), t);
       const stale = t.syncedBaseUrl !== this.baseUrl() || vctDrift;
       if (!missing && !stale) continue;
       try {
@@ -188,16 +222,30 @@ export class StudioService {
   }
 
   // ---- issuance -------------------------------------------------------------------------------------
-  async createOffer(typeId: string, rawClaims: Record<string, unknown>, opts: { txCode?: string; expiresIn?: number; runId?: string | null } = {}) {
+  async createOffer(
+    typeId: string,
+    rawClaims: Record<string, unknown>,
+    opts: { txCode?: string; expiresIn?: number; runId?: string | null } = {},
+  ) {
     const t = await this.requireType(typeId);
     const { claims, errors, ok } = coerceClaims(t, rawClaims);
     if (!ok) throw new StudioError(400, "invalid_claims", "Some claims are missing or invalid.", errors);
-    if (opts.txCode && !/^[A-Za-z0-9]{4,8}$/.test(opts.txCode)) throw new StudioError(400, "invalid_tx_code", "The PIN must be 4–8 letters or digits.");
+    if (opts.txCode && !/^[A-Za-z0-9]{4,8}$/.test(opts.txCode))
+      throw new StudioError(400, "invalid_tx_code", "The PIN must be 4–8 letters or digits.");
     try {
-      const offerUri = await this.certify.preAuthorize({ configId: t.configId, claims, txCode: opts.txCode, expiresIn: opts.expiresIn }, opts.runId);
+      const offerUri = await this.certify.preAuthorize(
+        { configId: t.configId, claims, txCode: opts.txCode, expiresIn: opts.expiresIn },
+        opts.runId,
+      );
       return { offerUri, type: t };
     } catch (e) {
-      if (e instanceof HttpError) throw new StudioError(502, e.code ?? "certify_rejected", `Inji Certify refused to create the offer: ${e.detail ?? e.code}`, e.body);
+      if (e instanceof HttpError)
+        throw new StudioError(
+          502,
+          e.code ?? "certify_rejected",
+          `Inji Certify refused to create the offer: ${e.detail ?? e.code}`,
+          e.body,
+        );
       throw e;
     }
   }
@@ -205,7 +253,9 @@ export class StudioService {
   // ---- public artefacts (served under /pub/issuers and /pub/contexts) ------------------------------------
   async contextDocument(issuerSlug: string, typeName: string) {
     const types = await this.store.listTypes(issuerSlug);
-    const t = types.find((x) => x.typeName === typeName && x.format === "ldp_vc") ?? types.find((x) => x.typeName === typeName);
+    const t =
+      types.find((x) => x.typeName === typeName && x.format === "ldp_vc") ??
+      types.find((x) => x.typeName === typeName);
     return t ? buildContextDocument(t.syncedBaseUrl, t) : undefined;
   }
 
@@ -225,11 +275,25 @@ export class StudioService {
     // "certify" has no stored profile, but over HTTPS Certify's status lists are signed as did:web:…:certify.
     if (slug !== RESERVED_ISSUER && !(await this.store.getIssuer(slug))) return undefined;
     const base = this.baseUrl();
-    const did = publicUrlsFor(base, { issuerSlug: slug, typeName: "X", format: "ldp_vc", ldpSuite: "Ed25519Signature2020", sdJwtAlg: "ES256" }).issuerId;
+    const did = publicUrlsFor(base, {
+      issuerSlug: slug,
+      typeName: "X",
+      format: "ldp_vc",
+      ldpSuite: "Ed25519Signature2020",
+      sdJwtAlg: "ES256",
+    }).issuerId;
     const certify = await this.certifyDid();
-    const vms = (certify.verificationMethod ?? []).map((vm) => ({ ...vm, id: `${did}#${vm.id.split("#").pop()}`, controller: did }));
+    const vms = (certify.verificationMethod ?? []).map((vm) => ({
+      ...vm,
+      id: `${did}#${vm.id.split("#").pop()}`,
+      controller: did,
+    }));
     return {
-      "@context": ["https://www.w3.org/ns/did/v1", "https://w3id.org/security/suites/ed25519-2020/v1", "https://w3id.org/security/suites/jws-2020/v1"],
+      "@context": [
+        "https://www.w3.org/ns/did/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1",
+        "https://w3id.org/security/suites/jws-2020/v1",
+      ],
       id: did,
       alsoKnownAs: [`${base}/pub/issuers/${slug}`],
       verificationMethod: vms,
@@ -252,12 +316,23 @@ export class StudioService {
       ES256K: ["EcdsaSecp256k1VerificationKey2019"],
       ES256: ["EcdsaSecp256r1VerificationKey2019", "JsonWebKey2020"],
     };
-    const vm = (certify.verificationMethod ?? []).find((v) => typeFor[alg].includes(v.type) && (alg !== "ES256" || v.type !== "JsonWebKey2020" || (v.publicKeyJwk as { crv?: string })?.crv === "P-256"));
+    const vm = (certify.verificationMethod ?? []).find(
+      (v) =>
+        typeFor[alg].includes(v.type) &&
+        (alg !== "ES256" ||
+          v.type !== "JsonWebKey2020" ||
+          (v.publicKeyJwk as { crv?: string })?.crv === "P-256"),
+    );
     if (!vm) return undefined;
     const id = `${this.baseUrl()}/pub/issuers/${slug}/keys/${alg}`;
     // Inji Verify 0.18.2's HTTP key resolver reads `publicKeyPem` whatever the key encoding, so publish
     // the same key as SPKI PEM alongside the original multibase / JWK form.
-    return { ...vm, id, controller: `${this.baseUrl()}/pub/issuers/${slug}`, publicKeyPem: vm.publicKeyPem ?? toPem(vm) };
+    return {
+      ...vm,
+      id,
+      controller: `${this.baseUrl()}/pub/issuers/${slug}`,
+      publicKeyPem: vm.publicKeyPem ?? toPem(vm),
+    };
   }
 
   async issuerProfileDocument(slug: string) {
@@ -268,21 +343,34 @@ export class StudioService {
       id: `${this.baseUrl()}/pub/issuers/${slug}`,
       name: issuer.name,
       description: issuer.description,
-      credentialTypes: types.map((t) => ({ id: t.configId, name: t.displayName, format: t.format, signingAlg: signingAlgOf(t) })),
+      credentialTypes: types.map((t) => ({
+        id: t.configId,
+        name: t.displayName,
+        format: t.format,
+        signingAlg: signingAlgOf(t),
+      })),
       issuedBy: "Inji Certify (via the Inji Interoperability Playground)",
     };
   }
 }
 
 /** SPKI PEM for a verification method given as publicKeyMultibase (Ed25519) or publicKeyJwk. */
-function toPem(vm: { publicKeyMultibase?: string; publicKeyJwk?: Record<string, unknown> }): string | undefined {
+function toPem(vm: {
+  publicKeyMultibase?: string;
+  publicKeyJwk?: Record<string, unknown>;
+}): string | undefined {
   try {
-    if (vm.publicKeyJwk) return createPublicKey({ key: vm.publicKeyJwk as never, format: "jwk" }).export({ type: "spki", format: "pem" }).toString();
+    if (vm.publicKeyJwk)
+      return createPublicKey({ key: vm.publicKeyJwk as never, format: "jwk" })
+        .export({ type: "spki", format: "pem" })
+        .toString();
     if (vm.publicKeyMultibase?.startsWith("z")) {
       const bytes = base58btcDecode(vm.publicKeyMultibase.slice(1));
       if (bytes[0] === 0xed && bytes[1] === 0x01) {
         const x = Buffer.from(bytes.slice(2)).toString("base64url");
-        return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x }, format: "jwk" }).export({ type: "spki", format: "pem" }).toString();
+        return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x }, format: "jwk" })
+          .export({ type: "spki", format: "pem" })
+          .toString();
       }
     }
   } catch {

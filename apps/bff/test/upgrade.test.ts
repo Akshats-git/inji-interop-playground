@@ -47,7 +47,9 @@ describe("requests that offer an h2c upgrade", () => {
   });
 
   it("still answers a plain GET", async () => {
-    const reply = await raw("GET /echo HTTP/1.1\r\nHost: x\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAEAAEAA\r\n\r\n");
+    const reply = await raw(
+      "GET /echo HTTP/1.1\r\nHost: x\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c\r\nHTTP2-Settings: AAEAAEAA\r\n\r\n",
+    );
     expect(reply).toMatch(/^HTTP\/1.1 200/);
     expect(reply).toContain('"method":"GET"');
   });

@@ -8,11 +8,30 @@ import type { Store } from "../store/types.js";
 import type { StudioService } from "./service.js";
 
 const ISSUERS: IssuerProfileInput[] = [
-  { slug: "agri-dept", name: "Karnataka Agriculture Department", description: "Registers farmers and the land they cultivate.", logoUrl: "", backgroundColor: "#1F4D3A", textColor: "#F4EFE3" },
-  { slug: "veridonia-uni", name: "University of Veridonia", description: "Awards degrees to its graduates.", logoUrl: "", backgroundColor: "#2B2D6E", textColor: "#F5F1FF" },
+  {
+    slug: "agri-dept",
+    name: "Karnataka Agriculture Department",
+    description: "Registers farmers and the land they cultivate.",
+    logoUrl: "",
+    backgroundColor: "#1F4D3A",
+    textColor: "#F4EFE3",
+  },
+  {
+    slug: "veridonia-uni",
+    name: "University of Veridonia",
+    description: "Awards degrees to its graduates.",
+    logoUrl: "",
+    backgroundColor: "#2B2D6E",
+    textColor: "#F5F1FF",
+  },
 ];
 
-const crop = { name: "primaryCropType", label: "Primary crop", kind: "choice" as const, options: ["Rice", "Ragi", "Sugarcane", "Coffee", "Cotton"] };
+const crop = {
+  name: "primaryCropType",
+  label: "Primary crop",
+  kind: "choice" as const,
+  options: ["Rice", "Ragi", "Sugarcane", "Coffee", "Cotton"],
+};
 
 const TYPES: Partial<CredentialTypeInput>[] = [
   {
@@ -28,7 +47,13 @@ const TYPES: Partial<CredentialTypeInput>[] = [
       { name: "fullName", label: "Full name", kind: "text", required: true, selectivelyDisclosable: true },
       { name: "farmerId", label: "Farmer ID", kind: "text", required: true, selectivelyDisclosable: true },
       { ...crop, required: true, selectivelyDisclosable: true },
-      { name: "landAreaAcres", label: "Land area (acres)", kind: "number", required: true, selectivelyDisclosable: true },
+      {
+        name: "landAreaAcres",
+        label: "Land area (acres)",
+        kind: "number",
+        required: true,
+        selectivelyDisclosable: true,
+      },
       { name: "district", label: "District", kind: "text", required: true, selectivelyDisclosable: true },
     ],
   },
@@ -43,7 +68,13 @@ const TYPES: Partial<CredentialTypeInput>[] = [
       { name: "fullName", label: "Full name", kind: "text", required: true, selectivelyDisclosable: true },
       { name: "farmerId", label: "Farmer ID", kind: "text", required: true, selectivelyDisclosable: true },
       { ...crop, required: true, selectivelyDisclosable: true },
-      { name: "landAreaAcres", label: "Land area (acres)", kind: "number", required: true, selectivelyDisclosable: true },
+      {
+        name: "landAreaAcres",
+        label: "Land area (acres)",
+        kind: "number",
+        required: true,
+        selectivelyDisclosable: true,
+      },
       { name: "district", label: "District", kind: "text", required: true, selectivelyDisclosable: false },
     ],
   },
@@ -57,9 +88,22 @@ const TYPES: Partial<CredentialTypeInput>[] = [
     ldpSuite: "Ed25519Signature2020",
     fields: [
       { name: "fullName", label: "Graduate", kind: "text", required: true, selectivelyDisclosable: true },
-      { name: "degree", label: "Degree", kind: "choice", options: ["B.Tech", "B.Sc", "B.A", "B.Com"], required: true, selectivelyDisclosable: true },
+      {
+        name: "degree",
+        label: "Degree",
+        kind: "choice",
+        options: ["B.Tech", "B.Sc", "B.A", "B.Com"],
+        required: true,
+        selectivelyDisclosable: true,
+      },
       { name: "major", label: "Major", kind: "text", required: true, selectivelyDisclosable: true },
-      { name: "graduationDate", label: "Graduated on", kind: "date", required: true, selectivelyDisclosable: true },
+      {
+        name: "graduationDate",
+        label: "Graduated on",
+        kind: "date",
+        required: true,
+        selectivelyDisclosable: true,
+      },
     ],
   },
   {
@@ -74,14 +118,31 @@ const TYPES: Partial<CredentialTypeInput>[] = [
     expiresAt: "2025-01-01T00:00:00.000Z",
     fields: [
       { name: "holderName", label: "Holder", kind: "text", required: true, selectivelyDisclosable: true },
-      { name: "cardNumber", label: "Card number", kind: "text", required: true, selectivelyDisclosable: true },
+      {
+        name: "cardNumber",
+        label: "Card number",
+        kind: "text",
+        required: true,
+        selectivelyDisclosable: true,
+      },
     ],
   },
 ];
 
 export const DEMO_CLAIMS: Record<string, Record<string, unknown>> = {
-  KarnatakaFarmerCard: { fullName: "Ramesh Kumar", farmerId: "KA-MND-20931", primaryCropType: "Ragi", landAreaAcres: 3.5, district: "Mandya" },
-  UniversityDegree: { fullName: "Asha Rao", degree: "B.Tech", major: "Computer Science", graduationDate: "2025-06-30" },
+  KarnatakaFarmerCard: {
+    fullName: "Ramesh Kumar",
+    farmerId: "KA-MND-20931",
+    primaryCropType: "Ragi",
+    landAreaAcres: 3.5,
+    district: "Mandya",
+  },
+  UniversityDegree: {
+    fullName: "Asha Rao",
+    degree: "B.Tech",
+    major: "Computer Science",
+    graduationDate: "2025-06-30",
+  },
 };
 
 export async function seedDemo(store: Store, studio: StudioService) {

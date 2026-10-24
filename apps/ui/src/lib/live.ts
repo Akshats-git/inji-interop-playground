@@ -7,7 +7,11 @@ type Message = { type: "event"; event: EventSummary } | { type: "run"; run: Run 
  * Subscribe to the playground's live feed. `runId` narrows it to one run; `null` means all traffic.
  * Reconnects with back-off; returns whether the socket is currently open.
  */
-export function useLiveFeed(runId: string | null | undefined, onMessage: (m: Message) => void, enabled = true) {
+export function useLiveFeed(
+  runId: string | null | undefined,
+  onMessage: (m: Message) => void,
+  enabled = true,
+) {
   const handler = useRef(onMessage);
   handler.current = onMessage;
   const [connected, setConnected] = useState(false);

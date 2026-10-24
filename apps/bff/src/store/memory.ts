@@ -27,7 +27,9 @@ export class MemoryStore implements Store {
   }
 
   async listTypes(issuerSlug?: string) {
-    return [...this.types.values()].filter((t) => !issuerSlug || t.issuerSlug === issuerSlug).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    return [...this.types.values()]
+      .filter((t) => !issuerSlug || t.issuerSlug === issuerSlug)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
   async getType(id: string) {
     return this.types.get(id) ?? [...this.types.values()].find((t) => t.configId === id);
@@ -48,7 +50,14 @@ export class MemoryStore implements Store {
   }
   async listRuns(f: RunFilter = {}) {
     return [...this.runs.values()]
-      .filter((r) => (!f.status || r.status === f.status) && (!f.verdict || r.result?.verdict === f.verdict) && (!f.format || r.labels.format === f.format) && (!f.wallet || r.spec.wallet === f.wallet) && (!f.verifier || r.spec.verifier === f.verifier))
+      .filter(
+        (r) =>
+          (!f.status || r.status === f.status) &&
+          (!f.verdict || r.result?.verdict === f.verdict) &&
+          (!f.format || r.labels.format === f.format) &&
+          (!f.wallet || r.spec.wallet === f.wallet) &&
+          (!f.verifier || r.spec.verifier === f.verifier),
+      )
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, f.limit ?? 200)
       .map((r) => structuredClone(r));
@@ -68,7 +77,11 @@ export class MemoryStore implements Store {
   }
   async listEvents(q: { runId?: string | null; limit?: number; sinceSeq?: number }): Promise<EventSummary[]> {
     return this.events
-      .filter((e) => (q.runId === undefined ? true : e.runId === q.runId) && (q.sinceSeq === undefined || e.seq > q.sinceSeq))
+      .filter(
+        (e) =>
+          (q.runId === undefined ? true : e.runId === q.runId) &&
+          (q.sinceSeq === undefined || e.seq > q.sinceSeq),
+      )
       .slice(-(q.limit ?? 500))
       .map(({ request: _q, response: _r, ...rest }) => rest);
   }
@@ -77,7 +90,8 @@ export class MemoryStore implements Store {
   }
   async attachEvents(ids: string[], runId: string) {
     let seq = this.seqs.get(runId) ?? 0;
-    for (const e of this.events) if (ids.includes(e.id) && e.runId !== runId) Object.assign(e, { runId, seq: ++seq });
+    for (const e of this.events)
+      if (ids.includes(e.id) && e.runId !== runId) Object.assign(e, { runId, seq: ++seq });
     this.seqs.set(runId, seq);
   }
 
@@ -85,7 +99,9 @@ export class MemoryStore implements Store {
     this.held.set(h.id, h);
   }
   async listHeld() {
-    return [...this.held.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map(({ raw: _raw, ...rest }) => rest);
+    return [...this.held.values()]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map(({ raw: _raw, ...rest }) => rest);
   }
   async getHeld(id: string) {
     return this.held.get(id);
@@ -96,7 +112,9 @@ export class MemoryStore implements Store {
 
   async purge(before: Date) {
     const cut = before.toISOString();
-    const r0 = this.runs.size, e0 = this.events.length, h0 = this.held.size;
+    const r0 = this.runs.size,
+      e0 = this.events.length,
+      h0 = this.held.size;
     for (const [id, r] of this.runs) if (r.createdAt < cut) this.runs.delete(id);
     this.events = this.events.filter((e) => e.at >= cut);
     for (const [id, h] of this.held) if (h.createdAt < cut) this.held.delete(id);

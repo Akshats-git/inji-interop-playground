@@ -289,7 +289,9 @@ function HostedEnv({ e, health }: { e: HostedEnvironment; health: Parties["healt
             </div>
             <p className="mt-1 max-w-[75ch] text-sm">{e.description}</p>
             <p className="mt-1 text-sm text-muted">
-              {e.issuers.length} issuers and {types} credential types found{e.refreshedAt ? `, ${ago(e.refreshedAt)}` : ""}. The playground runs here and talks to {e.name} over the internet.
+              {e.issuers.length} issuers and {types} credential types found
+              {e.refreshedAt ? `, ${ago(e.refreshedAt)}` : ""}. The playground runs here and talks to {e.name}{" "}
+              over the internet.
             </p>
           </div>
           <div className="flex flex-col gap-1.5 text-sm md:items-end md:text-right">
@@ -301,14 +303,29 @@ function HostedEnv({ e, health }: { e: HostedEnvironment; health: Parties["healt
           </div>
         </li>
         {e.mimoto && (
-          <Row title={`Mimoto, ${hostOf(e.mimoto.url)}`} origin meta="Inji Wallet's backend: its issuer list is where the playground finds the issuers" aside={<Reach h={health[`hosted:${e.id}:mimoto`]} />}>
+          <Row
+            title={`Mimoto, ${hostOf(e.mimoto.url)}`}
+            origin
+            meta="Inji Wallet's backend: its issuer list is where the playground finds the issuers"
+            aside={<Reach h={health[`hosted:${e.id}:mimoto`]} />}
+          >
             <p className="text-muted">{e.mimoto.detail}</p>
           </Row>
         )}
         {e.verifier && (
-          <Row title={e.verifier.label} origin meta={e.verifier.software} aside={<Reach h={health[`hosted:${e.id}:verify`]} />}>
+          <Row
+            title={e.verifier.label}
+            origin
+            meta={e.verifier.software}
+            aside={<Reach h={health[`hosted:${e.id}:verify`]} />}
+          >
             <p className="max-w-[72ch]">{e.verifier.description}</p>
-            <Chips items={[...e.verifier.accepts.map((a) => (a === "dcql" ? "DCQL only" : "Presentation Exchange")), ...e.verifier.formats.map((f) => formatLabel(f))]} />
+            <Chips
+              items={[
+                ...e.verifier.accepts.map((a) => (a === "dcql" ? "DCQL only" : "Presentation Exchange")),
+                ...e.verifier.formats.map((f) => formatLabel(f)),
+              ]}
+            />
           </Row>
         )}
         {e.client && (
@@ -317,14 +334,21 @@ function HostedEnv({ e, health }: { e: HostedEnvironment; health: Parties["healt
             origin
             meta={`How the Reference Wallet signs holders in, at ${e.client.authorizationServers.map(hostOf).join(", ")}`}
             aside={
-              <span className={cx("inline-flex items-center gap-1.5", e.client.ready ? "text-pass" : "text-fail")}>
-                <span className={cx("inline-block size-2 rounded-full", e.client.ready ? "bg-pass" : "bg-fail")} aria-hidden />
+              <span
+                className={cx("inline-flex items-center gap-1.5", e.client.ready ? "text-pass" : "text-fail")}
+              >
+                <span
+                  className={cx("inline-block size-2 rounded-full", e.client.ready ? "bg-pass" : "bg-fail")}
+                  aria-hidden
+                />
                 {e.client.ready ? "Key ready" : "Key missing"}
               </span>
             }
           >
             <p className="max-w-[72ch]">
-              MOSIP's documented test client for wallets built against Collab's eSignet; redirect URI <code className="font-mono">{e.client.redirectUri}</code>. {e.client.problem ?? "Its published key is in infra/collab/keys/ (git-ignored)."}
+              MOSIP's documented test client for wallets built against Collab's eSignet; redirect URI{" "}
+              <code className="font-mono">{e.client.redirectUri}</code>.{" "}
+              {e.client.problem ?? "Its published key is in infra/collab/keys/ (git-ignored)."}
             </p>
           </Row>
         )}
@@ -345,12 +369,20 @@ function HostedEnv({ e, health }: { e: HostedEnvironment; health: Parties["healt
               <tr key={i.id} className="border-t border-hairline align-top">
                 <td className="px-4 py-2">
                   <span className="block font-bold">{i.name}</span>
-                  <span className="block font-mono text-xs break-all text-muted">{hostOf(i.credentialIssuer)}</span>
-                  {i.listedBy === "parties file" && <span className="block text-xs text-muted">Not in Mimoto's list; named in parties.yaml</span>}
+                  <span className="block font-mono text-xs break-all text-muted">
+                    {hostOf(i.credentialIssuer)}
+                  </span>
+                  {i.listedBy === "parties file" && (
+                    <span className="block text-xs text-muted">
+                      Not in Mimoto's list; named in parties.yaml
+                    </span>
+                  )}
                   {i.note && <span className="mt-1 block text-xs text-present-ink">{i.note}</span>}
                   {i.error && <span className="mt-1 block text-xs text-fail">{i.error}</span>}
                 </td>
-                <td className="px-2 py-2 whitespace-nowrap">{i.protocol === "1.0" ? "1.0 (nonce endpoint)" : "draft 13"}</td>
+                <td className="px-2 py-2 whitespace-nowrap">
+                  {i.protocol === "1.0" ? "1.0 (nonce endpoint)" : "draft 13"}
+                </td>
                 <td className="px-2 py-2">
                   <ul className="flex flex-col gap-0.5">
                     {i.types.map((t) => (

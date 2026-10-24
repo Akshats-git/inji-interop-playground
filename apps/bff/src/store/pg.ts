@@ -33,7 +33,10 @@ type Row = Record<string, unknown>;
 export class PgStore implements Store {
   private pool: pg.Pool;
 
-  constructor(url: string, private readonly sealer: Sealer) {
+  constructor(
+    url: string,
+    private readonly sealer: Sealer,
+  ) {
     this.pool = new pg.Pool({ connectionString: url, max: 8 });
   }
 
@@ -57,13 +60,19 @@ export class PgStore implements Store {
   }
 
   async listIssuers() {
-    return (await this.q<{ doc: IssuerProfile }>("SELECT doc FROM issuer_profiles ORDER BY created_at")).rows.map((r) => r.doc);
+    return (
+      await this.q<{ doc: IssuerProfile }>("SELECT doc FROM issuer_profiles ORDER BY created_at")
+    ).rows.map((r) => r.doc);
   }
   async getIssuer(slug: string) {
-    return (await this.q<{ doc: IssuerProfile }>("SELECT doc FROM issuer_profiles WHERE slug=$1", [slug])).rows[0]?.doc;
+    return (await this.q<{ doc: IssuerProfile }>("SELECT doc FROM issuer_profiles WHERE slug=$1", [slug]))
+      .rows[0]?.doc;
   }
   async putIssuer(p: IssuerProfile) {
-    await this.q("INSERT INTO issuer_profiles (slug, doc, created_at) VALUES ($1,$2,$3) ON CONFLICT (slug) DO UPDATE SET doc=EXCLUDED.doc", [p.slug, p, p.createdAt]);
+    await this.q(
+      "INSERT INTO issuer_profiles (slug, doc, created_at) VALUES ($1,$2,$3) ON CONFLICT (slug) DO UPDATE SET doc=EXCLUDED.doc",
+      [p.slug, p, p.createdAt],
+    );
   }
   async deleteIssuer(slug: string) {
     await this.q("DELETE FROM issuer_profiles WHERE slug=$1", [slug]);
@@ -71,12 +80,19 @@ export class PgStore implements Store {
 
   async listTypes(issuerSlug?: string) {
     const r = issuerSlug
-      ? await this.q<{ doc: CredentialType }>("SELECT doc FROM credential_types WHERE issuer_slug=$1 ORDER BY created_at", [issuerSlug])
+      ? await this.q<{ doc: CredentialType }>(
+          "SELECT doc FROM credential_types WHERE issuer_slug=$1 ORDER BY created_at",
+          [issuerSlug],
+        )
       : await this.q<{ doc: CredentialType }>("SELECT doc FROM credential_types ORDER BY created_at");
     return r.rows.map((x) => x.doc);
   }
   async getType(id: string) {
-    return (await this.q<{ doc: CredentialType }>("SELECT doc FROM credential_types WHERE id=$1 OR config_id=$1", [id])).rows[0]?.doc;
+    return (
+      await this.q<{ doc: CredentialType }>("SELECT doc FROM credential_types WHERE id=$1 OR config_id=$1", [
+        id,
+      ])
+    ).rows[0]?.doc;
   }
   async putType(t: CredentialType) {
     await this.q(
@@ -94,7 +110,20 @@ export class PgStore implements Store {
       `INSERT INTO runs (id, created_at, status, verdict, format, wallet, verifier, mode, query, tamper, body, iv)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        ON CONFLICT (id) DO UPDATE SET status=EXCLUDED.status, verdict=EXCLUDED.verdict, body=EXCLUDED.body, iv=EXCLUDED.iv`,
-      [r.id, r.createdAt, r.status, r.result?.verdict ?? null, r.labels.format, r.spec.wallet, r.spec.verifier, r.spec.mode, r.spec.query, r.spec.tamper, s.data, s.iv],
+      [
+        r.id,
+        r.createdAt,
+        r.status,
+        r.result?.verdict ?? null,
+        r.labels.format,
+        r.spec.wallet,
+        r.spec.verifier,
+        r.spec.mode,
+        r.spec.query,
+        r.spec.tamper,
+        s.data,
+        s.iv,
+      ],
     );
   }
   private warnedUnreadable = false;
@@ -108,7 +137,9 @@ export class PgStore implements Store {
     } catch {
       if (!this.warnedUnreadable) {
         this.warnedUnreadable = true;
-        log.warn("some stored rows were sealed with a different EVENT_ENCRYPTION_KEY and are skipped; ./playground.sh reset clears them");
+        log.warn(
+          "some stored rows were sealed with a different EVENT_ENCRYPTION_KEY and are skipped; ./playground.sh reset clears them",
+        );
       }
       return undefined;
     }
@@ -117,7 +148,11 @@ export class PgStore implements Store {
     return this.tryOpen<Run>({ data: row.body, iv: row.iv }, row.id);
   }
   async getRun(id: string) {
-    const row = (await this.q<{ id: string; body: Buffer; iv: Buffer }>("SELECT id, body, iv FROM runs WHERE id=$1", [id])).rows[0];
+    const row = (
+      await this.q<{ id: string; body: Buffer; iv: Buffer }>("SELECT id, body, iv FROM runs WHERE id=$1", [
+        id,
+      ])
+    ).rows[0];
     return row ? this.openRun(row) : undefined;
   }
   async listRuns(f: RunFilter = {}) {
@@ -135,7 +170,12 @@ export class PgStore implements Store {
     add("wallet", f.wallet);
     add("verifier", f.verifier);
     params.push(f.limit ?? 200);
-    const rows = (await this.q<{ id: string; body: Buffer; iv: Buffer }>(`SELECT id, body, iv FROM runs ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY created_at DESC LIMIT $${params.length}`, params)).rows;
+    const rows = (
+      await this.q<{ id: string; body: Buffer; iv: Buffer }>(
+        `SELECT id, body, iv FROM runs ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY created_at DESC LIMIT $${params.length}`,
+        params,
+      )
+    ).rows;
     return rows.map((r) => this.openRun(r)).filter((r): r is Run => r !== undefined);
   }
   async deleteRun(id: string) {
@@ -149,7 +189,23 @@ export class PgStore implements Store {
       `INSERT INTO run_events (id, run_id, seq, at, duration_ms, party_from, party_to, actor, method, path, status, title, phase, labels, payload, iv)
        VALUES ($1,$2,(SELECT COALESCE(MAX(seq),0)+1 FROM run_events WHERE run_id IS NOT DISTINCT FROM $2),$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
        RETURNING seq`,
-      [e.id, e.runId, e.at, Math.round(e.durationMs), e.from, e.to, e.actor ?? null, e.method, e.path, e.status, e.title, e.phase, e.labels, s.data, s.iv],
+      [
+        e.id,
+        e.runId,
+        e.at,
+        Math.round(e.durationMs),
+        e.from,
+        e.to,
+        e.actor ?? null,
+        e.method,
+        e.path,
+        e.status,
+        e.title,
+        e.phase,
+        e.labels,
+        s.data,
+        s.iv,
+      ],
     );
     return { ...e, seq: r.rows[0]!.seq };
   }
@@ -183,13 +239,21 @@ export class PgStore implements Store {
       where.push(`seq > $${params.length}`);
     }
     params.push(q.limit ?? 500);
-    const rows = (await this.q(`SELECT * FROM (SELECT id, run_id, seq, at, duration_ms, party_from, party_to, actor, method, path, status, title, phase, labels FROM run_events ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY at DESC LIMIT $${params.length}) t ORDER BY at ASC`, params)).rows;
+    const rows = (
+      await this.q(
+        `SELECT * FROM (SELECT id, run_id, seq, at, duration_ms, party_from, party_to, actor, method, path, status, title, phase, labels FROM run_events ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY at DESC LIMIT $${params.length}) t ORDER BY at ASC`,
+        params,
+      )
+    ).rows;
     return rows.map((r) => this.toSummary(r));
   }
   async getEvent(id: string) {
     const r = (await this.q("SELECT * FROM run_events WHERE id=$1", [id])).rows[0];
     if (!r) return undefined;
-    const body = this.tryOpen<Pick<ProtocolEvent, "request" | "response">>({ data: r.payload as Buffer, iv: r.iv as Buffer }, id);
+    const body = this.tryOpen<Pick<ProtocolEvent, "request" | "response">>(
+      { data: r.payload as Buffer, iv: r.iv as Buffer },
+      id,
+    );
     return body && { ...this.toSummary(r), ...body };
   }
   async attachEvents(ids: string[], runId: string) {
@@ -206,13 +270,23 @@ export class PgStore implements Store {
   async putHeld(h: HeldCredential) {
     const { raw, ...summary } = h;
     const s = this.sealer.seal(raw, h.id);
-    await this.q("INSERT INTO held_credentials (id, created_at, summary, body, iv) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO UPDATE SET summary=EXCLUDED.summary, body=EXCLUDED.body, iv=EXCLUDED.iv", [h.id, h.createdAt, summary, s.data, s.iv]);
+    await this.q(
+      "INSERT INTO held_credentials (id, created_at, summary, body, iv) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (id) DO UPDATE SET summary=EXCLUDED.summary, body=EXCLUDED.body, iv=EXCLUDED.iv",
+      [h.id, h.createdAt, summary, s.data, s.iv],
+    );
   }
   async listHeld() {
-    return (await this.q<{ summary: HeldSummary }>("SELECT summary FROM held_credentials ORDER BY created_at DESC")).rows.map((r) => r.summary);
+    return (
+      await this.q<{ summary: HeldSummary }>("SELECT summary FROM held_credentials ORDER BY created_at DESC")
+    ).rows.map((r) => r.summary);
   }
   async getHeld(id: string) {
-    const r = (await this.q<{ summary: HeldSummary; body: Buffer; iv: Buffer }>("SELECT summary, body, iv FROM held_credentials WHERE id=$1", [id])).rows[0];
+    const r = (
+      await this.q<{ summary: HeldSummary; body: Buffer; iv: Buffer }>(
+        "SELECT summary, body, iv FROM held_credentials WHERE id=$1",
+        [id],
+      )
+    ).rows[0];
     const raw = r && this.tryOpen({ data: r.body, iv: r.iv }, id);
     return raw === undefined ? undefined : { ...r!.summary, raw };
   }

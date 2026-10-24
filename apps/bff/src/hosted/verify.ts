@@ -13,7 +13,15 @@ export interface HostedVerifyRequest {
   transactionId: string;
   requestId: string;
   requestUri?: string;
-  authorizationDetails?: { clientId: string; nonce: string; responseUri: string; responseMode: string; responseType: string; dcqlQuery?: DcqlQuery; presentationDefinition?: PresentationDefinition };
+  authorizationDetails?: {
+    clientId: string;
+    nonce: string;
+    responseUri: string;
+    responseMode: string;
+    responseType: string;
+    dcqlQuery?: DcqlQuery;
+    presentationDefinition?: PresentationDefinition;
+  };
   expiresAt?: number;
   nonce: string;
 }
@@ -41,30 +49,59 @@ export class HostedVerifyClient {
   }
 
   /** Without a title, the recorder names the step from the path and the answer ("Status: VP_SUBMITTED"…). */
-  private rec(title: string | undefined, labels: string[], phase: "presentation" | "verification" = "presentation") {
-    return { title, phase, from: "verifier-backend" as const, to: "hosted-verify" as const, labels: ["hosted Inji Verify", ...labels] };
+  private rec(
+    title: string | undefined,
+    labels: string[],
+    phase: "presentation" | "verification" = "presentation",
+  ) {
+    return {
+      title,
+      phase,
+      from: "verifier-backend" as const,
+      to: "hosted-verify" as const,
+      labels: ["hosted Inji Verify", ...labels],
+    };
   }
 
   private fail(r: { status: number; body: unknown }, what: string): never {
     const b = (r.body ?? {}) as Record<string, unknown>;
     const code = String(b.errorCode ?? b.error ?? `HTTP_${r.status}`);
     const detail = String(b.errorMessage ?? b.error_description ?? "");
-    throw new HostedVerifyError(r.status, code, `${what}: HTTP ${r.status} ${code}${detail ? ` (${detail})` : ""}.`, r.body);
+    throw new HostedVerifyError(
+      r.status,
+      code,
+      `${what}: HTTP ${r.status} ${code}${detail ? ` (${detail})` : ""}.`,
+      r.body,
+    );
   }
 
   /**
    * Ask for a presentation. With a DCQL query this is the 1.0 request; a Presentation Exchange definition is sent
    * only to record how a DCQL-only verifier answers it.
    */
-  async createRequest(o: { clientId: string; dcqlQuery?: DcqlQuery; presentationDefinition?: PresentationDefinition; runId?: string | null }): Promise<HostedVerifyRequest> {
+  async createRequest(o: {
+    clientId: string;
+    dcqlQuery?: DcqlQuery;
+    presentationDefinition?: PresentationDefinition;
+    runId?: string | null;
+  }): Promise<HostedVerifyRequest> {
     // Inji Verify 1.0 wants a nonce of at least 16 URL-safe characters.
     const nonce = randomBytes(18).toString("base64url");
-    const json = { clientId: o.clientId, nonce, ...(o.dcqlQuery ? { dcqlQuery: o.dcqlQuery } : {}), ...(o.presentationDefinition ? { presentationDefinition: o.presentationDefinition } : {}) };
+    const json = {
+      clientId: o.clientId,
+      nonce,
+      ...(o.dcqlQuery ? { dcqlQuery: o.dcqlQuery } : {}),
+      ...(o.presentationDefinition ? { presentationDefinition: o.presentationDefinition } : {}),
+    };
     const r = await recordedFetch(this.recorder, {
       url: this.url("/v2/vp-request"),
       json,
       runId: o.runId,
-      record: this.rec("Create authorization request", ["OpenID4VP 1.0", o.dcqlQuery ? "dcql" : "presentation_exchange", o.clientId.includes("did:") ? "request_uri (signed request)" : "request by value"]),
+      record: this.rec("Create authorization request", [
+        "OpenID4VP 1.0",
+        o.dcqlQuery ? "dcql" : "presentation_exchange",
+        o.clientId.includes("did:") ? "request_uri (signed request)" : "request by value",
+      ]),
     });
     if (r.status >= 300) this.fail(r, "The hosted Inji Verify refused the request");
     return { ...(r.body as Omit<HostedVerifyRequest, "nonce">), nonce };
@@ -87,20 +124,38 @@ export class HostedVerifyClient {
   }
 
   async status(requestId: string, runId?: string | null): Promise<string> {
-    const r = await recordedFetch(this.recorder, { url: this.url(`/vp-request/${requestId}/status`), runId, timeoutMs: 40_000, record: this.rec(undefined, ["long polling"]) });
+    const r = await recordedFetch(this.recorder, {
+      url: this.url(`/vp-request/${requestId}/status`),
+      runId,
+      timeoutMs: 40_000,
+      record: this.rec(undefined, ["long polling"]),
+    });
     if (r.status >= 300) this.fail(r, "Status check failed");
     return String((r.body as { status?: string }).status ?? "UNKNOWN");
   }
 
   async result(transactionId: string, runId?: string | null): Promise<VerifyResultV2> {
-    const r = await recordedFetch(this.recorder, { url: this.url(`/v2/vp-results/${transactionId}`), json: { skipStatusChecks: false, includeClaims: false }, runId, record: this.rec(undefined, [], "verification") });
+    const r = await recordedFetch(this.recorder, {
+      url: this.url(`/v2/vp-results/${transactionId}`),
+      json: { skipStatusChecks: false, includeClaims: false },
+      runId,
+      record: this.rec(undefined, [], "verification"),
+    });
     if (r.status >= 300) this.fail(r, "The hosted Inji Verify gave no result");
     return r.body as VerifyResultV2;
   }
 
   /** Direct share: one credential, no OpenID4VP. */
-  async verifyCredential(credential: string, runId?: string | null): Promise<VerifyResultV2["credentialResults"][number]> {
-    const r = await recordedFetch(this.recorder, { url: this.url("/v2/vc-verification"), json: { verifiableCredential: credential }, runId, record: this.rec(undefined, ["direct share", "no OpenID4VP"], "verification") });
+  async verifyCredential(
+    credential: string,
+    runId?: string | null,
+  ): Promise<VerifyResultV2["credentialResults"][number]> {
+    const r = await recordedFetch(this.recorder, {
+      url: this.url("/v2/vc-verification"),
+      json: { verifiableCredential: credential },
+      runId,
+      record: this.rec(undefined, ["direct share", "no OpenID4VP"], "verification"),
+    });
     if (r.status >= 300) this.fail(r, "The hosted Inji Verify could not check the credential");
     return r.body as VerifyResultV2["credentialResults"][number];
   }
@@ -110,7 +165,10 @@ export class HostedVerifyClient {
       const res = await fetch(this.url("/did.json"), { signal: AbortSignal.timeout(5000) });
       return { ok: true, detail: `HTTP ${res.status} from ${new URL(this.base).host}` };
     } catch (e) {
-      return { ok: false, detail: `${new URL(this.base).host} is not reachable (${(e as { cause?: { code?: string } }).cause?.code ?? (e as Error).name}).` };
+      return {
+        ok: false,
+        detail: `${new URL(this.base).host} is not reachable (${(e as { cause?: { code?: string } }).cause?.code ?? (e as Error).name}).`,
+      };
     }
   }
 }

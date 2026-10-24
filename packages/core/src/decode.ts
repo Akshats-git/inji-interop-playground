@@ -28,7 +28,11 @@ export function decodeJwt(token: string): DecodedJwt | null {
   if (!looksLikeJwt(token)) return null;
   const [h, p, sig] = token.split(".");
   try {
-    return { header: JSON.parse(b64urlToString(h!)), payload: JSON.parse(b64urlToString(p!)), signature: sig ?? "" };
+    return {
+      header: JSON.parse(b64urlToString(h!)),
+      payload: JSON.parse(b64urlToString(p!)),
+      signature: sig ?? "",
+    };
   } catch {
     return null;
   }
@@ -49,7 +53,8 @@ export interface DecodedSdJwt {
   keyBindingRaw?: string;
 }
 
-export const looksLikeSdJwt = (s: unknown): s is string => typeof s === "string" && s.includes("~") && looksLikeJwt(s.split("~")[0]);
+export const looksLikeSdJwt = (s: unknown): s is string =>
+  typeof s === "string" && s.includes("~") && looksLikeJwt(s.split("~")[0]);
 
 /** `<issuer-jwt>~<disclosure>~…~<kb-jwt?>` */
 export function decodeSdJwt(token: string): DecodedSdJwt | null {
@@ -65,12 +70,22 @@ export function decodeSdJwt(token: string): DecodedSdJwt | null {
   for (const raw of disclosureParts) {
     try {
       const arr = JSON.parse(b64urlToString(raw)) as unknown[];
-      disclosures.push(arr.length === 3 ? { raw, salt: String(arr[0]), name: String(arr[1]), value: arr[2] } : { raw, salt: String(arr[0]), value: arr[1] });
+      disclosures.push(
+        arr.length === 3
+          ? { raw, salt: String(arr[0]), name: String(arr[1]), value: arr[2] }
+          : { raw, salt: String(arr[0]), value: arr[1] },
+      );
     } catch {
       /* not a disclosure */
     }
   }
-  return { issuerJwt, issuerJwtRaw, disclosures, keyBinding: kb ?? undefined, keyBindingRaw: kb ? last : undefined };
+  return {
+    issuerJwt,
+    issuerJwtRaw,
+    disclosures,
+    keyBinding: kb ?? undefined,
+    keyBindingRaw: kb ? last : undefined,
+  };
 }
 
 /** Claims an SD-JWT reveals once its disclosures are applied (top-level only; enough for display). */
@@ -112,7 +127,11 @@ export function parseCredentialOffer(uri: string): ParsedOffer | null {
  * credential from the QR code, then signs the holder in at the issuer's authorization server (eSignet) itself.
  * This is how an authorization-code issuer (every MOSIP Collab issuer) becomes a QR code a wallet can scan.
  */
-export function authorizationCodeOffer(credentialIssuer: string, configurationIds: string[], authorizationServer?: string): string {
+export function authorizationCodeOffer(
+  credentialIssuer: string,
+  configurationIds: string[],
+  authorizationServer?: string,
+): string {
   const offer = {
     credential_issuer: credentialIssuer,
     credential_configuration_ids: configurationIds,
@@ -147,7 +166,10 @@ export function sniff(input: string): Sniffed {
     const o = parseCredentialOffer(s);
     if (o) return { kind: "credential-offer", value: o };
   }
-  if (/^(openid4vp|openid-vc|haip|mdoc-openid4vp|eudi-openid4vp|INJI_OVP):/i.test(s) || /[?&]request_uri=|[?&]presentation_definition=|[?&]dcql_query=/.test(s)) {
+  if (
+    /^(openid4vp|openid-vc|haip|mdoc-openid4vp|eudi-openid4vp|INJI_OVP):/i.test(s) ||
+    /[?&]request_uri=|[?&]presentation_definition=|[?&]dcql_query=/.test(s)
+  ) {
     const r = parseAuthorizationRequest(s);
     if (r) return { kind: "authorization-request", value: r };
   }
@@ -158,15 +180,31 @@ export function sniff(input: string): Sniffed {
   }
 }
 
-const SECRET_KEYS = new Set(["access_token", "refresh_token", "pre-authorized_code", "tx_code", "authorization", "cookie", "set-cookie", "code", "response_code", "code_verifier", "client_assertion", "x-xsrf-token", "oauth-details-hash"]);
+const SECRET_KEYS = new Set([
+  "access_token",
+  "refresh_token",
+  "pre-authorized_code",
+  "tx_code",
+  "authorization",
+  "cookie",
+  "set-cookie",
+  "code",
+  "response_code",
+  "code_verifier",
+  "client_assertion",
+  "x-xsrf-token",
+  "oauth-details-hash",
+]);
 
 /** Replace secret-looking values with a fingerprint so the inspector can show structure without leaking. */
 export function maskSecrets<T>(value: T, reveal = false): T {
   if (reveal) return value;
   const walk = (v: unknown, key?: string): unknown => {
-    if (key && SECRET_KEYS.has(key.toLowerCase()) && (typeof v === "string" || typeof v === "number")) return mask(String(v));
+    if (key && SECRET_KEYS.has(key.toLowerCase()) && (typeof v === "string" || typeof v === "number"))
+      return mask(String(v));
     if (Array.isArray(v)) return v.map((x) => walk(x));
-    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x, k)]));
+    if (v && typeof v === "object")
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x, k)]));
     return v;
   };
   return walk(value) as T;

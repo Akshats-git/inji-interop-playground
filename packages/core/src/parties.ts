@@ -14,7 +14,9 @@ const ID = /^[a-z][a-z0-9-]{1,40}$/;
 const id = z.string().regex(ID, "lowercase letters, digits and dashes, starting with a letter");
 
 /** Where to find a value in a step's response: "$" (the whole body), "$.a.b[0]", "header:location" or "query:<param>". */
-const Selector = z.string().regex(/^(\$.*|header:[\w-]+|query:[\w.-]+)$/, 'a JSON path ("$.a.b"), "header:<name>" or "query:<param>"');
+const Selector = z
+  .string()
+  .regex(/^(\$.*|header:[\w-]+|query:[\w.-]+)$/, 'a JSON path ("$.a.b"), "header:<name>" or "query:<param>"');
 
 export const HttpStep = z.object({
   /** Shown in the inspector, e.g. "Create offer at walt.id". */
@@ -64,7 +66,10 @@ export const ExternalTypeInput = z
     /** Steps that make the issuer create a credential offer for these claims. Must save `offerUri`. Overrides the issuer's. */
     offer: Steps.optional(),
   })
-  .refine((t) => (t.format === "ldp_vc" ? Boolean(t.typeName) : Boolean(t.vct)), { message: "ldp_vc types need typeName; SD-JWT types need vct", path: ["format"] });
+  .refine((t) => (t.format === "ldp_vc" ? Boolean(t.typeName) : Boolean(t.vct)), {
+    message: "ldp_vc types need typeName; SD-JWT types need vct",
+    path: ["format"],
+  });
 export type ExternalTypeInput = z.infer<typeof ExternalTypeInput>;
 
 export const ExternalIssuerInput = z.object({
@@ -94,8 +99,14 @@ export const ExternalIssuerInput = z.object({
       jwksUri: z.string().url().optional(),
     })
     .default({}),
-  backgroundColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
-  textColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  backgroundColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+  textColor: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   types: z.array(ExternalTypeInput).min(1).max(30),
 });
 export type ExternalIssuerInput = z.infer<typeof ExternalIssuerInput>;
@@ -124,7 +135,13 @@ export const ExternalWalletInput = z.object({
   software: z.string().max(80).optional(),
   kind: z.enum(["mobile", "web", "headless"]),
   homepage: z.string().url().optional(),
-  install: z.object({ android: z.string().url().optional(), ios: z.string().url().optional(), web: z.string().url().optional() }).default({}),
+  install: z
+    .object({
+      android: z.string().url().optional(),
+      ios: z.string().url().optional(),
+      web: z.string().url().optional(),
+    })
+    .default({}),
   formats: z.array(z.string()).default([]),
   protocols: z.array(z.string()).default([]),
   notes: z.string().max(600).optional(),
@@ -173,7 +190,9 @@ export const EnvironmentInput = z.object({
     })
     .optional(),
   /** Issuers to use that Mimoto does not list, by their OpenID4VCI credential_issuer. */
-  issuers: z.array(z.object({ id, name: z.string().trim().min(2).max(80), credentialIssuer: z.string().url() })).default([]),
+  issuers: z
+    .array(z.object({ id, name: z.string().trim().min(2).max(80), credentialIssuer: z.string().url() }))
+    .default([]),
   /** An Inji Verify deployment the playground can send presentation requests to. */
   verify: z
     .object({
@@ -183,7 +202,10 @@ export const EnvironmentInput = z.object({
       /** client_id for its requests. Its own DID makes it sign them (a small request_uri QR). */
       clientId: z.string().min(1),
       /** What it accepts: the 1.0 line takes DCQL only, the 0.x line Presentation Exchange only. */
-      queryLanguages: z.array(z.enum(["presentation_exchange", "dcql"])).min(1).default(["dcql"]),
+      queryLanguages: z
+        .array(z.enum(["presentation_exchange", "dcql"]))
+        .min(1)
+        .default(["dcql"]),
       formats: z.array(ApiFormat).default(["ldp_vc", "vc+sd-jwt", "dc+sd-jwt"]),
       version: z.string().trim().max(40).optional(),
     })
@@ -209,7 +231,9 @@ export const EnvironmentInput = z.object({
       otp: z.string().trim().max(12).optional(),
       identities: z.array(TestIdentity).default([]),
       /** Extra notes for one issuer (Mimoto issuer_id) or all, e.g. the insurance policy to sign in with. */
-      notes: z.array(z.object({ issuer: z.string().optional(), text: z.string().trim().min(1).max(400) })).default([]),
+      notes: z
+        .array(z.object({ issuer: z.string().optional(), text: z.string().trim().min(1).max(400) }))
+        .default([]),
       /** Where a person can get their own identity (it arrives by email). */
       selfRegistration: z.string().url().optional(),
     })
@@ -236,26 +260,50 @@ export function partiesProblems(p: PartiesFile): string[] {
       seen.add(i);
     }
   };
-  dup("issuer", p.issuers.map((i) => i.id));
-  dup("verifier", p.verifiers.map((v) => v.id));
-  dup("wallet", p.wallets.map((w) => w.id));
-  dup("environment", p.environments.map((e) => e.id));
+  dup(
+    "issuer",
+    p.issuers.map((i) => i.id),
+  );
+  dup(
+    "verifier",
+    p.verifiers.map((v) => v.id),
+  );
+  dup(
+    "wallet",
+    p.wallets.map((w) => w.id),
+  );
+  dup(
+    "environment",
+    p.environments.map((e) => e.id),
+  );
   for (const e of p.environments) {
-    if (!e.mimoto && !e.issuers.length && !e.verify) out.push(`environment ${e.id}: give it a mimoto or issuers (where its issuers are), a verify (its verifier), or both.`);
-    if (e.verify && p.verifiers.some((v) => v.id === hostedVerifierId(e.id))) out.push(`environment ${e.id}: its verifier id "${hostedVerifierId(e.id)}" is also used in verifiers.`);
+    if (!e.mimoto && !e.issuers.length && !e.verify)
+      out.push(
+        `environment ${e.id}: give it a mimoto or issuers (where its issuers are), a verify (its verifier), or both.`,
+      );
+    if (e.verify && p.verifiers.some((v) => v.id === hostedVerifierId(e.id)))
+      out.push(`environment ${e.id}: its verifier id "${hostedVerifierId(e.id)}" is also used in verifiers.`);
   }
   for (const i of p.issuers) {
-    dup(`type (issuer ${i.id})`, i.types.map((t) => t.id));
+    dup(
+      `type (issuer ${i.id})`,
+      i.types.map((t) => t.id),
+    );
     for (const t of i.types) {
       const steps = t.offer ?? i.offer;
-      if (steps && !steps.some((s) => "offerUri" in s.save)) out.push(`issuer ${i.id}, type ${t.id}: the offer steps never save "offerUri".`);
+      if (steps && !steps.some((s) => "offerUri" in s.save))
+        out.push(`issuer ${i.id}, type ${t.id}: the offer steps never save "offerUri".`);
     }
   }
   for (const v of p.verifiers) {
-    if (!v.request.some((s) => "requestUri" in s.save)) out.push(`verifier ${v.id}: the request steps never save "requestUri".`);
-    if (!v.result.some((s) => "verified" in s.save)) out.push(`verifier ${v.id}: the result steps never save "verified".`);
+    if (!v.request.some((s) => "requestUri" in s.save))
+      out.push(`verifier ${v.id}: the request steps never save "requestUri".`);
+    if (!v.result.some((s) => "verified" in s.save))
+      out.push(`verifier ${v.id}: the result steps never save "verified".`);
   }
-  for (const w of p.wallets) if (w.automation && w.kind !== "headless") out.push(`wallet ${w.id}: automation is only for headless wallets (kind: headless).`);
+  for (const w of p.wallets)
+    if (w.automation && w.kind !== "headless")
+      out.push(`wallet ${w.id}: automation is only for headless wallets (kind: headless).`);
   return out;
 }
 
@@ -314,7 +362,8 @@ export interface CatalogType {
   };
 }
 
-export const hostedTypeId = (environmentId: string, issuerId: string, configurationId: string) => `hosted:${environmentId}/${issuerId}/${encodeURIComponent(configurationId)}`;
+export const hostedTypeId = (environmentId: string, issuerId: string, configurationId: string) =>
+  `hosted:${environmentId}/${issuerId}/${encodeURIComponent(configurationId)}`;
 export const isHostedTypeId = (id: string) => id.startsWith("hosted:");
 /** The verifier id an environment's Inji Verify gets in runs and the registry. */
 export const hostedVerifierId = (environmentId: string) => `${environmentId}-verify`;
@@ -334,7 +383,14 @@ export function catalogFromStudio(t: CredentialType, issuerName: string): Catalo
     vct: t.format === "vc+sd-jwt" ? vctFor(t.syncedBaseUrl, t) : undefined,
     typeIri: t.format === "ldp_vc" ? typeIriFor(t.syncedBaseUrl, t) : undefined,
     proof: t.format === "ldp_vc" ? t.ldpSuite : `SD-JWT ${signingAlgOf(t)}`,
-    fields: t.fields.map((f) => ({ name: f.name, label: f.label, kind: f.kind, options: f.options, sample: f.example, selectivelyDisclosable: f.selectivelyDisclosable })),
+    fields: t.fields.map((f) => ({
+      name: f.name,
+      label: f.label,
+      kind: f.kind,
+      options: f.options,
+      sample: f.example,
+      selectivelyDisclosable: f.selectivelyDisclosable,
+    })),
     canIssue: true,
     configurationId: t.configId,
     expiresAt: t.expiresAt || undefined,
@@ -396,7 +452,8 @@ const PART = /\$\{([^}]+)\}/g;
 export function lookup(ctx: Record<string, unknown>, name: string): unknown {
   let cur: unknown = ctx;
   for (const p of name.split(".")) {
-    if (cur && typeof cur === "object" && p in (cur as Record<string, unknown>)) cur = (cur as Record<string, unknown>)[p];
+    if (cur && typeof cur === "object" && p in (cur as Record<string, unknown>))
+      cur = (cur as Record<string, unknown>)[p];
     else return undefined;
   }
   return cur;
@@ -424,12 +481,16 @@ export function render(template: unknown, ctx: Record<string, unknown>): unknown
     });
   }
   if (Array.isArray(template)) return template.map((t) => render(t, ctx));
-  if (template && typeof template === "object") return Object.fromEntries(Object.entries(template).map(([k, v]) => [k, render(v, ctx)]));
+  if (template && typeof template === "object")
+    return Object.fromEntries(Object.entries(template).map(([k, v]) => [k, render(v, ctx)]));
   return template;
 }
 
 /** Take a value out of a response with a save selector. */
-export function select(selector: string, res: { body: unknown; text: string; headers: Record<string, string> }): unknown {
+export function select(
+  selector: string,
+  res: { body: unknown; text: string; headers: Record<string, string> },
+): unknown {
   if (selector === "$") return res.body ?? res.text;
   if (selector.startsWith("header:")) return res.headers[selector.slice(7).toLowerCase()];
   if (selector.startsWith("query:")) {
