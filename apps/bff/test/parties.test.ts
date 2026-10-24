@@ -40,7 +40,7 @@ describe("the shipped parties file", () => {
   it("loads without problems once the lab keys exist", () => {
     const loaded = loadPartiesFile(join(infraWithKeys(), "parties.yaml"));
     expect(loaded.errors).toEqual([]);
-    expect(loaded.data.issuers.map((i) => i.id)).toEqual(["waltid-demo"]);
+    expect(loaded.data.issuers.map((i) => i.id)).toEqual(["waltid-demo", "animo-tax"]);
     expect(loaded.data.verifiers.map((v) => v.id)).toEqual(["waltid-verifier"]);
     expect(loaded.data.wallets.map((w) => w.id)).toEqual(["waltid-wallet"]);
     // ${jwk:…} turned the PEM key into a JWK the issuer API can use.
@@ -65,6 +65,7 @@ describe("the shipped parties file", () => {
     expect(parties.catalog().map((t) => t.id)).toEqual([
       "ext:waltid-demo/library-card",
       "ext:waltid-demo/university-degree",
+      "ext:animo-tax/tax-id",
     ]);
     expect(parties.catalog()[0]).toMatchObject({
       origin: "external",
