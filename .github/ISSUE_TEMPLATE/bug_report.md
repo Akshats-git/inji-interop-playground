@@ -1,0 +1,15 @@
+---
+name: Bug report
+about: Something in the playground does not work
+labels: bug
+---
+
+**What happened**
+
+**What you expected**
+
+**Steps** (the run id or the matrix row, e.g. `C7`, helps)
+
+**Versions** (`./playground.sh doctor` output, browser, OS)
+
+Do not paste real personal data or secrets.

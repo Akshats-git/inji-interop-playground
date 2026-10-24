@@ -1,9 +1,7 @@
 # Inji Interoperability Playground
 
-<!-- CI badge: replace OWNER once the GitHub repository exists, then uncomment.
-[![CI](https://github.com/OWNER/inji-interop-playground/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/inji-interop-playground/actions/workflows/ci.yml)
-[![Nightly interop matrix](https://github.com/OWNER/inji-interop-playground/actions/workflows/nightly-interop.yml/badge.svg)](https://github.com/OWNER/inji-interop-playground/actions/workflows/nightly-interop.yml)
--->
+[![CI](https://github.com/Akshats-git/inji-interop-playground/actions/workflows/ci.yml/badge.svg)](https://github.com/Akshats-git/inji-interop-playground/actions/workflows/ci.yml)
+[![Nightly interop matrix](https://github.com/Akshats-git/inji-interop-playground/actions/workflows/nightly-interop.yml/badge.svg)](https://github.com/Akshats-git/inji-interop-playground/actions/workflows/nightly-interop.yml)
 
 The Inji Interoperability Playground is a lab for the whole Verifiable Credential lifecycle on MOSIP's Inji stack.
 In it you can:
@@ -30,7 +28,7 @@ You need **Docker** with Compose 2.20 or newer, about **6 GB of memory** for Doc
 3 GB) and about 3 GB of disk for images. It runs on Linux and macOS; on Windows, use WSL2 (not tested).
 
 ```bash
-git clone <repository-url> inji-interop-playground
+git clone https://github.com/Akshats-git/inji-interop-playground inji-interop-playground
 cd inji-interop-playground
 ./playground.sh up        # builds the playground, starts Postgres, Inji Certify 0.14.0 and Inji Verify 0.18.2
 ```
