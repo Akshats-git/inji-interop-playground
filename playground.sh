@@ -15,7 +15,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$ROOT/.env"
 COMPOSE_FILE="$ROOT/infra/compose.yml"
-PROJECT="inji-playground"
+PROJECT="${PLAYGROUND_PROJECT:-inji-playground}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-600}"
 
 if [[ -t 1 ]]; then B=$'\e[1m'; G=$'\e[32m'; R=$'\e[31m'; Y=$'\e[33m'; D=$'\e[2m'; N=$'\e[0m'; else B='' G='' R='' Y='' D='' N=''; fi
