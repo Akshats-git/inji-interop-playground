@@ -60,7 +60,7 @@ minutes to boot. Demo issuers and credential types are created on first start.
    presentation definition, the `vp_token` and Verify's result. Secrets are masked; *Reveal tokens* works on
    this computer only.
 4. **Run it again with *Make the wallet misbehave* → Answer with a stale nonce**, once for the JSON-LD card and
-   once for the SD-JWT card. Inji Verify rejects the first and accepts the second. That is gap G19.
+   once for the SD-JWT card. Inji Verify treats the two differently. That is a known gap (G19, details withheld).
 
 ## Running each flow
 
@@ -131,7 +131,7 @@ turns green when the sandbox is reachable.
   ([Android APK](https://drive.google.com/drive/folders/1gBjFSdpjxU4bsZi7-xS59W1-EIFKrkS8),
   [iOS TestFlight](https://testflight.apple.com/join/7FTAdjLe)), choose the issuer in the app, sign in with a demo
   UIN and OTP `111111`, then present to Collab's Inji Verify. This is the path Swati described at AMA 4; the playground's automated runs use the Reference Wallet instead, and a physical phone run is still to be recorded.
-- **What it found there:** Collab's Verify 1.0 fixes G19 and G20 but still accepts a forged SD-JWT (G11), and
+- **What it found there:** Collab's Verify 1.0 fixes G19 and G20 but G11 is still present (details withheld), and
   reads DCQL claim paths differently from OpenID4VP 1.0 (G36); Collab's Land registry credentials cannot be
   verified by anyone (G41). See [docs/gaps.md](docs/gaps.md) (G36–G41).
 - Inji Verify 1.0 speaks **DCQL only**, and **does not support `mso_mdoc`** (AMA 4).
@@ -176,7 +176,7 @@ the same verdicts over a tunnel and on fresh volumes (11 Oct).
 | Direct share (PixelPass) | JSON-LD 2.0, SD-JWT | ✅ accepted | — |
 | Expired credential | JSON-LD 2.0 | ✅ rejected | ✅ rejected |
 | Altered claim, someone else's credential | both | ✅ rejected | ✅ rejected |
-| Stale nonce, no holder proof, forged SD-JWT | SD-JWT | ❌ **accepted** | ✅ rejected |
+| Stale nonce, no holder proof, forged SD-JWT | SD-JWT | ❌ known gaps (G11, G19, G20; details withheld) | ✅ rejected |
 | Honest presentation of an **external issuer's** SD-JWT (walt.id) | SD-JWT | ✅ accepted | ✅ accepted |
 | An **external wallet** (walt.id) presenting | SD-JWT | ✅ accepted by value; ❌ cannot fetch a signed request (G35) | ❌ rejected: its submission ids break PE (G33) |
 
@@ -188,7 +188,7 @@ On **MOSIP Collab** (Inji Verify 1.0.0-alpha.1, DCQL only):
 | Presentation Exchange request | JSON-LD | ✅ refused (`UNKNOWN_FIELD`): the mirror of the 0.18.2 gap G22 |
 | DCQL claim path written as OpenID4VP 1.0 says | JSON-LD | ❌ **rejected** (G36); Inji's own path style is accepted |
 | Stale nonce, no holder proof, altered claim, someone else's credential | SD-JWT, JSON-LD | ✅ rejected (G19 and G20 are fixed) |
-| SD-JWT re-signed with a self-signed certificate | SD-JWT | ❌ **accepted** (G11 is still there) |
+| Forged SD-JWT | SD-JWT | ❌ known gap (G11, details withheld) |
 | Collab's Land registry credential | JSON-LD 2.0 | ❌ cannot be verified: its signing key is not in its DID document (G41) |
 | Collab credentials at the bundled Verify 0.18.2, and the bundled Certify 0.14 SD-JWT at Collab's Verify | both | ✅ accepted |
 
@@ -197,9 +197,8 @@ The full report is [docs/interop-report.md](docs/interop-report.md). [docs/gaps.
 
 - **The version split is real.** Inji Verify 0.x accepts Presentation Exchange only. A DCQL request (the
   OpenID4VP 1.0 shape that Verify 1.0 uses) fails with a misleading `BOTH_ID_AND_PD_CANNOT_BE_NULL` (G22).
-- **Three SD-JWT verification weaknesses in Inji Verify 0.18.2** (G11, G19, G20), each reproducible with one
-  tamper preset. The 1.0.0-alpha.1 on Collab fixes two and still has G11. They are being reported to MOSIP
-  privately.
+- **Three SD-JWT verification weaknesses in Inji Verify 0.18.2** (G11, G19, G20). The 1.0.0-alpha.1 on Collab fixes two and still has G11. They are being reported to MOSIP
+  privately, so the mechanism is withheld for now.
 - **Collab's Verify 1.0 reads DCQL claim paths differently from OpenID4VP 1.0** (G36), so a spec-written request
   rejects honest presentations.
 - **The reference setups do not work out of the box.** At the released tags, broken database scripts and

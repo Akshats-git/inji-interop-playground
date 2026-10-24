@@ -82,7 +82,7 @@ export const ExternalIssuerInput = z.object({
   offer: Steps.optional(),
   /**
    * How the playground's Reference Verifier should trust this issuer's SD-JWT signatures. Inji Verify 0.18.2
-   * ignores this (it trusts whatever x5c certificate the token carries, gap G11).
+   * ignores this (gap G11).
    */
   trust: z
     .object({

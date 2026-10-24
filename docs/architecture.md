@@ -153,8 +153,7 @@ flowchart LR
   Verify / the Reference Verifier ask for the external type by its `vct` or `typeName`; *present* drives an
   API wallet through its automation steps, or waits for a person; *verify* polls the external verifier's result
   steps until it gives a verdict, and lists its own policy results as checks.
-- **Trust.** Inji Verify 0.18.2 checks an SD-JWT against the `x5c` certificate in the token itself (G11), so an
-  external issuer that signs with `x5c` verifies there with no configuration. The Reference Verifier trusts an
+- **Trust.** Inji Verify 0.18.2 needs no configuration to verify an external issuer's SD-JWT. The Reference Verifier trusts an
   external issuer only through the certificates, JWKs or JWKS URL its entry lists under `trust`.
 - **What a person cannot be watched doing.** External parties are not behind the gateway, so a phone talking to
   one directly is invisible to the playground; those steps wait for *Continue*. Everything the playground itself

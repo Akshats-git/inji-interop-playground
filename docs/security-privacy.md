@@ -119,7 +119,7 @@ handled like code:
   git-ignored. The lab's wallet login (`lab@example.org`) is a fixed demo account on a service that exists only
   on the Docker network.
 - **Trust is explicit.** The Reference Verifier accepts an external issuer's SD-JWT only if its key matches a
-  certificate or key the entry lists under `trust`. Inji Verify 0.18.2 does not need (or use) that list (G11).
+  certificate or key the entry lists under `trust`. Inji Verify 0.18.2 does not use that list.
 - **Placeholders fail closed.** A misspelled placeholder stops the step with a configuration error instead of
   sending `undefined` to someone else's server.
 - **Synthetic data still applies.** Claim values typed into a run with an external issuer are sent to that
@@ -166,9 +166,7 @@ The Collab lane connects the playground to MOSIP's public sandbox over the inter
 
 ## Findings this lab surfaced about the Inji stack
 
-Testing with tamper presets found weaknesses in Inji Verify 0.18.2 (G11, G19, G20: forged or replayed SD-JWT
-presentations accepted; on Collab's Inji Verify 1.0.0-alpha.1, G19 and G20 are fixed but G11 is not) and in Certify 0.14.0 (G27: the access token's `sub` carries every claim value; G8:
-templates without JSON escaping). They are being reported to MOSIP privately; see
+Testing with tamper presets found weaknesses in Inji Verify 0.18.2 (G11, G19, G20; on Collab's Inji Verify 1.0.0-alpha.1, G19 and G20 are fixed but G11 is not) and in Certify 0.14.0 (G27, G8). They are being reported to MOSIP privately; see
 [gaps.md](gaps.md#responsible-disclosure). The playground's own Reference Verifier rejects all of these
 presentations; it is the comparison that shows the gap.
 

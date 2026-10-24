@@ -216,10 +216,10 @@ export const VERIFIERS: Record<VerifierId, { label: string; accepts: QueryLangua
 
 /** Upstream problems written up in docs/gaps.md that runs reproduce on purpose. */
 export const KNOWN_GAPS = {
-  G11: "Inji Verify trusts whatever x5c certificate an SD-JWT carries",
+  G11: "Inji Verify accepts a forged SD-JWT (reported privately to MOSIP)",
   G15: "Certify signs Ed25519Signature2020 proofs without that suite's @context, so strict JSON-LD processors cannot check them",
-  G19: "Inji Verify does not compare the SD-JWT key-binding nonce",
-  G20: "Inji Verify accepts an SD-JWT with no key-binding JWT",
+  G19: "Inji Verify accepts a replayed SD-JWT presentation (reported privately to MOSIP)",
+  G20: "Inji Verify accepts an SD-JWT presentation without holder proof (reported privately to MOSIP)",
   G30: "walt.id's wallet cannot read Inji Certify's issuer metadata",
   G32: "walt.id's verifier cannot read the holder key in Certify's SD-JWTs",
   G33: "walt.id's wallet puts the definition id in descriptor_map",
@@ -244,7 +244,7 @@ export function knownGapOf(run: Pick<Run, "spec" | "labels" | "result">): KnownG
     if (spec.tamper === "no-holder-proof") return "G20";
     if (spec.tamper === "self-signed-sdjwt") return "G11";
   }
-  // Inji Verify 1.0 (MOSIP Collab) still trusts a self-signed x5c; it fixed G19 and G20.
+  // Inji Verify 1.0 (MOSIP Collab) still has G11; it fixed G19 and G20.
   if (labels.hosted?.verifier && isSdJwtFormat(labels.format) && spec.tamper === "self-signed-sdjwt" && r.verifierOutcome === "ACCEPTED") return "G11";
   if (spec.verifier === "reference-verifier" && labels.hosted?.issuer && labels.format === "ldp_vc" && r.verifierOutcome === "REJECTED" && /safe mode/i.test(`${r.errorDetail ?? ""} ${r.explanation}`)) return "G15";
   if (spec.wallet === "waltid-wallet" && certifyIssued && r.verifierOutcome === "NOT_REACHED" && run.result?.explanation.includes("issue step")) return "G30";

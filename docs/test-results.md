@@ -87,8 +87,7 @@ reachable it adds the C rows. `ONLY=C7,C19` reruns just those rows.
 | Local, with the external lab, signed Inji Verify requests | 19 Oct 2026 | 42 / 9 known / 0 unexpected (51 rows) | (superseded) |
 | Local, with the external lab and MOSIP Collab | 23 Oct 2026 | **58 / 13 known / 0 unexpected (71 rows)** | [interop-report.md](interop-report.md) |
 
-The three known gaps are the same in every mode: **T6** (G19, stale nonce accepted), **T10** (G20, no holder
-proof accepted) and **T17** (G11, forged SD-JWT accepted), all in Inji Verify 0.18.2's SD-JWT handling. The
+The three known gaps are the same in every mode: **T6** (G19), **T10** (G20) and **T17** (G11), all in Inji Verify 0.18.2's SD-JWT handling (details withheld). The
 Reference Verifier rejects all three (T8, T12, T18).
 
 With the external lab, six more rows are known gaps, none of them in the playground: **X9** (G33, walt.id's
@@ -100,7 +99,7 @@ requests and the Collab rows, and have not been repeated. A first run on 12 Oct 
 
 With MOSIP Collab, four more rows are known gaps: **C3** (G36, DCQL claim paths), **C7** (G41, the Land registry's
 signing key is not in its DID document), **C15** (G15, a strict verifier cannot check Collab's JSON-LD) and
-**C18** (G11, the forged SD-JWT is still accepted by Verify 1.0). Verify 1.0 rejects a stale nonce (C16), a
+**C18** (G11, still present in Verify 1.0). Verify 1.0 rejects a stale nonce (C16), a
 missing holder proof (C17), an altered claim (C19, C21) and someone else's credential (C20), so G19 and G20 are
 fixed there. The first Collab run on 23 Oct had two unexpected rows: C7 (a new gap, now G41) and C19, whose
 tamper altered nothing because the request asked for a claim that is not selectively disclosable in Collab's
