@@ -89,6 +89,8 @@ request fetched by `request_uri`); M14, M15 and X7 keep the by-value form. The m
 expected, 9 known gaps (the eight above plus X18 = G35) and 0 unexpected.
 On 23 Oct 2026, with MOSIP Collab added (20 C rows): 71 rows, 58 as expected, 13 known gaps (the nine above plus
 C3 = G36, C7 = G41, C15 = G15 and C18 = G11) and 0 unexpected.
+On 24 Oct 2026, with Animo's hosted playground added (4 A rows) and the images rebuilt: 75 rows, 62 as expected,
+the same 13 known gaps and 0 unexpected.
 
 ## Responsible disclosure
 
@@ -370,6 +372,12 @@ walt.id (the parties file describes every call):
   altered claim (X16, X17).
 - The Reference Verifier trusts the external issuer only through the certificate listed in the parties file,
   so the forged-signature preset is rejected there (X15) and G11 shows again at Inji Verify (X14).
+
+**Animo's hosted playground** (Credo, `dc+sd-jwt`, OpenID4VCI 1.0) is a second real external issuer (A rows). Its
+Tax-ID is collected by the Reference Wallet and accepted by Inji Verify 0.18.2 (A1, A2) and by Collab's Verify 1.0
+(A3); an altered claim is rejected (A4). Presented to the Reference Verifier, the credential is refused only because
+its `x5c` certificate (`CN=credo dcs`) is not in the trust list, which is by design, not a gap. Hovi's test bed
+offers no issuer API (a browser app on a private backend), so it is not in the matrix.
 
 What does not work yet is G30 (walt.id cannot collect from Certify), G32 (walt.id cannot verify Certify's
 SD-JWTs), G33 (walt.id's submission ids) and G35 (walt.id cannot fetch Inji Verify's signed requests). G31

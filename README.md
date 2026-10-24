@@ -110,6 +110,14 @@ stack (issuer, verifier and wallet APIs 1.0.0, see [infra/external/README.md](in
 shipped `parties.yaml` describes them. They run only on the Docker network, so they are for local runs, not for
 phones.
 
+The file also lists **Animo's hosted OpenID4VC playground** (<https://playground.animo.id>, built on Credo, not
+Inji), the external stack the mentors named. It needs no lab: its API creates a pre-authorized offer for a
+`dc+sd-jwt` Tax-ID on request, so the Reference Wallet collects it and Inji Verify 0.18.2 and Collab's Verify 1.0
+verify it (matrix rows A1–A4). The Reference Verifier refuses it only because Animo's certificate is not in its trust
+list (checked by hand, not a matrix row). Animo's other issuers can be added the same way.
+**Hovi's test bed** (<https://playground.hovi.id>) was looked at too: it is a browser app on a private backend with
+no documented issuer or offer API, so it can only be used by scanning its QR codes with a phone wallet.
+
 ![The Parties page: built-in and external wallets, issuers and verifiers](docs/screenshots/parties.png)
 
 ## Connecting to MOSIP Collab
@@ -164,9 +172,10 @@ tunnel without an account:
 
 ## What it found
 
-The matrix runs **71 journeys**: 33 against the real Inji Certify 0.14.0 and Inji Verify 0.18.2, 18 more that mix in
-walt.id's issuer, wallet and verifier (the external lab), and 20 against **MOSIP Collab** (Inji 1.0.0-alpha.1).
-**58 behave as expected, 13 are known gaps and 0 are unexpected** (23 Oct 2026). The first 31 local rows also gave
+The matrix runs **75 journeys**: 33 against the real Inji Certify 0.14.0 and Inji Verify 0.18.2, 18 more that mix in
+walt.id's issuer, wallet and verifier (the external lab), 20 against **MOSIP Collab** (Inji 1.0.0-alpha.1) and 4 with
+a credential from **Animo's** hosted playground.
+**62 behave as expected, 13 are known gaps and 0 are unexpected** (24 Oct 2026). The first 31 local rows also gave
 the same verdicts over a tunnel and on fresh volumes (11 Oct).
 
 | | Credential | Inji Verify 0.18.2 | Reference Verifier |
@@ -177,7 +186,7 @@ the same verdicts over a tunnel and on fresh volumes (11 Oct).
 | Expired credential | JSON-LD 2.0 | ✅ rejected | ✅ rejected |
 | Altered claim, someone else's credential | both | ✅ rejected | ✅ rejected |
 | Stale nonce, no holder proof, forged SD-JWT | SD-JWT | ❌ known gaps (G11, G19, G20; details withheld) | ✅ rejected |
-| Honest presentation of an **external issuer's** SD-JWT (walt.id) | SD-JWT | ✅ accepted | ✅ accepted |
+| Honest presentation of an **external issuer's** SD-JWT (walt.id, Animo) | SD-JWT | ✅ accepted | ✅ accepted (walt.id; Animo's needs its certificate in the trust list) |
 | An **external wallet** (walt.id) presenting | SD-JWT | ✅ accepted by value; ❌ cannot fetch a signed request (G35) | ❌ rejected: its submission ids break PE (G33) |
 
 On **MOSIP Collab** (Inji Verify 1.0.0-alpha.1, DCQL only):

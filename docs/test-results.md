@@ -6,7 +6,7 @@ Four layers of testing, from pure functions up to a browser:
 |---|---|---|---|
 | Unit | Core logic and BFF modules, no network | `pnpm test` | **73 passed**: core 30, bff 43 |
 | Static | TypeScript in all three packages, shell script lint | `pnpm typecheck`, `shellcheck -S warning playground.sh` | clean |
-| Interop matrix | 33 end-to-end journeys against the real Inji Certify and Inji Verify, plus 18 with external parties (walt.id) and 20 with MOSIP Collab | `apps/bff/scripts/matrix.ts` | **30 / 3 known / 0 unexpected** local; **58 / 13 known / 0 unexpected** of 71 with everything |
+| Interop matrix | 33 end-to-end journeys against the real Inji Certify and Inji Verify, plus 18 with external parties (walt.id), 20 with MOSIP Collab and 4 with Animo's hosted playground | `apps/bff/scripts/matrix.ts` | **30 / 3 known / 0 unexpected** local; **62 / 13 known / 0 unexpected** of 75 with everything |
 | UI | Every page at 390 px and 1440 px in Chromium | Playwright | no console errors, no horizontal overflow, layout shift below 0.01 |
 
 CI ([.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs the unit and static layers on every push and
@@ -85,7 +85,8 @@ reachable it adds the C rows. `ONLY=C7,C19` reruns just those rows.
 | Fresh volumes (after `reset`) | 11 Oct 2026, 15:45 UTC | 28 / 3 known / 0 unexpected | [evidence/matrix-2026-10-11-fresh-volumes.md](evidence/matrix-2026-10-11-fresh-volumes.md) |
 | Local, with the external lab | 12 Oct 2026 | 40 / 8 known / 0 unexpected (48 rows) | (superseded) |
 | Local, with the external lab, signed Inji Verify requests | 19 Oct 2026 | 42 / 9 known / 0 unexpected (51 rows) | (superseded) |
-| Local, with the external lab and MOSIP Collab | 23 Oct 2026 | **58 / 13 known / 0 unexpected (71 rows)** | [interop-report.md](interop-report.md) |
+| Local, with the external lab and MOSIP Collab | 23 Oct 2026 | 58 / 13 known / 0 unexpected (71 rows) | (superseded) |
+| Local, with the external lab, MOSIP Collab and Animo, rebuilt images | 24 Oct 2026 | **62 / 13 known / 0 unexpected (75 rows)** | [interop-report.md](interop-report.md) |
 
 The three known gaps are the same in every mode: **T6** (G19), **T10** (G20) and **T17** (G11), all in Inji Verify 0.18.2's SD-JWT handling (details withheld). The
 Reference Verifier rejects all three (T8, T12, T18).

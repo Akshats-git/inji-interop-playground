@@ -353,7 +353,7 @@ async function main() {
     "# Interop report",
     "",
     `Generated ${new Date().toISOString()} by \`apps/bff/scripts/matrix.ts\` against ${BASE}.`,
-    `Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier${withExternal ? ", the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0)" : ""}${withCollab ? ", and MOSIP Collab (Inji 1.0.0-alpha.1: its Certify issuers, eSignet and Inji Verify 1.0, reached over the internet)" : ""}.`,
+    `Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier${withExternal ? ", the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0)" : ""}${withCollab ? ", MOSIP Collab (Inji 1.0.0-alpha.1: its Certify issuers, eSignet and Inji Verify 1.0, reached over the internet)" : ""}${withAnimo ? ", and Animo's hosted OpenID4VC playground (Credo)" : ""}.`,
     "",
     "**Verdict** means *the journey behaved as expected*: honest presentations are accepted; tampered or expired ones are rejected.",
     "Rows marked with a gap id are known upstream problems described in [gaps.md](gaps.md).",

@@ -11,6 +11,6 @@
 - Parties: external issuers, wallets and verifiers declared in `infra/parties.yaml`; a walt.id lab.
 - MOSIP Collab lane: authorization-code issuance through eSignet, Collab's Inji Verify 1.0 over DCQL, test-data
   panels, authorization-code offer QR for phones.
-- Results matrix (71 journeys), capabilities and QR Lab, live traffic and decoder.
+- Results matrix (75 journeys), capabilities and QR Lab, live traffic and decoder.
 - One-command Compose bundle, Cloudflare tunnel mode for phones, CI and a nightly matrix workflow.
 - 41 documented gaps between Inji components and the standards.
