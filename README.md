@@ -175,7 +175,7 @@ tunnel without an account:
 The matrix runs **75 journeys**: 33 against the real Inji Certify 0.14.0 and Inji Verify 0.18.2, 18 more that mix in
 walt.id's issuer, wallet and verifier (the external lab), 20 against **MOSIP Collab** (Inji 1.0.0-alpha.1) and 4 with
 a credential from **Animo's** hosted playground.
-**62 behave as expected, 13 are known gaps and 0 are unexpected** (24 Oct 2026). The first 31 local rows also gave
+**62 behave as expected, 13 are known gaps and 0 are unexpected** (24 Oct 2026). (The Results page counts distinct cells of its grid, 70, because five journeys share a cell with another journey (same credential, wallet, verifier and fault).) The first 31 local rows also gave
 the same verdicts over a tunnel and on fresh volumes (11 Oct).
 
 | | Credential | Inji Verify 0.18.2 | Reference Verifier |
