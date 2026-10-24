@@ -292,13 +292,17 @@ flowchart LR
 - **Use synthetic data only.** Nothing here is built for real identities.
 - **Phone runs** are wired end to end (tunnel, did:web, attribution of the phone's messages), but the matrix
   covers them with the Reference Wallet rather than a physical phone.
-- **Inji Verify 1.0 and Inji Web** are not in the local bundle (no 1.0 image is released); DCQL runs against
-  Collab's Verify 1.0 and the Reference Verifier.
+- **The local bundle runs the stable 0.x line** (Certify 0.14.0, Verify 0.18.2). Docker images tagged
+  `1.0.0-alpha.1` exist for Certify and Verify (published 31 Jul and 4 Aug 2026) and MOSIP's forum answer of
+  13 Oct tells teams to use that tag; they are **not** bundled here. The 1.0 line is covered through MOSIP
+  Collab, which runs it (DCQL against Collab's Verify 1.0, `dc+sd-jwt` and the nonce endpoint from Collab's
+  Certify). Inji Web is not bundled either.
 - **Collab is shared and can change.** Its findings are dated 23 Oct 2026; the C rows need internet and skip
   themselves without it. The Reference Wallet signs in with MOSIP's public demo UINs, never real identities.
-- **A phone run with Inji Wallet 1.0.0-alpha.1 has not been recorded yet.** As far as we could tell, Collab has no client for
-  authorization-code offers scanned from outside its own app, so the playground shows the sign-in link, QR and
-  test data rather than a scannable offer for Collab issuers.
+- **A phone run with Inji Wallet 1.0.0-alpha.1 has not been recorded yet.** *Wallet → Collect from MOSIP Collab → Show the QR code
+  for a phone* shows an authorization-code credential offer with the test data beside it, but whether the alpha
+  wallet completes an offer scanned from outside Mimoto's issuer list (Collab's eSignet may not know its client)
+  is untested.
 - **mDoc** can be collected but not verified (no verifier supports `mso_mdoc`).
 - **External parties** in the lab are reachable only inside Docker, so phone runs use Inji Certify. The parties
   file can describe internet-facing parties too; their traffic is recorded by the playground, but a phone's
