@@ -2,7 +2,7 @@
 
 Four layers of testing, from pure functions up to a browser:
 
-| Layer | What | Where | Result (23 Oct 2026) |
+| Layer | What | Where | Result (24 Oct 2026) |
 |---|---|---|---|
 | Unit | Core logic and BFF modules, no network | `pnpm test` | **73 passed**: core 30, bff 43 |
 | Static | TypeScript in all three packages, shell script lint | `pnpm typecheck`, `shellcheck -S warning playground.sh` | clean |
@@ -86,6 +86,7 @@ reachable it adds the C rows. `ONLY=C7,C19` reruns just those rows.
 | Local, with the external lab | 12 Oct 2026 | 40 / 8 known / 0 unexpected (48 rows) | (superseded) |
 | Local, with the external lab, signed Inji Verify requests | 19 Oct 2026 | 42 / 9 known / 0 unexpected (51 rows) | (superseded) |
 | Local, with the external lab and MOSIP Collab | 23 Oct 2026 | 58 / 13 known / 0 unexpected (71 rows) | (superseded) |
+| Fresh clone, empty volumes (rows M1, M11, M12, C1, A1) | 24 Oct 2026 | 5 / 0 known / 0 unexpected | not kept |
 | Local, with the external lab, MOSIP Collab and Animo, rebuilt images | 24 Oct 2026 | **62 / 13 known / 0 unexpected (75 rows)** | [interop-report.md](interop-report.md) |
 
 The three known gaps are the same in every mode: **T6** (G19), **T10** (G20) and **T17** (G11), all in Inji Verify 0.18.2's SD-JWT handling (details withheld). The
@@ -191,4 +192,6 @@ loads took it to 0. The animations themselves only move `transform` and `opacity
   exercised: their eSignets have no client the Reference Wallet can use, so only Inji Wallet on a phone can collect them (Parties page).
 - **Inji Web** (wallet-initiated issuance), an optional extra.
 - The CI workflows on GitHub itself (see above).
-- A fresh clone on a second machine following only the README.
+- A fresh clone on a second **machine**. On 24 Oct a fresh `git clone` in an empty directory, started under its
+  own project name with no existing volumes (`PLAYGROUND_PROJECT=fresh-test ./playground.sh up --external`), passed
+  `doctor` and the rows M1, M11, M12, C1 and A1 as expected; it did not run on different hardware.
