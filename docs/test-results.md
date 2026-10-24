@@ -86,7 +86,7 @@ reachable it adds the C rows. `ONLY=C7,C19` reruns just those rows.
 | Local, with the external lab | 12 Oct 2026 | 40 / 8 known / 0 unexpected (48 rows) | (superseded) |
 | Local, with the external lab, signed Inji Verify requests | 19 Oct 2026 | 42 / 9 known / 0 unexpected (51 rows) | (superseded) |
 | Local, with the external lab and MOSIP Collab | 23 Oct 2026 | 58 / 13 known / 0 unexpected (71 rows) | (superseded) |
-| Fresh clone, empty volumes (rows M1, M11, M12, C1, A1) | 24 Oct 2026 | 5 / 0 known / 0 unexpected | not kept |
+| Fresh clone, empty volumes (rows M1, M11, M12, C1, A1) | 24 Oct 2026 | 5 / 0 known / 0 unexpected | [evidence/matrix-2026-10-24-fresh-clone.md](evidence/matrix-2026-10-24-fresh-clone.md) |
 | Local, with the external lab, MOSIP Collab and Animo, rebuilt images | 24 Oct 2026 | **62 / 13 known / 0 unexpected (75 rows)** | [interop-report.md](interop-report.md) |
 
 The three known gaps are the same in every mode: **T6** (G19), **T10** (G20) and **T17** (G11), all in Inji Verify 0.18.2's SD-JWT handling (details withheld). The
