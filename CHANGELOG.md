@@ -14,3 +14,5 @@
 - Results matrix (75 journeys), capabilities and QR Lab, live traffic and decoder.
 - One-command Compose bundle, Cloudflare tunnel mode for phones, CI and a nightly matrix workflow.
 - 41 documented gaps between Inji components and the standards.
+- Interface follows mosip.io: white paper with faint wave lines, MOSIP navy and amber, Montserrat titles, a utility
+  bar with live service status. Light is the default and dark stays as a toggle.
