@@ -3,7 +3,7 @@
 Generated 2026-10-24T18:02:53.846Z by `apps/bff/scripts/matrix.ts` against http://127.0.0.1:8080.
 Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier, the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0), MOSIP Collab (Inji 1.0.0-alpha.1: its Certify issuers, eSignet and Inji Verify 1.0, reached over the internet), and Animo's hosted OpenID4VC playground (Credo).
 
-**Verdict** means *the journey behaved as expected*: honest presentations are accepted; tampered or expired ones are rejected.
+**Verdict** means *the journey behaved as expected*: honest presentations are accepted, and tampered or expired ones are rejected.
 Rows marked with a gap id are known upstream problems described in [gaps.md](gaps.md).
 
 | # | Credential | Issuer | Format | Wallet | Verifier | Query | Mode | Tamper | Expected | Verifier outcome | Status / error | Verdict | Run |

@@ -8,8 +8,8 @@ labels: bug
 
 **What you expected**
 
-**Steps** (the run id or the matrix row, e.g. `C7`, helps)
+**Steps** (the run id or the matrix row, such as `C7`, helps)
 
 **Versions** (`./playground.sh doctor` output, browser, OS)
 
-Do not paste real personal data or secrets.
+Please don't paste real personal data or secrets.

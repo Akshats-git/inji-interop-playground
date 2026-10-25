@@ -5,7 +5,7 @@
 Generated 2026-10-11T15:45:37.084Z by `apps/bff/scripts/matrix.ts` against http://127.0.0.1:8080.
 Stack: Inji Certify 0.14.0 · Inji Verify 0.18.2 · Reference Wallet / Reference Verifier (playground).
 
-**Verdict** means *the journey behaved as expected*: honest presentations are accepted; tampered or expired ones are rejected.
+**Verdict** means *the journey behaved as expected*: honest presentations are accepted, and tampered or expired ones are rejected.
 Rows marked with a gap id are known upstream problems described in [gaps.md](../gaps.md).
 
 | # | Credential | Format | Verifier | Query | Mode | Tamper | Expected | Verifier outcome | Status / error | Verdict | Run |
@@ -13,8 +13,8 @@ Rows marked with a gap id are known upstream problems described in [gaps.md](../
 | M1 | Karnataka Farmer Card | ldp_vc (DM 2.0) | Inji Verify 0.18.2 | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-wq1s6q` |
 | M2 | Bachelor's Degree | ldp_vc (DM 1.1) | Inji Verify 0.18.2 | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-bukdkw` |
 | M3 | Karnataka Farmer Card (SD-JWT) | vc+sd-jwt | Inji Verify 0.18.2 | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-0oyxtw` |
-| M4 | Karnataka Farmer Card | ldp_vc (DM 2.0) | Inji Verify 0.18.2 | — | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-bcgqqa` |
-| M5 | Karnataka Farmer Card (SD-JWT) | vc+sd-jwt | Inji Verify 0.18.2 | — | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-nngeqq` |
+| M4 | Karnataka Farmer Card | ldp_vc (DM 2.0) | Inji Verify 0.18.2 | n/a | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-bcgqqa` |
+| M5 | Karnataka Farmer Card (SD-JWT) | vc+sd-jwt | Inji Verify 0.18.2 | n/a | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-nngeqq` |
 | M6 | Karnataka Farmer Card | ldp_vc (DM 2.0) | Reference Verifier | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-txy7xa` |
 | M7 | Karnataka Farmer Card | ldp_vc (DM 2.0) | Reference Verifier | DCQL | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-ovgarq` |
 | M8 | Karnataka Farmer Card (SD-JWT) | vc+sd-jwt | Reference Verifier | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-z0go5q` |

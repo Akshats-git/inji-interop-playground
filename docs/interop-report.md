@@ -3,7 +3,7 @@
 Generated 2026-10-24T17:59:37.389Z by `apps/bff/scripts/matrix.ts` against http://127.0.0.1:8080.
 Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier, the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0), MOSIP Collab (Inji 1.0.0-alpha.1: its Certify issuers, eSignet and Inji Verify 1.0, reached over the internet), and Animo's hosted OpenID4VC playground (Credo).
 
-**Verdict** means *the journey behaved as expected*: honest presentations are accepted; tampered or expired ones are rejected.
+**Verdict** means *the journey behaved as expected*: honest presentations are accepted, and tampered or expired ones are rejected.
 Rows marked with a gap id are known upstream problems described in [gaps.md](gaps.md).
 
 | # | Credential | Issuer | Format | Wallet | Verifier | Query | Mode | Tamper | Expected | Verifier outcome | Status / error | Verdict | Run |
@@ -11,8 +11,8 @@ Rows marked with a gap id are known upstream problems described in [gaps.md](gap
 | M1 | Karnataka Farmer Card | Karnataka Agriculture Department | ldp_vc (DM 2.0) | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-vihpla` |
 | M2 | Bachelor's Degree | University of Veridonia | ldp_vc (DM 1.1) | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-iomxwq` |
 | M3 | Karnataka Farmer Card (SD-JWT) | Karnataka Agriculture Department | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-ui7x9a` |
-| M4 | Karnataka Farmer Card | Karnataka Agriculture Department | ldp_vc (DM 2.0) | Reference Wallet | Inji Verify 0.18.2 | — | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-uoq47g` |
-| M5 | Karnataka Farmer Card (SD-JWT) | Karnataka Agriculture Department | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | — | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-axjp0w` |
+| M4 | Karnataka Farmer Card | Karnataka Agriculture Department | ldp_vc (DM 2.0) | Reference Wallet | Inji Verify 0.18.2 | n/a | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-uoq47g` |
+| M5 | Karnataka Farmer Card (SD-JWT) | Karnataka Agriculture Department | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | n/a | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-axjp0w` |
 | M6 | Karnataka Farmer Card | Karnataka Agriculture Department | ldp_vc (DM 2.0) | Reference Wallet | Reference Verifier | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-agiaig` |
 | M7 | Karnataka Farmer Card | Karnataka Agriculture Department | ldp_vc (DM 2.0) | Reference Wallet | Reference Verifier | DCQL | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-k7pa6g` |
 | M8 | Karnataka Farmer Card (SD-JWT) | Karnataka Agriculture Department | vc+sd-jwt | Reference Wallet | Reference Verifier | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-6txbwa` |
@@ -42,7 +42,7 @@ Rows marked with a gap id are known upstream problems described in [gaps.md](gap
 | T17 | Karnataka Farmer Card (SD-JWT) | Karnataka Agriculture Department | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | self-signed-sdjwt | reject | ACCEPTED | SUCCESS | ❌ G11 | `run-ufwceq` |
 | T18 | Karnataka Farmer Card (SD-JWT) | Karnataka Agriculture Department | vc+sd-jwt | Reference Wallet | Reference Verifier | PE | OpenID4VP | self-signed-sdjwt | reject | REJECTED | Issuer is trusted | ✅ | `run-xvtgww` |
 | X1 | City Library Card | walt.id demo issuer | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-fulizg` |
-| X2 | City Library Card | walt.id demo issuer | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | — | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-buc05w` |
+| X2 | City Library Card | walt.id demo issuer | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | n/a | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-buc05w` |
 | X3 | Open University Degree | walt.id demo issuer | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-unzmyw` |
 | X4 | City Library Card | walt.id demo issuer | vc+sd-jwt | Reference Wallet | Reference Verifier | PE | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-my1neg` |
 | X5 | City Library Card | walt.id demo issuer | vc+sd-jwt | Reference Wallet | Reference Verifier | DCQL | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-hldz2a` |
@@ -66,7 +66,7 @@ Rows marked with a gap id are known upstream problems described in [gaps.md](gap
 | C5 | Mock Verifiable Credential (VCDM 2.0) | Collab mock issuer (MOSIP Collab) | ldp_vc (DM 2.0) | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | DCQL | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-gm6cvq` |
 | C6 | Farmer ID Card (VCDM 2.0) | Farmer ID Card (MOSIP Collab) | ldp_vc (DM 2.0) | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | DCQL | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-rsg85q` |
 | C7 | STATEMENT OF THE STATUS OF INFORMATION DECLARED IN CAR (VC DM2.0) (VCDM 2.0) | AgroVeritas Property & Land Registry (MOSIP Collab) | ldp_vc (DM 2.0) | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | DCQL | OpenID4VP | none | accept | REJECTED | VP_VERIFICATION_FAILED | ❌ G41 | `run-o0kshq` |
-| C8 | Mock Verifiable Credential (SD-JWT) | Collab mock issuer (MOSIP Collab) | dc+sd-jwt | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | — | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-nllgnq` |
+| C8 | Mock Verifiable Credential (SD-JWT) | Collab mock issuer (MOSIP Collab) | dc+sd-jwt | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | n/a | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-nllgnq` |
 | C9 | Mock Verifiable Credential (VCDM 1.1) | Collab mock issuer (MOSIP Collab) | ldp_vc (DM 1.1) | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | PE | OpenID4VP | none | reject | REJECTED | QUERY_LANGUAGE_UNSUPPORTED | ✅ | `run-k6aodq` |
 | C10 | Mock Verifiable Credential (VCDM 1.1) | Collab mock issuer (MOSIP Collab) | ldp_vc (DM 1.1) | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-eryloa` |
 | C11 | Mock Verifiable Credential (SD-JWT) | Collab mock issuer (MOSIP Collab) | dc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-yx4sjq` |
@@ -80,7 +80,7 @@ Rows marked with a gap id are known upstream problems described in [gaps.md](gap
 | C20 | Mock Verifiable Credential (SD-JWT) | Collab mock issuer (MOSIP Collab) | dc+sd-jwt | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | DCQL | OpenID4VP | foreign-holder | reject | REJECTED | ERR_INVALID_KB_SIGNATURE | ✅ | `run-dwmq6g` |
 | C21 | Mock Verifiable Credential (VCDM 1.1) | Collab mock issuer (MOSIP Collab) | ldp_vc (DM 1.1) | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | DCQL | OpenID4VP | alter-claim | reject | REJECTED | ERR_SIGNATURE_VERIFICATION_FAILED | ✅ | `run-4fzmtq` |
 | A1 | Tax-ID (Animo) | Animo playground, Federal Central Tax Office | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | none | accept | ACCEPTED | SUCCESS | ✅ | `run-wwvalq` |
-| A2 | Tax-ID (Animo) | Animo playground, Federal Central Tax Office | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | — | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-6bzptq` |
+| A2 | Tax-ID (Animo) | Animo playground, Federal Central Tax Office | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | n/a | direct share | none | accept | ACCEPTED | SUCCESS | ✅ | `run-6bzptq` |
 | A3 | Tax-ID (Animo) | Animo playground, Federal Central Tax Office | vc+sd-jwt | Reference Wallet | Inji Verify 1.0 (MOSIP Collab) | DCQL | OpenID4VP | none | accept | ACCEPTED | SUCCESS | ✅ | `run-xgoucw` |
 | A4 | Tax-ID (Animo) | Animo playground, Federal Central Tax Office | vc+sd-jwt | Reference Wallet | Inji Verify 0.18.2 | PE | OpenID4VP, signed request_uri | alter-claim | reject | REJECTED | ERR_INVALID_DISCLOSURE | ✅ | `run-xc6ubg` |
 
