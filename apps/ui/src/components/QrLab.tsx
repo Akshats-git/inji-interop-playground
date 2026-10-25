@@ -1,5 +1,5 @@
 /**
- * QR Lab: how large a credential is as a QR code, drawn on a line of QR versions 1–40 whose stations are
+ * QR Lab: how large a credential is as a QR code, drawn on a line of QR versions 1 to 40 whose stations are
  * the documented limits (Certify's issuing cap, Inji Verify's scan and upload caps, the QR maximum).
  */
 import { useDeferredValue, useId, useState } from "react";
@@ -201,9 +201,9 @@ export function PhotoSizeLab() {
           className="w-full accent-[var(--present)]"
         />
         <p className="text-sm text-muted">
-          A typical ID-card face JPEG is 4–12 KB, well past the end of this slider: everything a QR code can
-          carry fits in under 2.5 KB. The photo bytes here are random, which compresses about as badly as real
-          JPEG data.
+          A typical ID-card face JPEG is 4 to 12 KB. That is well past the end of this slider, because a QR
+          code can only carry about 2.5 KB. The photo bytes here are random, which compress about as badly as
+          real JPEG data.
         </p>
       </div>
       {q.data ? (

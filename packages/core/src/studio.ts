@@ -30,7 +30,7 @@ const RESERVED_FIELDS = new Set([
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
 export const IssuerProfileInput = z.object({
-  slug: z.string().regex(SLUG, "lowercase letters, digits and dashes (3–32 chars)"),
+  slug: z.string().regex(SLUG, "lowercase letters, digits and dashes (3 to 32 characters)"),
   name: z.string().trim().min(2).max(80),
   description: z.string().trim().max(280).default(""),
   logoUrl: z.string().url().or(z.literal("")).default(""),
@@ -45,7 +45,7 @@ export type FieldKind = z.infer<typeof FieldKind>;
 
 export const FieldDef = z
   .object({
-    name: z.string().regex(FIELD_NAME, "start with a letter; letters, digits, _ only"),
+    name: z.string().regex(FIELD_NAME, "start with a letter, then use letters, digits or _ only"),
     label: z.string().trim().min(1).max(60),
     kind: FieldKind.default("text"),
     options: z.array(z.string().trim().min(1).max(60)).max(20).optional(),

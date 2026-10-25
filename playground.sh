@@ -99,7 +99,7 @@ COLLAB_KEY_PASS="xy4gh6swa2i"
 ensure_collab_key() {
   local dir="$ROOT/infra/collab/keys" tmp
   [[ -f "$dir/wallet-demo.key.pem" ]] && return
-  command -v openssl >/dev/null && command -v curl >/dev/null || { warn "openssl and curl are needed to fetch MOSIP's Collab test client key; the Reference Wallet will not sign in at Collab by itself."; return; }
+  command -v openssl >/dev/null && command -v curl >/dev/null || { warn "openssl and curl are needed to fetch MOSIP's Collab test client key. The Reference Wallet will not sign in at Collab by itself."; return; }
   tmp="$(mktemp -d)"
   if curl -fsSL --max-time 30 -o "$tmp/k.zip" "$COLLAB_KEY_URL" &&
     { unzip -oq "$tmp/k.zip" oidckeystore.p12 -d "$tmp" 2>/dev/null || python3 -I -c 'import sys, zipfile; zipfile.ZipFile(sys.argv[1]).extract("oidckeystore.p12", sys.argv[2])' "$tmp/k.zip" "$tmp"; }; then
@@ -110,10 +110,10 @@ ensure_collab_key() {
       say "Fetched MOSIP's Collab test client key (wallet-demo) into infra/collab/keys/."
     else
       rm -f "$dir/wallet-demo.key.pem"
-      warn "Could not read MOSIP's Collab test client key; the Reference Wallet will not sign in at Collab by itself."
+      warn "Could not read MOSIP's Collab test client key. The Reference Wallet will not sign in at Collab by itself."
     fi
   else
-    warn "Could not download MOSIP's Collab test client key (offline?); the Reference Wallet will not sign in at Collab by itself."
+    warn "Could not download MOSIP's Collab test client key (offline?). The Reference Wallet will not sign in at Collab by itself."
   fi
   rm -rf "$tmp"
 }
@@ -168,7 +168,7 @@ start() {
     # Leave the lab off cleanly if it was on.
     compose --profile external rm -sf waltid-issuer waltid-verifier waltid-wallet >/dev/null 2>&1 || true
   fi
-  say "${D}The first start downloads about 2 GB of images and can take several minutes; Certify needs 1–3 minutes to boot.${N}"
+  say "${D}The first start downloads about 2 GB of images and can take several minutes. Certify needs 1 to 3 more minutes to boot.${N}"
   local started=$SECONDS
   # shellcheck disable=SC2046
   compose $(lab_profile) "$@" up -d --build --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT" && return
@@ -206,12 +206,12 @@ cmd_restart() {
   [[ -f "$ENV_FILE" ]] || die ".env is missing: run ./playground.sh up first."
   if external_on; then ensure_lab_keys; fi
   ensure_collab_key
-  say "Restarting the playground; it reads infra/parties.yaml again."
+  say "Restarting the playground. It reads infra/parties.yaml again."
   # shellcheck disable=SC2046
   compose $(lab_profile) up -d --no-deps --force-recreate --wait --wait-timeout 120 playground
   local errors
   errors="$(http_get "http://localhost:$(port)/api/parties" | grep -o '"errors":\[[^]]*\]' || true)"
-  if [[ -n "$errors" && "$errors" != '"errors":[]' ]]; then warn "The parties file has problems; see the Parties page (or /api/parties): ${errors:9:400}"
+  if [[ -n "$errors" && "$errors" != '"errors":[]' ]]; then warn "The parties file has problems. See the Parties page (or /api/parties): ${errors:9:400}"
   else ok "Parties file loaded. The Parties page lists what it declares."; fi
 }
 
@@ -243,7 +243,7 @@ cmd_down() {
   require_docker
   [[ -f "$ENV_FILE" ]] || touch "$ENV_FILE"
   compose_all down --remove-orphans
-  say "Stopped. Data is kept; ./playground.sh up starts again where you left off."
+  say "Stopped. Your data is kept. ./playground.sh up starts again where you left off."
 }
 
 cmd_reset() {
@@ -275,7 +275,7 @@ cmd_doctor() {
   else bad "Docker Compose $cv is too old; 2.20 or newer is needed"; fi
   local mem; mem=$(( $(docker info --format '{{.MemTotal}}') / 1024 / 1024 / 1024 ))
   if (( mem >= 6 )); then ok "Docker can use ${mem} GB of memory"
-  elif (( mem >= 4 )); then warn "Docker can use ${mem} GB of memory; 6 GB or more is comfortable (the bundle needs about 3 GB)"
+  elif (( mem >= 4 )); then warn "Docker can use ${mem} GB of memory. 6 GB or more is comfortable (the bundle needs about 3 GB)"
   else bad "Docker can use only ${mem} GB of memory; the bundle needs about 3 GB"; fi
   command -v curl >/dev/null && ok "curl is available" || bad "curl is missing (needed for these checks)"
 
@@ -330,7 +330,7 @@ cmd_doctor() {
     if [[ "${perrors:-0}" == 0 ]]; then ok "infra/parties.yaml loads without problems"
     # Without the lab its demo issuer's key does not exist yet, so that entry is skipped: expected, not broken.
     elif external_on; then bad "infra/parties.yaml has ${perrors} problem(s); the Parties page lists them"
-    else warn "infra/parties.yaml has ${perrors} problem(s), expected while the external lab has never been started; the Parties page lists them"; fi
+    else warn "infra/parties.yaml has ${perrors} problem(s). That is expected if the external lab has never been started. The Parties page lists them"; fi
     if [[ -n "$configured" ]]; then
       if [[ "$reachable" == "$configured" ]]; then ok "All ${configured} external parties are reachable"
       elif external_on; then bad "${reachable:-0} of ${configured} external parties are reachable"
@@ -350,7 +350,7 @@ cmd_doctor() {
     elif [[ "$meta" == *"\"credential_issuer\":\"$pub/pub/certify\""* || "$meta" == *"\"credential_issuer\" : \"$pub/pub/certify\""* ]]; then ok "$pub is reachable, and Certify announces itself at $pub/pub/certify"
     else bad "Certify announces a different URL; restart with ./playground.sh tunnel"; fi
     if [[ "$(get_env PUBLIC_UI)" == true ]]; then warn "PUBLIC_UI=true: the UI and API are reachable by anyone with the public URL"
-    elif http_ok "$pub/api/health" 15; then bad "The API is reachable through the public URL; it should not be"
+    elif http_ok "$pub/api/health" 15; then bad "The API is reachable through the public URL, and it should not be"
     else ok "Only wallet-facing paths (/pub/*) are public; the UI and API stay on this machine"; fi
     local host="${pub#https://}"
     http_ok "https://$host/pub/issuers/certify/did.json" 15 && ok "did:web:$host:pub:issuers:certify resolves" || bad "Certify's did:web document does not resolve"

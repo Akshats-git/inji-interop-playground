@@ -231,7 +231,7 @@ export class StudioService {
     const { claims, errors, ok } = coerceClaims(t, rawClaims);
     if (!ok) throw new StudioError(400, "invalid_claims", "Some claims are missing or invalid.", errors);
     if (opts.txCode && !/^[A-Za-z0-9]{4,8}$/.test(opts.txCode))
-      throw new StudioError(400, "invalid_tx_code", "The PIN must be 4–8 letters or digits.");
+      throw new StudioError(400, "invalid_tx_code", "The PIN must be 4 to 8 letters or digits.");
     try {
       const offerUri = await this.certify.preAuthorize(
         { configId: t.configId, claims, txCode: opts.txCode, expiresIn: opts.expiresIn },

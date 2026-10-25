@@ -106,7 +106,7 @@ const BUILTIN_WALLETS: WalletInfo[] = (["reference-wallet", "inji-wallet", "exte
       id === "reference-wallet"
         ? "Automatic, no phone needed."
         : id === "inji-wallet"
-          ? "Scan with the Inji app; needs a public URL."
+          ? "Scan with the Inji app. Needs a public URL."
           : "Any OpenID4VCI wallet that scans offers.",
   }),
 );
@@ -446,7 +446,7 @@ export function RunBuilderPage() {
                                   current={loginMode}
                                   onChange={setLoginMode}
                                   title="I'll sign in myself"
-                                  note="eSignet's own page opens in a tab; it sends you back here."
+                                  note="eSignet's own page opens in a tab. It sends you back here."
                                 />
                               </div>
                               {loginMode === "auto" && identities.length > 0 && (
@@ -481,7 +481,7 @@ export function RunBuilderPage() {
                         hint={
                           type?.origin === "external"
                             ? "Passed to the external issuer's offer step as ${txCode}."
-                            : "4–8 letters or digits. The wallet must enter it to collect the credential (tx_code)."
+                            : "4 to 8 letters or digits. The wallet must enter it to collect the credential (tx_code)."
                         }
                       >
                         {(id) => (
@@ -547,7 +547,7 @@ export function RunBuilderPage() {
                       current={wallet}
                       onChange={setWallet}
                       title={w.origin === "external" ? `${w.label} (external)` : w.label}
-                      note={down(`wallet:${w.id}`) ? "Not reachable: start the external lab." : w.note}
+                      note={down(`wallet:${w.id}`) ? "Not reachable. Start the external lab." : w.note}
                     />
                   ))}
                 </div>
@@ -569,8 +569,8 @@ export function RunBuilderPage() {
                             v.origin === "hosted" ? `hosted:${v.environmentId}:verify` : `verifier:${v.id}`,
                           )
                             ? v.origin === "hosted"
-                              ? "Not reachable right now: check the internet connection."
-                              : "Not reachable: start the external lab."
+                              ? "Not reachable right now. Check the internet connection."
+                              : "Not reachable. Start the external lab."
                             : v.note
                         }
                         accent="present"
@@ -585,7 +585,7 @@ export function RunBuilderPage() {
                       current={mode}
                       onChange={setMode}
                       title="OpenID4VP request"
-                      note="The verifier asks; the wallet answers with only what was asked for."
+                      note="The verifier asks, and the wallet answers with only what was asked for."
                       accent="present"
                     />
                     <Choice
@@ -606,8 +606,8 @@ export function RunBuilderPage() {
                   {mode !== "direct-share" &&
                     (verifierInfo?.ownQuery ? (
                       <p className="text-sm text-muted">
-                        {verifierInfo.label} writes its own request (its query language is its choice, shown
-                        in the inspector). The parties file tells it which credential to ask for.
+                        {verifierInfo.label} writes its own request, and it picks the query language itself
+                        (the inspector shows which). The parties file tells it which credential to ask for.
                       </p>
                     ) : (
                       <div role="radiogroup" aria-label="Query language" className="grid gap-2">
@@ -618,7 +618,7 @@ export function RunBuilderPage() {
                           current={query}
                           onChange={setQuery}
                           title="Presentation Exchange"
-                          note="OpenID4VP drafts 21–23, Inji 0.x."
+                          note="OpenID4VP drafts 21 to 23, Inji 0.x."
                           accent="present"
                         />
                         <Choice
@@ -647,7 +647,7 @@ export function RunBuilderPage() {
                           current={verifyRequest}
                           onChange={setVerifyRequest}
                           title="Signed, by reference"
-                          note="client_id is Verify's did:web; the wallet fetches a signed request object. Small QR. Best for phones."
+                          note="client_id is Verify's did:web, and the wallet fetches a signed request object. Small QR. Best for phones."
                           accent="present"
                         />
                         <Choice
@@ -699,7 +699,7 @@ export function RunBuilderPage() {
                   )}
                   {formatMismatch && (
                     <Notice tone="warn">
-                      {verifierInfo!.label} is configured for {verifierInfo!.formats.join(", ")} only; this
+                      {verifierInfo!.label} is configured for {verifierInfo!.formats.join(", ")} only. This
                       credential is {type!.format}.
                     </Notice>
                   )}
@@ -783,7 +783,7 @@ export function RunBuilderPage() {
                       <p className="mt-2 text-sm text-muted">
                         {type.format === "vc+sd-jwt"
                           ? "SD-JWT reveals only these claims."
-                          : "JSON-LD credentials are shared whole; the request still names the claims it needs."}
+                          : "JSON-LD credentials are shared whole. The request still names the claims it needs."}
                       </p>
                     </fieldset>
                   )}

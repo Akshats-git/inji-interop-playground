@@ -298,7 +298,7 @@ export default function CapabilitiesPage() {
     <>
       <PageHeader
         title="Claimed and proven"
-        lede="What Inji Certify and Inji Verify say they support, set against what runs in this playground have actually shown. Only honest runs count; tamper runs are excluded."
+        lede="What Inji Certify and Inji Verify say they support, next to what runs in this playground have shown. Only honest runs count. Tamper runs are left out."
       />
       {q.isLoading ? (
         <p className="text-muted">Reading issuer metadata and runs…</p>

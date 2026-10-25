@@ -1,12 +1,12 @@
 /**
- * Run orchestrator. A run is one journey — issuer type × wallet × verifier × format × mode — executed as
- * four steps (issue → request → present → verify). Automated wallets run straight through; for a human
- * wallet (a phone) a step waits, shows a QR, and advances when the gateway sees the wallet's traffic.
+ * Run orchestrator. A run is one journey: an issuer type, a wallet, a verifier, a format and a mode. It runs
+ * as four steps (issue, request, present, verify). Automated wallets run straight through. For a human
+ * wallet (a phone), a step waits, shows a QR code, and moves on when the gateway sees the wallet's traffic.
  *
  * Issuers, wallets and verifiers are either built in (Inji Certify via the Studio, the Reference Wallet and
- * Verifier, Inji Verify) or external parties declared in the parties file, which the run drives through the
- * HTTP steps the file describes. Steps an external party completes out of sight wait for the person to
- * press Continue (or to paste an offer).
+ * Verifier, Inji Verify) or external parties declared in the parties file. The run drives external parties
+ * through the HTTP steps the file describes. When an external party finishes a step out of sight, the run
+ * waits for the person to press Continue (or to paste an offer).
  */
 import { EventEmitter } from "node:events";
 import {

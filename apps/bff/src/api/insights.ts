@@ -222,7 +222,7 @@ export function insightsApi(
           format: run.labels.format + (run.labels.dataModel ? ` (DM ${run.labels.dataModel})` : ""),
           proof: run.labels.proofType,
           mode: run.spec.mode,
-          query: run.spec.mode === "direct-share" ? "—" : run.spec.query,
+          query: run.spec.mode === "direct-share" ? "n/a" : run.spec.query,
           accepted: 0,
           rejected: 0,
           lastRun: run.id,

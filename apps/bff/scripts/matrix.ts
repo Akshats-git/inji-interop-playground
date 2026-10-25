@@ -355,7 +355,7 @@ async function main() {
     `Generated ${new Date().toISOString()} by \`apps/bff/scripts/matrix.ts\` against ${BASE}.`,
     `Stack: Inji Certify 0.14.0, Inji Verify 0.18.2, the playground's Reference Wallet and Reference Verifier${withExternal ? ", the external parties in infra/parties.yaml (walt.id issuer-api, verifier-api and wallet-api 1.0.0)" : ""}${withCollab ? ", MOSIP Collab (Inji 1.0.0-alpha.1: its Certify issuers, eSignet and Inji Verify 1.0, reached over the internet)" : ""}${withAnimo ? ", and Animo's hosted OpenID4VC playground (Credo)" : ""}.`,
     "",
-    "**Verdict** means *the journey behaved as expected*: honest presentations are accepted; tampered or expired ones are rejected.",
+    "**Verdict** means *the journey behaved as expected*: honest presentations are accepted, and tampered or expired ones are rejected.",
     "Rows marked with a gap id are known upstream problems described in [gaps.md](gaps.md).",
     "",
     "| # | Credential | Issuer | Format | Wallet | Verifier | Query | Mode | Tamper | Expected | Verifier outcome | Status / error | Verdict | Run |",
@@ -371,7 +371,7 @@ async function main() {
     const r = run.result;
     const q =
       row.mode === "direct-share"
-        ? "—"
+        ? "n/a"
         : run.labels.external?.verifier
           ? "own"
           : run.spec.query === "dcql"
@@ -381,7 +381,7 @@ async function main() {
             : "PE";
     const fmt = `${run.labels.format}${run.labels.dataModel ? ` (DM ${run.labels.dataModel})` : ""}`;
     lines.push(
-      `| ${row.id} | ${run.labels.typeName} | ${run.labels.issuerName}${run.labels.hosted?.issuer ? ` (${run.labels.hosted.issuer})` : ""} | ${fmt} | ${run.labels.wallet} | ${run.labels.verifier} | ${q} | ${row.mode === "direct-share" ? "direct share" : row.verifier === "inji-verify" && run.spec.query !== "dcql" ? `OpenID4VP, ${run.spec.verifyRequest === "by-value" ? "by value" : "signed request_uri"}` : "OpenID4VP"} | ${row.tamper ?? "none"} | ${r?.expected === "PASS" ? "accept" : "reject"} | ${r?.verifierOutcome ?? "—"} | ${r?.errorCode ?? r?.credentialStatus ?? ""} | ${icon(run)}${row.knownGap ? ` ${row.knownGap}` : ""} | \`${run.id}\` |`,
+      `| ${row.id} | ${run.labels.typeName} | ${run.labels.issuerName}${run.labels.hosted?.issuer ? ` (${run.labels.hosted.issuer})` : ""} | ${fmt} | ${run.labels.wallet} | ${run.labels.verifier} | ${q} | ${row.mode === "direct-share" ? "direct share" : row.verifier === "inji-verify" && run.spec.query !== "dcql" ? `OpenID4VP, ${run.spec.verifyRequest === "by-value" ? "by value" : "signed request_uri"}` : "OpenID4VP"} | ${row.tamper ?? "none"} | ${r?.expected === "PASS" ? "accept" : "reject"} | ${r?.verifierOutcome ?? "n/a"} | ${r?.errorCode ?? r?.credentialStatus ?? ""} | ${icon(run)}${row.knownGap ? ` ${row.knownGap}` : ""} | \`${run.id}\` |`,
     );
   }
   const unexpected = results.filter((x) => !x.run || (x.run.result?.verdict !== "PASS" && !x.row.knownGap));

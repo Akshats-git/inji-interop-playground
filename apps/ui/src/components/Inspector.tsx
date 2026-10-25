@@ -22,7 +22,7 @@ import { cx, Empty, Notice, Tag } from "./ui";
 const MEANING: [RegExp, string][] = [
   [
     /^Register credential type|^Update credential type/,
-    "The Issuer Studio pushes your credential design to Inji Certify's admin API. This call stays on the internal Docker network; the gateway never exposes admin APIs publicly.",
+    "The Issuer Studio pushes your credential design to Inji Certify's admin API. This call stays on the internal Docker network. The gateway never exposes admin APIs publicly.",
   ],
   [
     /^Create credential offer/,
@@ -50,7 +50,7 @@ const MEANING: [RegExp, string][] = [
   ],
   [
     /^Create authorization request/,
-    "The verifier says what it wants to see (as a Presentation Exchange definition or a DCQL query), where to send the answer, and a nonce the answer must be signed over.",
+    "The verifier says what it wants to see, as a Presentation Exchange definition or a DCQL query. It also says where to send the answer, and gives a nonce that the answer must be signed over.",
   ],
   [
     /^Fetch request object/,
@@ -58,7 +58,7 @@ const MEANING: [RegExp, string][] = [
   ],
   [
     /^Submit presentation/,
-    "The wallet posts its answer (vp_token) straight to the verifier (response_mode direct_post). For JSON-LD it is a signed Verifiable Presentation; for SD-JWT it is the credential with only the chosen disclosures plus a key-binding JWT.",
+    "The wallet posts its answer (vp_token) straight to the verifier (response_mode direct_post). For JSON-LD, the answer is a signed Verifiable Presentation. For SD-JWT, it is the credential with only the chosen disclosures, plus a key-binding JWT.",
   ],
   [/^Status:/, "The verifier's front end long-polls until the wallet has answered."],
   [
@@ -79,11 +79,11 @@ const MEANING: [RegExp, string][] = [
   ],
   [
     /^eSignet: CSRF/,
-    "eSignet's login page starts with a CSRF token; the wallet sends it back on every call, as a browser would.",
+    "eSignet's login page starts with a CSRF token. The wallet sends it back on every call, as a browser would.",
   ],
   [
     /^eSignet: start login/,
-    "The authorization request of the authorization code flow: which client asks, for which scope, where to send the person back (redirect_uri), and a PKCE challenge so only this wallet can redeem the code.",
+    "The authorization request of the authorization code flow. It says which client asks and for which scope. It says where to send the person back (redirect_uri). It also has a PKCE challenge, so only this wallet can redeem the code.",
   ],
   [
     /^eSignet: send OTP/,
@@ -91,7 +91,7 @@ const MEANING: [RegExp, string][] = [
   ],
   [
     /^eSignet: sign in with the OTP/,
-    "The holder proves who they are with the OTP. This is the step a person does on eSignet's page; the playground can do it for a demo identity.",
+    "The holder proves who they are with the OTP. This is the step a person does on eSignet's page. The playground can do it for a demo identity.",
   ],
   [
     /^eSignet: authorization code/,

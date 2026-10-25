@@ -1,7 +1,7 @@
 /**
  * Query Builder: one form, two query languages.
  *
- * - Presentation Exchange 2.0 (`presentation_definition`), spoken by OpenID4VP drafts 21–23 and Inji 0.x.
+ * - Presentation Exchange 2.0 (`presentation_definition`), spoken by OpenID4VP drafts 21 to 23 and Inji 0.x.
  * - DCQL (`dcql_query`), spoken by OpenID4VP 1.0 and Inji 1.0-alpha.
  *
  * Both have a dialect question for W3C credentials. PE: Inji filters `$.type` with a regex pattern, the spec with
@@ -235,7 +235,7 @@ export function explainMapping(spec: QuerySpec): { pe: string; dcql: string; not
     rows.push({
       pe: "fields: $.vct = …",
       dcql: "meta.vct_values",
-      note: "Exact string match; DCQL has no vct inheritance.",
+      note: "Exact string match. DCQL has no vct inheritance.",
     });
   for (const c of spec.claims)
     rows.push({

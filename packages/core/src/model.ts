@@ -268,7 +268,7 @@ export const KNOWN_GAPS = {
   G30: "walt.id's wallet cannot read Inji Certify's issuer metadata",
   G32: "walt.id's verifier cannot read the holder key in Certify's SD-JWTs",
   G33: "walt.id's wallet puts the definition id in descriptor_map",
-  G35: "walt.id's wallet fetches request_uri as JSON only; Inji Verify answers 406",
+  G35: "walt.id's wallet fetches request_uri as JSON only, and Inji Verify answers 406",
   G36: "Inji Verify 1.0 reads DCQL claim paths from credentialSubject, not from the credential's root as OpenID4VP 1.0 does",
   G41: "Collab's Land registry signs with a key its did:web document does not list, so no verifier can resolve it",
 } as const;

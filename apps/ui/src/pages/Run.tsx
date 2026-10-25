@@ -170,7 +170,7 @@ function ActionPanel({ run, step }: { run: Run; step: RunStep }) {
             <p className="text-sm text-muted">
               eSignet sends your browser back to{" "}
               <code className="font-mono">http://localhost:3004/redirect</code>, where the playground picks up
-              the authorization code; the run then carries on by itself.
+              the authorization code. The run then carries on by itself.
             </p>
           )}
           {!a.needsConfirm && a.kind !== "paste-offer" && a.kind !== "login" && (

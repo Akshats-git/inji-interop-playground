@@ -547,13 +547,13 @@ export default function VerifyDeskPage() {
     <>
       <PageHeader
         title="Verifier desk"
-        lede="Stand where a relying party stands: ask a wallet for a credential with Inji Verify's own SDK, check a credential's QR code directly, and see the same request written in both query languages."
+        lede="Stand where a relying party stands. Ask a wallet for a credential with Inji Verify's own SDK. Check a credential's QR code directly. See the same request written in both query languages."
       />
       {types.isLoading ? (
         <p className="text-muted">Loading credential types…</p>
       ) : !types.data?.length || !spec ? (
         <Empty title="No credential types to ask for">
-          Design one in the Issuer Studio, or declare an external issuer in infra/parties.yaml; the verifier
+          Design one in the Issuer Studio, or declare an external issuer in infra/parties.yaml. The verifier
           needs to know what it is asking for.
         </Empty>
       ) : (

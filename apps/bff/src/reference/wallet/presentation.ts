@@ -1,6 +1,6 @@
 /**
  * Reference Wallet, presentation side: an OpenID4VP client (direct_post) that answers both
- * Presentation Exchange (drafts 21–23) and DCQL (1.0) requests, for W3C JSON-LD and SD-JWT VC credentials.
+ * Presentation Exchange (drafts 21 to 23) and DCQL (1.0) requests, for W3C JSON-LD and SD-JWT VC credentials.
  *
  * Tamper presets inject deliberate faults so the playground can check that verifiers fail correctly.
  */

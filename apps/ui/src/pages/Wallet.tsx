@@ -419,7 +419,9 @@ function AnswerRequest({ initial, held }: { initial: string; held: HeldSummary[]
           Send presentation
         </Button>
         {!held.length && (
-          <p className="text-sm text-muted">Collect a credential first; the wallet has nothing to present.</p>
+          <p className="text-sm text-muted">
+            Collect a credential first. The wallet has nothing to present yet.
+          </p>
         )}
       </form>
       {r && (
@@ -449,7 +451,7 @@ function AnswerRequest({ initial, held }: { initial: string; held: HeldSummary[]
           )}
           <JsonView value={r.verifierResponse ?? "(empty response)"} maxHeight="14rem" />
           <p className="text-sm text-muted">
-            The verifier decides the outcome on its own side; check its result screen, or find the exchange in{" "}
+            The verifier decides the outcome on its own side. Check its result screen, or find the exchange in{" "}
             <Link to="/traffic" className="text-issue underline">
               Live traffic
             </Link>
