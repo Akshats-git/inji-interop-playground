@@ -137,7 +137,7 @@ function Matrix() {
         the verifier rejects it.
       </p>
       <div className="overflow-x-auto rounded-[10px] border border-hairline bg-surface">
-        <table className="w-full min-w-[56rem] border-collapse text-left">
+        <table className="w-full min-w-[64rem] border-collapse text-left">
           <thead>
             <tr className="border-b border-hairline align-bottom">
               <th scope="col" className="px-3 py-2.5 text-sm font-bold">
@@ -160,7 +160,7 @@ function Matrix() {
                   r.tamper !== "none" && "bg-present-soft/40",
                 )}
               >
-                <th scope="row" className="px-3 py-2 align-top font-normal">
+                <th scope="row" className="min-w-[11rem] px-3 py-2 align-top font-normal">
                   <span className="block font-bold">{r.typeName}</span>
                   <span className="block text-sm text-muted">{r.format}</span>
                   <span className="block text-sm text-muted">
@@ -317,7 +317,7 @@ export default function ResultsPage() {
         title="Results"
         lede="The matrix shows the latest run for every combination of credential, wallet, verifier and presentation style. History lists every run, newest first."
         action={
-          <div role="tablist" aria-label="Results view" className="flex gap-1 rounded-md bg-sunken p-1">
+          <div role="tablist" aria-label="Results view" className="flex gap-1 rounded-full bg-sunken p-1">
             {(["matrix", "history"] as const).map((t) => (
               <button
                 key={t}
@@ -325,7 +325,7 @@ export default function ResultsPage() {
                 aria-selected={tab === t}
                 onClick={() => setTab(t)}
                 className={cx(
-                  "rounded px-4 py-1.5 text-sm font-bold capitalize",
+                  "rounded-full px-4 py-1.5 text-sm font-bold capitalize",
                   tab === t ? "bg-surface shadow-sm" : "text-muted hover:text-ink",
                 )}
               >

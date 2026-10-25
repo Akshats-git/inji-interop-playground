@@ -1,70 +1,63 @@
 @import "tailwindcss";
-@import "@fontsource-variable/overpass";
+@import "@fontsource-variable/montserrat";
 @import "@fontsource/overpass-mono/400.css";
 @import "@fontsource/overpass-mono/600.css";
 
 /*
- * Design tokens. The playground is drawn as a transit map: issuance travels on the blue line,
- * presentation on the saffron line, stations are the parties. Everything else stays quiet.
+ * Design tokens. The look follows mosip.io: white paper, MOSIP navy for ink and actions, thin Montserrat
+ * headlines, soft wave lines behind the header. The playground's own signature stays: it is drawn as a
+ * transit map, issuance travels on the blue line, presentation on the amber line, stations are the parties.
  */
 :root {
-  --paper: #f2f4f7;
+  --paper: #f6f8fc;
   --surface: #ffffff;
-  --sunken: #e8ecf2;
-  --ink: #16233f;
-  --muted: #5a6478;
-  --hairline: #d5dbe5;
-  --issue: #2447b5;
-  --issue-soft: #e3e9fb;
-  --present: #d68a12;
-  --present-ink: #8a5300;
-  --present-soft: #fbefd9;
-  --pass: #12715a;
-  --pass-soft: #def3ec;
-  --fail: #b42318;
-  --fail-soft: #fde6e3;
-  --focus: #2447b5;
+  --sunken: #eaf0f8;
+  --ink: #12233f;
+  --muted: #566277;
+  --hairline: #d9e0ec;
+  --issue: #024191;
+  --issue-bright: #03a2fa;
+  --issue-soft: #e3effc;
+  --present: #fd9300;
+  --present-bright: #fdc30d;
+  --present-ink: #8a4b00;
+  --present-soft: #fff1d6;
+  --pass: #0a7a4b;
+  --pass-soft: #def3e8;
+  --fail: #c0303a;
+  --fail-soft: #fde7e8;
+  --focus: #005eff;
+  --on-issue: #ffffff;
+  --shadow: 0 1px 2px rgb(2 65 145 / 0.06), 0 6px 20px -8px rgb(2 65 145 / 0.14);
+  --shadow-lift: 0 2px 4px rgb(2 65 145 / 0.08), 0 14px 30px -10px rgb(2 65 145 / 0.22);
+  --wave-opacity: 1;
   color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #0d1628;
-    --surface: #14213a;
-    --sunken: #0a1222;
-    --ink: #e6eaf2;
-    --muted: #9aa5ba;
-    --hairline: #26344f;
-    --issue: #7b95ff;
-    --issue-soft: #1c2b55;
-    --present: #f0a93b;
-    --present-ink: #f3bd66;
-    --present-soft: #3a2b12;
-    --pass: #45c49c;
-    --pass-soft: #12352c;
-    --fail: #ff7a6b;
-    --fail-soft: #3d1a17;
-    --focus: #9fb2ff;
-    color-scheme: dark;
-  }
-}
+/* Light is the default, as on mosip.io. Dark is an explicit choice from the theme button. */
 :root[data-theme="dark"] {
-  --paper: #0d1628;
-  --surface: #14213a;
-  --sunken: #0a1222;
-  --ink: #e6eaf2;
-  --muted: #9aa5ba;
-  --hairline: #26344f;
-  --issue: #7b95ff;
-  --issue-soft: #1c2b55;
-  --present: #f0a93b;
-  --present-ink: #f3bd66;
-  --present-soft: #3a2b12;
-  --pass: #45c49c;
+  --paper: #0b1730;
+  --surface: #11203d;
+  --sunken: #0a1226;
+  --ink: #e8edf6;
+  --muted: #a0abc0;
+  --hairline: #263756;
+  --issue: #6db3ff;
+  --issue-bright: #4cb8ff;
+  --issue-soft: #15305e;
+  --present: #ffa526;
+  --present-bright: #ffd04a;
+  --present-ink: #ffc266;
+  --present-soft: #3a2a0e;
+  --pass: #4cc794;
   --pass-soft: #12352c;
-  --fail: #ff7a6b;
-  --fail-soft: #3d1a17;
-  --focus: #9fb2ff;
+  --fail: #ff7f89;
+  --fail-soft: #3d1a1e;
+  --focus: #8fc2ff;
+  --on-issue: #0b1730;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px -10px rgb(0 0 0 / 0.5);
+  --shadow-lift: 0 2px 4px rgb(0 0 0 / 0.35), 0 16px 32px -12px rgb(0 0 0 / 0.6);
+  --wave-opacity: 0.35;
   color-scheme: dark;
 }
 
@@ -76,16 +69,21 @@
   --color-muted: var(--muted);
   --color-hairline: var(--hairline);
   --color-issue: var(--issue);
+  --color-issue-bright: var(--issue-bright);
+  --color-on-issue: var(--on-issue);
   --color-issue-soft: var(--issue-soft);
   --color-present: var(--present);
+  --color-present-bright: var(--present-bright);
   --color-present-ink: var(--present-ink);
   --color-present-soft: var(--present-soft);
   --color-pass: var(--pass);
   --color-pass-soft: var(--pass-soft);
   --color-fail: var(--fail);
   --color-fail-soft: var(--fail-soft);
-  --font-sans: "Overpass Variable", "Overpass", system-ui, sans-serif;
+  --font-sans: "Montserrat Variable", "Montserrat", system-ui, sans-serif;
   --font-mono: "Overpass Mono", ui-monospace, "SFMono-Regular", monospace;
+  --shadow-card: var(--shadow);
+  --shadow-lift: var(--shadow-lift);
   /* Type scale: 1.2 ratio from a 16px base. */
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
@@ -94,20 +92,22 @@
   --text-xl: 1.44rem;
   --text-2xl: 1.728rem;
   --text-3xl: 2.488rem;
+  --text-4xl: 3.2rem;
 }
 
 html {
   background: var(--paper);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
+  scroll-padding-top: 5rem;
 }
 body {
   margin: 0;
   min-height: 100vh;
   background: var(--paper);
   font-family: var(--font-sans);
-  font-size: 1rem;
-  line-height: 1.5;
+  font-size: 0.9375rem;
+  line-height: 1.55;
 }
 @layer base {
   /* Fieldsets default to min-content width, which lets one long option widen a whole form on phones. */
@@ -117,24 +117,100 @@ body {
   :focus-visible {
     outline: 2px solid var(--focus);
     outline-offset: 2px;
-    border-radius: 4px;
+    border-radius: 6px;
+  }
+  /* Body links read as MOSIP's do: navy, underlined on hover only, except inside running text. */
+  main a:not([class]) {
+    color: var(--issue);
+    font-weight: 600;
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--issue) 35%, transparent);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 150ms;
+  }
+  main a:not([class]):hover {
+    text-decoration-color: var(--issue);
   }
 }
 ::selection {
-  background: var(--issue-soft);
+  background: var(--present-bright);
+  color: #12233f;
 }
 
-/* Headings use the signage weight of Overpass with tight tracking. */
-h1,
+/* Page titles are thin, as on mosip.io; section titles are semibold so they still anchor a dense page. */
+h1 {
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
 h2,
 h3 {
-  font-weight: 800;
-  letter-spacing: -0.015em;
-  line-height: 1.15;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+/* The header zone: faint wave lines that fade out before the content, like the mosip.io hero. */
+.waves {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--surface);
+}
+.waves::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: url("/waves.svg") repeat;
+  opacity: var(--wave-opacity);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}
+
+/* The hand-drawn amber underline under page titles. */
+.scribble {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 C40 1 70 7 110 3.5 S170 2 198 4.5' fill='none' stroke='%23fdc30d' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: min(100%, 11em) 0.36em;
+  display: inline-block;
+  max-width: 100%;
+  padding-bottom: 0.42em;
+}
+
+/* MOSIP's circle-and-dots motif, used once per page header. */
+.orbit {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 25%, var(--issue-bright), var(--issue) 70%);
+  box-shadow: var(--shadow);
+}
+.orbit::before,
+.orbit::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+}
+.orbit::before {
+  width: 26%;
+  aspect-ratio: 1;
+  left: -8%;
+  top: 14%;
+  background: var(--present-bright);
+}
+.orbit::after {
+  width: 36%;
+  aspect-ratio: 1;
+  right: -10%;
+  bottom: 2%;
+  background: var(--issue-bright);
+  border: 3px solid var(--surface);
+}
 }
 
 @media (prefers-reduced-motion: reduce) {

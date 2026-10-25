@@ -111,8 +111,8 @@ importers:
 
   apps/ui:
     dependencies:
-      '@fontsource-variable/overpass':
-        specifier: ^5.2.5
+      '@fontsource-variable/montserrat':
+        specifier: ^5.3.0
         version: 5.3.0
       '@fontsource/overpass-mono':
         specifier: ^5.2.5
@@ -129,6 +129,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.85.5
         version: 5.104.1(react@18.3.1)
+      lucide-react:
+        specifier: ^1.61.0
+        version: 1.61.0(@types/react@18.3.31)(react@18.3.1)
       motion:
         specifier: ^12.23.12
         version: 12.43.0(@emotion/is-prop-valid@1.4.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -689,8 +692,8 @@ packages:
     resolution: {integrity: sha512-vBZP4NlzfOlerQTnba4aqZoMhE/a9HY7HRqoOPaETQcSQuWEIyZMHGfVu6w9wGtGK5fED5qRs2DteVCjOH60sA==}
     engines: {node: '>=14'}
 
-  '@fontsource-variable/overpass@5.3.0':
-    resolution: {integrity: sha512-HviVvVvKCwhXjxM61GjnCW2cKoeEWFkoBANaArzIHliC+7mV4lmKKIBAa0O7E5ISHnkV3sihgOHXxzpnsbP3Xg==}
+  '@fontsource-variable/montserrat@5.3.0':
+    resolution: {integrity: sha512-7PaZoxaxrWLAyrhO46v65An9LhUhfkTExWLhfbywYZCnZEgg/W1rEHnlNmZKjNZ3nJTVYyicqxlJt10z/26yTA==}
 
   '@fontsource/overpass-mono@5.3.0':
     resolution: {integrity: sha512-ORe1cIq1DZmEQ2/Y4N09YIKgzAfzn1ZlPfOQUEAIZTJiNaOQJonxCWbp9fsUQrp0h6j7+ebd9wIzkRv7YMaESQ==}
@@ -1947,6 +1950,15 @@ packages:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
 
+  lucide-react@1.61.0:
+    resolution: {integrity: sha512-v2SQPPPNjnr+BlhL9Spuzmo5yR+hLkftfuE4E3jaxdNPgSH0hJKPcLJBP7yAta87jQNPsSERS59PJjCJ/CorBA==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
 
@@ -3134,7 +3146,7 @@ snapshots:
 
   '@fastify/busboy@2.1.1': {}
 
-  '@fontsource-variable/overpass@5.3.0': {}
+  '@fontsource-variable/montserrat@5.3.0': {}
 
   '@fontsource/overpass-mono@5.3.0': {}
 
@@ -4400,6 +4412,12 @@ snapshots:
   lru-cache@6.0.0:
     dependencies:
       yallist: 4.0.0
+
+  lucide-react@1.61.0(@types/react@18.3.31)(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+    optionalDependencies:
+      '@types/react': 18.3.31
 
   magic-string@0.30.21:
     dependencies:

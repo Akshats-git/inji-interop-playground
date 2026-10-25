@@ -364,7 +364,7 @@ export function EventDetail({ id }: { id: string }) {
       {meaning && <p className="max-w-[68ch] border-l-4 border-hairline pl-3 text-[0.95rem]">{meaning}</p>}
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="tablist" className="flex gap-1 rounded-md bg-sunken p-1">
+        <div role="tablist" className="flex gap-1 rounded-full bg-sunken p-1">
           {(["decoded", "request", "response"] as const).map((t) => (
             <button
               key={t}
@@ -372,7 +372,7 @@ export function EventDetail({ id }: { id: string }) {
               aria-selected={tab === t}
               onClick={() => setTab(t)}
               className={cx(
-                "rounded px-3 py-1 text-sm font-bold capitalize",
+                "rounded-full px-3 py-1 text-sm font-bold capitalize",
                 tab === t ? "bg-surface shadow-sm" : "text-muted hover:text-ink",
               )}
             >

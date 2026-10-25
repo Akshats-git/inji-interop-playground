@@ -97,7 +97,7 @@ function ActionPanel({ run, step }: { run: Run; step: RunStep }) {
           <p className="text-[1.05rem] font-bold">{a.hint}</p>
           {a.kind === "login" && a.uri && (
             <a
-              className="inline-flex min-h-12 items-center self-start rounded-md bg-ink px-5 font-bold text-paper hover:bg-issue"
+              className="inline-flex min-h-12 items-center self-start rounded-full bg-issue px-6 font-bold text-on-issue shadow-card transition-[box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-lift"
               href={a.uri}
               target="_blank"
               rel="noreferrer"

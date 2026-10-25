@@ -348,4 +348,4 @@ Third-party parts, all under OSI-approved licences and unmodified:
 | walt.id issuer-api, verifier-api, wallet-api 1.0.0 (optional external lab) | Apache-2.0 |
 | cloudflared (tunnel mode only) | Apache-2.0 |
 | PostgreSQL 15 | PostgreSQL License |
-| npm dependencies (`pnpm licenses list --prod`) | MIT, BSD, ISC, Apache-2.0, MPL-2.0, 0BSD, Zlib; Overpass fonts under OFL-1.1; jszip used under its MIT option |
+| npm dependencies (`pnpm licenses list --prod`) | MIT, BSD, ISC, Apache-2.0, MPL-2.0, 0BSD, Zlib; Montserrat and Overpass Mono fonts under OFL-1.1; lucide-react under ISC; jszip used under its MIT option |

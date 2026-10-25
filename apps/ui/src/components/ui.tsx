@@ -22,9 +22,9 @@ export const Button = forwardRef<
       disabled={disabled || busy}
       aria-busy={busy || undefined}
       className={cx(
-        "inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-4 text-sm font-bold transition-[background-color,transform] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50",
-        tone === "primary" && "bg-ink text-paper hover:bg-issue",
-        tone === "quiet" && "border border-hairline bg-surface text-ink hover:border-ink",
+        "inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50",
+        tone === "primary" && "bg-issue text-on-issue shadow-card hover:-translate-y-px hover:shadow-lift",
+        tone === "quiet" && "border border-hairline bg-surface text-issue hover:border-issue hover:bg-issue-soft",
         tone === "danger" && "border border-fail/40 bg-surface text-fail hover:bg-fail-soft",
         className,
       )}
@@ -74,7 +74,7 @@ export function Field({
 }
 
 const control =
-  "min-h-10 w-full rounded-md border border-hairline bg-surface px-3 text-base text-ink placeholder:text-muted/70 hover:border-muted focus:border-issue";
+  "min-h-11 w-full rounded-[10px] border border-hairline bg-surface px-3.5 text-base text-ink placeholder:text-muted/70 hover:border-muted focus:border-issue focus:shadow-[0_0_0_3px_var(--issue-soft)]";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input(
   { className, ...rest },
@@ -134,12 +134,12 @@ export function Choice<T extends string>({
   return (
     <label
       className={cx(
-        "flex cursor-pointer gap-3 rounded-md border px-3 py-2.5 transition-colors duration-150",
+        "flex cursor-pointer gap-3 rounded-xl border px-3.5 py-3 transition-[border-color,background-color,box-shadow] duration-150",
         on
           ? accent === "present"
             ? "border-present bg-present-soft"
             : "border-issue bg-issue-soft"
-          : "border-hairline bg-surface hover:border-muted",
+          : "border-hairline bg-surface hover:border-muted hover:shadow-card",
         disabled && "cursor-not-allowed opacity-50",
       )}
     >
@@ -206,7 +206,7 @@ export function Tag({
   return (
     <span
       className={cx(
-        "inline-flex items-center rounded px-1.5 py-px text-xs font-semibold whitespace-nowrap",
+        "inline-flex items-center rounded-full px-2 py-px text-xs font-semibold whitespace-nowrap",
         tone === "plain" && "bg-sunken text-muted",
         tone === "issue" && "bg-issue-soft text-issue",
         tone === "present" && "bg-present-soft text-present-ink",
@@ -231,10 +231,10 @@ export function Panel({
   id?: string;
 }) {
   return (
-    <section id={id} className={cx("rounded-[10px] border border-hairline bg-surface", className)}>
+    <section id={id} className={cx("rounded-2xl border border-hairline bg-surface shadow-card", className)}>
       {(title || action) && (
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-4 py-3">
-          {title && <h2 className="text-lg">{title}</h2>}
+          {title && <h2 className="text-base">{title}</h2>}
           {action}
         </header>
       )}
@@ -254,7 +254,7 @@ export function Notice({
     <div
       role={tone === "error" ? "alert" : "status"}
       className={cx(
-        "rounded-md border-l-4 px-3 py-2 text-sm",
+        "rounded-xl border-l-4 px-4 py-2.5 text-sm",
         tone === "info" && "border-issue bg-issue-soft",
         tone === "error" && "border-fail bg-fail-soft",
         tone === "warn" && "border-present bg-present-soft",
@@ -267,7 +267,7 @@ export function Notice({
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-start gap-2 rounded-md border border-dashed border-hairline px-4 py-6">
+    <div className="flex flex-col items-start gap-2 rounded-2xl border border-dashed border-hairline px-5 py-7">
       <p className="font-bold">{title}</p>
       {children && <div className="text-sm text-muted">{children}</div>}
     </div>
@@ -276,10 +276,12 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
 
 export function PageHeader({ title, lede, action }: { title: string; lede?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div className="max-w-[68ch]">
-        <h1 className="text-2xl sm:text-3xl">{title}</h1>
-        {lede && <p className="mt-2 text-muted">{lede}</p>}
+        <h1 className="text-3xl sm:text-4xl">
+          <span className="scribble">{title}</span>
+        </h1>
+        {lede && <p className="mt-3 text-[1.0625rem] leading-relaxed text-muted">{lede}</p>}
       </div>
       {action}
     </div>

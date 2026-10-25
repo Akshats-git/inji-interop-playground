@@ -580,9 +580,9 @@ function TypeDesigner({ issuers, initialIssuer }: { issuers: IssuerWithTypes[]; 
 
       <div className="flex min-w-0 flex-col gap-4">
         <CardPreview issuer={issuer} d={d} />
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-lg">What Certify receives</h3>
-          <div role="tablist" className="flex max-w-full gap-1 overflow-x-auto rounded-md bg-sunken p-1">
+          <div role="tablist" className="flex max-w-full gap-1 overflow-x-auto rounded-full bg-sunken p-1">
             {(["config", "template", "context"] as const).map((t) => (
               <button
                 key={t}
@@ -590,7 +590,7 @@ function TypeDesigner({ issuers, initialIssuer }: { issuers: IssuerWithTypes[]; 
                 aria-selected={preview === t}
                 onClick={() => setPreview(t)}
                 className={cx(
-                  "rounded px-2.5 py-1 text-sm font-bold",
+                  "rounded-full px-3 py-1 text-sm font-bold",
                   preview === t ? "bg-surface shadow-sm" : "text-muted hover:text-ink",
                 )}
               >

@@ -303,7 +303,7 @@ function CollectHosted({ onCollected }: { onCollected: () => void }) {
                 href={job.loginUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 inline-flex min-h-10 items-center rounded-md bg-ink px-4 font-bold text-paper hover:bg-issue"
+                className="mt-2 inline-flex min-h-10 items-center rounded-full bg-issue px-5 font-bold text-on-issue shadow-card transition-[box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-lift"
               >
                 Open eSignet in a new tab
               </a>

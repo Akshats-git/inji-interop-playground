@@ -13,12 +13,13 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@fontsource-variable/overpass": "^5.2.5",
+    "@fontsource-variable/montserrat": "^5.3.0",
     "@fontsource/overpass-mono": "^5.2.5",
     "@injistack/pixelpass": "0.8.0",
     "@injistack/react-inji-verify-sdk": "0.18.1",
     "@playground/core": "workspace:*",
     "@tanstack/react-query": "^5.85.5",
+    "lucide-react": "^1.61.0",
     "motion": "^12.23.12",
     "qrcode": "^1.5.4",
     "react": "18.3.1",
