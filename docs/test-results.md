@@ -165,23 +165,24 @@ steps to reproduce:
 ## UI checks
 
 I opened every page in Chromium (Playwright 1.56) at **390 × 844** and **1440 × 900** against the running bundle.
-I did this on 23 Oct 2026, after the matrix, so Results and the history were full. I recorded the console,
-horizontal overflow and layout shift (CLS):
+I did this on 25 Oct 2026, after the interface was restyled to follow mosip.io, with Results and the history full from
+the 24 Oct matrix. The 23 Oct pass had the same result for the earlier look. I recorded the console, horizontal
+overflow and layout shift (CLS):
 
 | Page | Console errors | Horizontal overflow (390 / 1440) | Layout shift, CLS (390 / 1440) |
 |---|---|---|---|
-| Run (builder, with Collab and external parties) | none | 0 / 0 | 0.0008 / 0.0019 |
-| Run detail (a Collab run) | none | 0 / 0 | 0 / 0.0019 |
-| Issuer Studio | none | 0 / 0 | 0 / 0.0098 |
-| Verifier desk | none | 0 / 0 | 0.0005 / 0.002 |
-| Wallet (with *Collect from MOSIP Collab*) | none | 0 / 0 | 0 / 0.0041 |
-| Parties (with the hosted section) | none | 0 / 0 | 0.002 / 0.002 |
-| Results | none | 0 / 0 | 0 / 0.0019 |
-| Capabilities | none | 0 / 0 | 0 / 0.0019 |
-| Live traffic | none | 0 / 0 | 0 / 0.0053 |
+| Run (builder, with Collab and external parties) | none | 0 / 0 | 0.0019 / 0.0032 |
+| Run detail (a Collab run) | none | 0 / 0 | 0.0004 / 0.0028 |
+| Issuer Studio | none | 0 / 0 | 0 / 0.0076 |
+| Verifier desk | none | 0 / 0 | 0.0004 / 0.0029 |
+| Wallet (with *Collect from MOSIP Collab*) | none | 0 / 0 | 0.0004 / 0.0028 |
+| Parties (with the hosted section) | none | 0 / 0 | 0.0022 / 0.0029 |
+| Results | none | 0 / 0 | 0 / 0.0028 |
+| Capabilities | none | 0 / 0 | 0.0004 / 0.0028 |
+| Live traffic | none | 0 / 0 | 0.0004 / 0.0028 |
 
 At phone width, the Results matrix scrolls sideways inside its own container. The page itself does not scroll
-sideways. The screenshots in the README and in [screenshots/](screenshots/) come from this pass.
+sideways. The screenshots in the README and in [screenshots/](screenshots/) were retaken in this pass, on the restyled interface.
 
 **Layout shift history.** Until 19 Oct, most pages scored above 0.1 at phone width. That is the line for "good".
 Studio scored 0.50 and Live traffic scored 0.42. Giving `main` a minimum height fixed most of them. On 23 Oct,
