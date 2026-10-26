@@ -1,6 +1,6 @@
 {
   "name": "inji-interop-playground",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "A visual lab for issuing, holding, presenting and verifying Verifiable Credentials across Inji Certify, Inji Wallet and Inji Verify, with every protocol message recorded.",
   "license": "MPL-2.0",

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.1 (final submission)
+
+- Run history is kept for 30 days by default (it was 7). Set `RETENTION_DAYS` to change it.
+- Results matrix: a wider credential column that stays in view when you scroll sideways.
+- Capabilities: the list of proven combinations is sorted.
+- New guide, [docs/usage.md](docs/usage.md), with the step-by-step flows. The README is now a short front page.
+
 ## 1.0.0 (MOSIP Decode 2026 submission)
 
 - Issuer Studio: design issuers and credential types (JSON-LD VCDM 1.1 and 2.0, SD-JWT VC) and push them to
