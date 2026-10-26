@@ -140,7 +140,10 @@ function Matrix() {
         <table className="w-full min-w-[72rem] border-collapse text-left">
           <thead>
             <tr className="border-b border-hairline align-bottom">
-              <th scope="col" className="sticky left-0 z-10 bg-surface px-3 py-2.5 text-sm font-bold">
+              <th
+                scope="col"
+                className="bg-surface px-3 py-2.5 text-sm font-bold sm:sticky sm:left-0 sm:z-10"
+              >
                 Credential, wallet and fault
               </th>
               {columns.map((c) => (
@@ -162,7 +165,7 @@ function Matrix() {
               >
                 <th
                   scope="row"
-                  className="sticky left-0 z-10 w-[16rem] min-w-[16rem] bg-surface px-3 py-2 align-top font-normal"
+                  className="bg-surface px-3 py-2 align-top font-normal min-w-[11rem] sm:sticky sm:left-0 sm:z-10 sm:w-[16rem] sm:min-w-[16rem]"
                 >
                   <span className="block font-bold">{r.typeName}</span>
                   <span className="block text-sm text-muted">
