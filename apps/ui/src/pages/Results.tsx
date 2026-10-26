@@ -28,7 +28,7 @@ const ownRequest = (r: Run) => Boolean(r.labels.external?.verifier);
 const columnOf = (r: Run) => (ownRequest(r) ? `${r.spec.verifier}|own` : `${r.spec.verifier}|${how(r)}`);
 
 function Cell({ run }: { run?: Run }) {
-  if (!run) return <span className="text-sm text-muted">Not run</span>;
+  if (!run) return <span className="text-sm text-muted/60">Not run</span>;
   const res = run.result;
   const outcome =
     res?.verifierOutcome === "ACCEPTED"
@@ -137,10 +137,10 @@ function Matrix() {
         the verifier rejects it.
       </p>
       <div className="overflow-x-auto rounded-[10px] border border-hairline bg-surface">
-        <table className="w-full min-w-[64rem] border-collapse text-left">
+        <table className="w-full min-w-[72rem] border-collapse text-left">
           <thead>
             <tr className="border-b border-hairline align-bottom">
-              <th scope="col" className="px-3 py-2.5 text-sm font-bold">
+              <th scope="col" className="sticky left-0 z-10 bg-surface px-3 py-2.5 text-sm font-bold">
                 Credential, wallet and fault
               </th>
               {columns.map((c) => (
@@ -160,11 +160,13 @@ function Matrix() {
                   r.tamper !== "none" && "bg-present-soft/40",
                 )}
               >
-                <th scope="row" className="min-w-[11rem] px-3 py-2 align-top font-normal">
+                <th
+                  scope="row"
+                  className="sticky left-0 z-10 w-[16rem] min-w-[16rem] bg-surface px-3 py-2 align-top font-normal"
+                >
                   <span className="block font-bold">{r.typeName}</span>
-                  <span className="block text-sm text-muted">{r.format}</span>
                   <span className="block text-sm text-muted">
-                    Wallet:{" "}
+                    {r.format} ·{" "}
                     <span className={cx(r.externalWallet && "font-semibold text-ink")}>{r.wallet}</span>
                   </span>
                   {r.tamper !== "none" && (

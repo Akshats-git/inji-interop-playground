@@ -257,34 +257,42 @@ function ProvenTable({ rows }: { rows: Proven[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr
-              key={[r.verifier, r.format, r.proof, r.mode, r.query].join("|")}
-              className="border-t border-hairline"
-            >
-              <td className="px-2 py-1.5 font-bold">{r.verifier}</td>
-              <td className="px-2 py-1.5">{r.format}</td>
-              <td className="px-2 py-1.5">{r.proof}</td>
-              <td className="px-2 py-1.5">
-                {r.mode === "direct-share"
-                  ? "Direct share"
-                  : r.query === "dcql"
-                    ? "OpenID4VP, DCQL"
-                    : "OpenID4VP, PE"}
-              </td>
-              <td className={cx("tabular px-2 py-1.5 font-bold", r.accepted ? "text-pass" : "text-muted")}>
-                {r.accepted}
-              </td>
-              <td className={cx("tabular px-2 py-1.5 font-bold", r.rejected ? "text-fail" : "text-muted")}>
-                {r.rejected}
-              </td>
-              <td className="px-2 py-1.5">
-                <Link to={`/runs/${r.lastRun}`} className="text-issue underline">
-                  Latest run
-                </Link>
-              </td>
-            </tr>
-          ))}
+          {[...rows]
+            .sort(
+              (a, b) =>
+                a.verifier.localeCompare(b.verifier) ||
+                a.format.localeCompare(b.format) ||
+                a.proof.localeCompare(b.proof) ||
+                String(a.query).localeCompare(String(b.query)),
+            )
+            .map((r) => (
+              <tr
+                key={[r.verifier, r.format, r.proof, r.mode, r.query].join("|")}
+                className="border-t border-hairline"
+              >
+                <td className="px-2 py-1.5 font-bold">{r.verifier}</td>
+                <td className="px-2 py-1.5">{r.format}</td>
+                <td className="px-2 py-1.5">{r.proof}</td>
+                <td className="px-2 py-1.5">
+                  {r.mode === "direct-share"
+                    ? "Direct share"
+                    : r.query === "dcql"
+                      ? "OpenID4VP, DCQL"
+                      : "OpenID4VP, PE"}
+                </td>
+                <td className={cx("tabular px-2 py-1.5 font-bold", r.accepted ? "text-pass" : "text-muted")}>
+                  {r.accepted}
+                </td>
+                <td className={cx("tabular px-2 py-1.5 font-bold", r.rejected ? "text-fail" : "text-muted")}>
+                  {r.rejected}
+                </td>
+                <td className="px-2 py-1.5">
+                  <Link to={`/runs/${r.lastRun}`} className="text-issue underline">
+                    Latest run
+                  </Link>
+                </td>
+              </tr>
+            ))}
         </tbody>
       </table>
     </div>
