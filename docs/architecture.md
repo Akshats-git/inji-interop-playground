@@ -255,7 +255,7 @@ This is how the inspector shows a phone's messages under the right run, with no 
 Each sealed value has a fresh 12-byte IV. The row id is bound in as additional authenticated data, so a
 ciphertext can't be moved to another row. The key is `EVENT_ENCRYPTION_KEY` (32 random bytes, generated into
 `.env` on the first start). Rows sealed under an older key are skipped with one warning. A purge runs at start-up
-and every hour. It deletes runs, events and held credentials older than `RETENTION_DAYS` (7 by default). Without
+and every hour. It deletes runs, events and held credentials older than `RETENTION_DAYS` (30 by default). Without
 `DATABASE_URL` (unit tests, a second dev instance), an in-memory store with the same interface is used. See
 [security-privacy.md](security-privacy.md).
 

@@ -37,7 +37,7 @@ Anything that can contain claim values is sealed with **AES-256-GCM** before it 
 
 ## Retention
 
-The playground purges runs, recorded messages and held credentials after **`RETENTION_DAYS`** (default 7, set in
+The playground purges runs, recorded messages and held credentials after **`RETENTION_DAYS`** (default 30, set in
 `.env`). The purge runs at start-up and every hour. `./playground.sh reset` deletes everything straight away. That
 includes all volumes and Certify's signing keys. It asks for confirmation first.
 

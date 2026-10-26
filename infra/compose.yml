@@ -114,7 +114,7 @@ services:
       # Inji Verify's DID: as a client id it makes Verify sign requests (request_uri), which keeps QR codes small.
       VERIFY_DID: ${VERIFY_DID:-did:web:playground.localhost%3A8080:pub:verify:v1:verify}
       EVENT_ENCRYPTION_KEY: ${EVENT_ENCRYPTION_KEY:-}
-      RETENTION_DAYS: ${RETENTION_DAYS:-7}
+      RETENTION_DAYS: ${RETENTION_DAYS:-30}
       # The tunnel only exposes the wallet-facing gateway (/pub/*) unless this is "true".
       PUBLIC_UI: ${PUBLIC_UI:-false}
       # External issuers, verifiers and wallets, and hosted Inji (MOSIP Collab). Read at start-up: edit

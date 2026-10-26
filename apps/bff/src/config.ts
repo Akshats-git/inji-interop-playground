@@ -14,7 +14,7 @@ const Env = z.object({
   VERIFY_DID: z.string().optional(),
   /** base64 32-byte key for AES-256-GCM sealing of recorded payloads. */
   EVENT_ENCRYPTION_KEY: z.string().optional(),
-  RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+  RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   UI_DIST: z.string().optional(),
   /** Also serve the UI and API on the public (tunnel) URL. Off by default: wallets only need /pub/*. */
   PUBLIC_UI: z.enum(["true", "false"]).default("false"),
