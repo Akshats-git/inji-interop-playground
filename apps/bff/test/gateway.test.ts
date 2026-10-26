@@ -53,13 +53,10 @@ describe("recording gateway", () => {
   it("records each exchange, classified and attributed to the run that owns its identifiers", async () => {
     const { a, store, recorder } = app();
     recorder.bind("run-1", "preauth-code-abc");
-    await request(a)
-      .post("/pub/certify/v1/certify/oauth/token")
-      .type("form")
-      .send({
-        grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code",
-        "pre-authorized_code": "preauth-code-abc",
-      });
+    await request(a).post("/pub/certify/v1/certify/oauth/token").type("form").send({
+      grant_type: "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+      "pre-authorized_code": "preauth-code-abc",
+    });
     await new Promise((r) => setTimeout(r, 20));
     const events = await store.listEvents({ runId: "run-1" });
     expect(events).toHaveLength(1);

@@ -101,12 +101,10 @@ export function recordingProxy(route: Route, recorder: Recorder): Router {
         return;
       }
       if (!allowed) {
-        res
-          .status(404)
-          .json({
-            error: "not_exposed",
-            error_description: `${req.method} ${route.prefix}${publicPath} is not a wallet-facing endpoint, so the playground gateway does not expose it.`,
-          });
+        res.status(404).json({
+          error: "not_exposed",
+          error_description: `${req.method} ${route.prefix}${publicPath} is not a wallet-facing endpoint, so the playground gateway does not expose it.`,
+        });
         return;
       }
 
@@ -131,12 +129,10 @@ export function recordingProxy(route: Route, recorder: Recorder): Router {
         });
       } catch (e) {
         log.warn({ err: (e as Error).message, path: upstreamPath }, "upstream unreachable");
-        res
-          .status(502)
-          .json({
-            error: "upstream_unavailable",
-            error_description: `${route.upstream} is not reachable from the playground (is its container healthy?).`,
-          });
+        res.status(502).json({
+          error: "upstream_unavailable",
+          error_description: `${route.upstream} is not reachable from the playground (is its container healthy?).`,
+        });
         return;
       }
       const buf = Buffer.from(await upstream.arrayBuffer());

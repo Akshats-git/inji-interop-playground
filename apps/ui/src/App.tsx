@@ -28,12 +28,24 @@ const NAV = [
 
 function Wordmark() {
   return (
-    <NavLink to="/" className="flex shrink-0 items-center gap-3 rounded-lg" aria-label="Inji Interop Playground, home">
+    <NavLink
+      to="/"
+      className="flex shrink-0 items-center gap-3 rounded-lg"
+      aria-label="Inji Interop Playground, home"
+    >
       <svg width="46" height="18" viewBox="0 0 46 18" aria-hidden>
         <path d="M6 9h17" stroke="var(--issue-bright)" strokeWidth="4.5" strokeLinecap="round" />
         <path d="M23 9h17" stroke="var(--present)" strokeWidth="4.5" strokeLinecap="round" />
         {[6, 23, 40].map((cx) => (
-          <circle key={cx} cx={cx} cy="9" r="5.5" fill="var(--surface)" stroke="var(--issue)" strokeWidth="3" />
+          <circle
+            key={cx}
+            cx={cx}
+            cy="9"
+            r="5.5"
+            fill="var(--surface)"
+            stroke="var(--issue)"
+            strokeWidth="3"
+          />
         ))}
       </svg>
       <span className="text-[1.0625rem] leading-none font-extrabold tracking-wide text-issue">
@@ -163,7 +175,10 @@ export function App() {
       <header className="sticky top-0 z-40 border-b border-hairline bg-surface/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1320px] flex-wrap items-center gap-x-8 gap-y-1 px-4 pt-3 sm:px-6 lg:flex-nowrap lg:py-3">
           <Wordmark />
-          <nav aria-label="Main" className="order-3 -mx-4 w-[calc(100%+2rem)] overflow-x-auto px-4 lg:order-none lg:mx-0 lg:w-auto lg:flex-1 lg:overflow-visible lg:px-0">
+          <nav
+            aria-label="Main"
+            className="order-3 -mx-4 w-[calc(100%+2rem)] overflow-x-auto px-4 lg:order-none lg:mx-0 lg:w-auto lg:flex-1 lg:overflow-visible lg:px-0"
+          >
             <ul className="flex gap-1 lg:justify-center">
               {NAV.map((n) => (
                 <li key={n.to}>
@@ -192,31 +207,34 @@ export function App() {
       </header>
       {/* At least a screen tall, so the footer starts below the fold and content arriving never shoves it around. */}
       <div className="relative">
-        <div aria-hidden className="waves pointer-events-none absolute inset-x-0 top-0 h-[340px] bg-transparent!" />
+        <div
+          aria-hidden
+          className="waves pointer-events-none absolute inset-x-0 top-0 h-[340px] bg-transparent!"
+        />
         <div
           aria-hidden
           className="orbit pointer-events-none absolute top-6 right-[max(2rem,calc((100%-1320px)/2+2rem))] hidden w-[4.5rem] lg:block"
         />
-      <main
-        id="main"
-        tabIndex={-1}
-        className="relative mx-auto min-h-svh max-w-[1320px] px-4 py-8 outline-none sm:px-6 sm:py-12"
-      >
-        <Suspense fallback={<p className="text-muted">Loading…</p>}>
-          <Routes>
-            <Route path="/" element={<RunBuilderPage />} />
-            <Route path="/runs/:id" element={<RunPage />} />
-            <Route path="/studio" element={<StudioPage />} />
-            <Route path="/verify" element={<VerifyDeskPage />} />
-            <Route path="/wallet" element={<WalletPage />} />
-            <Route path="/parties" element={<PartiesPage />} />
-            <Route path="/results" element={<ResultsPage />} />
-            <Route path="/capabilities" element={<CapabilitiesPage />} />
-            <Route path="/traffic" element={<TrafficPage />} />
-            <Route path="*" element={<p>This page does not exist. Use the navigation above.</p>} />
-          </Routes>
-        </Suspense>
-      </main>
+        <main
+          id="main"
+          tabIndex={-1}
+          className="relative mx-auto min-h-svh max-w-[1320px] px-4 py-8 outline-none sm:px-6 sm:py-12"
+        >
+          <Suspense fallback={<p className="text-muted">Loading…</p>}>
+            <Routes>
+              <Route path="/" element={<RunBuilderPage />} />
+              <Route path="/runs/:id" element={<RunPage />} />
+              <Route path="/studio" element={<StudioPage />} />
+              <Route path="/verify" element={<VerifyDeskPage />} />
+              <Route path="/wallet" element={<WalletPage />} />
+              <Route path="/parties" element={<PartiesPage />} />
+              <Route path="/results" element={<ResultsPage />} />
+              <Route path="/capabilities" element={<CapabilitiesPage />} />
+              <Route path="/traffic" element={<TrafficPage />} />
+              <Route path="*" element={<p>This page does not exist. Use the navigation above.</p>} />
+            </Routes>
+          </Suspense>
+        </main>
       </div>
       <footer className="mx-auto flex max-w-[1320px] flex-col gap-1 border-t border-hairline px-4 pt-4 pb-8 text-sm text-muted sm:flex-row sm:justify-between sm:px-6">
         <p>

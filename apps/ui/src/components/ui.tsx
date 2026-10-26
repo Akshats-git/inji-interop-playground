@@ -24,7 +24,8 @@ export const Button = forwardRef<
       className={cx(
         "inline-flex min-h-10 items-center justify-center gap-2 rounded-full px-5 text-sm font-bold transition-[background-color,border-color,box-shadow,transform] duration-150 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50",
         tone === "primary" && "bg-issue text-on-issue shadow-card hover:-translate-y-px hover:shadow-lift",
-        tone === "quiet" && "border border-hairline bg-surface text-issue hover:border-issue hover:bg-issue-soft",
+        tone === "quiet" &&
+          "border border-hairline bg-surface text-issue hover:border-issue hover:bg-issue-soft",
         tone === "danger" && "border border-fail/40 bg-surface text-fail hover:bg-fail-soft",
         className,
       )}

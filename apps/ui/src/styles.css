@@ -155,62 +155,62 @@ h3 {
 }
 
 @layer components {
-/* The header zone: faint wave lines that fade out before the content, like the mosip.io hero. */
-.waves {
-  position: relative;
-  isolation: isolate;
-  background-color: var(--surface);
-}
-.waves::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background: url("/waves.svg") repeat;
-  opacity: var(--wave-opacity);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
-}
+  /* The header zone: faint wave lines that fade out before the content, like the mosip.io hero. */
+  .waves {
+    position: relative;
+    isolation: isolate;
+    background-color: var(--surface);
+  }
+  .waves::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: url("/waves.svg") repeat;
+    opacity: var(--wave-opacity);
+    mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  }
 
-/* The hand-drawn amber underline under page titles. */
-.scribble {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 C40 1 70 7 110 3.5 S170 2 198 4.5' fill='none' stroke='%23fdc30d' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: 0 100%;
-  background-size: min(100%, 11em) 0.36em;
-  display: inline-block;
-  max-width: 100%;
-  padding-bottom: 0.42em;
-}
+  /* The hand-drawn amber underline under page titles. */
+  .scribble {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5 C40 1 70 7 110 3.5 S170 2 198 4.5' fill='none' stroke='%23fdc30d' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: min(100%, 11em) 0.36em;
+    display: inline-block;
+    max-width: 100%;
+    padding-bottom: 0.42em;
+  }
 
-/* MOSIP's circle-and-dots motif, used once per page header. */
-.orbit {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 9999px;
-  background: radial-gradient(circle at 30% 25%, var(--issue-bright), var(--issue) 70%);
-  box-shadow: var(--shadow);
-}
-.orbit::before,
-.orbit::after {
-  content: "";
-  position: absolute;
-  border-radius: 9999px;
-}
-.orbit::before {
-  width: 26%;
-  aspect-ratio: 1;
-  left: -8%;
-  top: 14%;
-  background: var(--present-bright);
-}
-.orbit::after {
-  width: 36%;
-  aspect-ratio: 1;
-  right: -10%;
-  bottom: 2%;
-  background: var(--issue-bright);
-  border: 3px solid var(--surface);
-}
+  /* MOSIP's circle-and-dots motif, used once per page header. */
+  .orbit {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    background: radial-gradient(circle at 30% 25%, var(--issue-bright), var(--issue) 70%);
+    box-shadow: var(--shadow);
+  }
+  .orbit::before,
+  .orbit::after {
+    content: "";
+    position: absolute;
+    border-radius: 9999px;
+  }
+  .orbit::before {
+    width: 26%;
+    aspect-ratio: 1;
+    left: -8%;
+    top: 14%;
+    background: var(--present-bright);
+  }
+  .orbit::after {
+    width: 36%;
+    aspect-ratio: 1;
+    right: -10%;
+    bottom: 2%;
+    background: var(--issue-bright);
+    border: 3px solid var(--surface);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

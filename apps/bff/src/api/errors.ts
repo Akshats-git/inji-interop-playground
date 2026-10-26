@@ -30,13 +30,11 @@ export class ApiError extends Error {
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof ZodError) {
-    res
-      .status(400)
-      .json({
-        error: "validation_failed",
-        message: "Some fields are invalid.",
-        issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
-      });
+    res.status(400).json({
+      error: "validation_failed",
+      message: "Some fields are invalid.",
+      issues: err.issues.map((i) => ({ path: i.path.join("."), message: i.message })),
+    });
     return;
   }
   if (err instanceof StudioError || err instanceof ApiError) {
@@ -57,13 +55,11 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   }
   // The Reference Wallet could not do what it was asked: say why instead of "something went wrong".
   if (err instanceof PresentationError || err instanceof IssuanceError) {
-    res
-      .status(422)
-      .json({
-        error: err.code,
-        message: err.message,
-        detail: err instanceof IssuanceError ? err.detail : undefined,
-      });
+    res.status(422).json({
+      error: err.code,
+      message: err.message,
+      detail: err instanceof IssuanceError ? err.detail : undefined,
+    });
     return;
   }
   if (err instanceof EsignetError || err instanceof HostedError || err instanceof HostedVerifyError) {

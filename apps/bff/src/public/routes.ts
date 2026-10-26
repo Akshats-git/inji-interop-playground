@@ -36,12 +36,10 @@ export function publicRoutes(studio: StudioService, store: Store) {
     if (!ALGS.has(alg)) return void res.status(404).json({ error: "unknown_algorithm" });
     const key = await studio.issuerKey(req.params.slug, alg).catch(() => undefined);
     if (!key)
-      return void res
-        .status(404)
-        .json({
-          error: "no_key",
-          error_description: `Certify has no ${alg} key in use yet. Create a credential type that signs with ${alg} first.`,
-        });
+      return void res.status(404).json({
+        error: "no_key",
+        error_description: `Certify has no ${alg} key in use yet. Create a credential type that signs with ${alg} first.`,
+      });
     res.json(key);
   });
 
