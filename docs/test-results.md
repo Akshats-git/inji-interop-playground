@@ -12,8 +12,10 @@ There are four layers of testing, from pure functions up to a browser:
 CI ([.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs the unit and static layers on every push and
 pull request. Then it starts the whole Compose bundle and checks that Certify advertises the seeded types through
 the gateway. A nightly workflow ([nightly-interop.yml](../.github/workflows/nightly-interop.yml)) runs the full
-matrix on a fresh bundle with the external lab and attaches the report. Both workflows are written, and their
-steps pass locally. They have not run on GitHub yet, because the repository has not been pushed.
+matrix on a fresh bundle with the external lab and attaches the report. Both workflows have run on GitHub and
+passed. The nightly run of 25 Oct 2026 started the bundle from scratch on a GitHub runner and got the same result as
+the local run: 75 journeys, 62 as expected, 13 known gaps, 0 unexpected. Its report is kept in
+[evidence/matrix-2026-10-25-github-nightly.md](evidence/matrix-2026-10-25-github-nightly.md).
 
 ## Unit tests
 
@@ -197,13 +199,30 @@ while it loads, and the score dropped to 0. The animations only move `transform`
   (VCDM 2.0, revocable) and as SD-JWT, Bachelor's Degree (VCDM 1.1), and Library Pass (already expired).
 - **Matrix claims** ([scripts/matrix.ts](../apps/bff/scripts/matrix.ts)): synthetic holders such as "Ramesh
   Kumar, KA-MND-20931, Ragi, Mandya" and "Asha Rao, B.Tech, Computer Science".
+- **MOSIP Collab demo identities** ([infra/parties.yaml](../infra/parties.yaml), `testData`). These are public mock
+  data from docs.inji.io. The app shows them beside every sign-in. The OTP is always `111111`.
+
+  | UIN | Who | Where it works |
+  |---|---|---|
+  | 2154189532 | Male adult | Mock, Farmer, Land registry and mDL issuers. This is the default for automatic sign-in. |
+  | 5614273165 | Male adult | Mock, Farmer and Land registry issuers |
+  | 5860356276 | Female adult | Mock and Farmer issuers |
+  | 2089250384 | Female adult | Mock and Farmer issuers |
+  | 3963293078 | Minor, 5 to 18 | Mock and Farmer issuers |
+  | 5134067562 | Infant, under 5 | Mock and Farmer issuers |
+
+  The insurance issuer uses Policy Number 12345, Full Name `insuranceCredentials` and date of birth 2000-01-01.
+  The MOSIP ID and Tax issuers need your own UIN from [self-registration](https://self-register.collab.mosip.net/).
+  Collab can change these records at any time.
+- **Animo and walt.id** need no accounts. The playground asks them for an offer through their public APIs (Animo) or
+  the local lab (walt.id).
 - All data is synthetic. See [security-privacy.md](security-privacy.md).
 
 ## Not yet tested
 
 - **A phone running Inji Wallet 1.0.0-alpha.1**, against the tunnel (bundled Certify 0.14) or against Collab.
   The matrix exercises the tunnel path with the Reference Wallet, and a unit test covers message-to-run
-  attribution. I still need to record a phone run for the demo video.
+  attribution. No phone run is recorded.
 - **C13** (a bundled W3C credential at Collab's Verify) needs a public URL, so it only runs in tunnel mode.
 - **Collab issuers other than mock, Farmer, Land and the mDL.** I collected and presented the mock, Farmer and
   Land credentials (matrix). I collected the mDL's `mso_mdoc` by hand, and no verifier here can check it.
@@ -211,8 +230,8 @@ while it loads, and the score dropped to 0. The animations only move `transform`
   issuers. Their eSignets have no client that the Reference Wallet can use, so only Inji Wallet on a phone can
   collect them (see the Parties page).
 - **Inji Web** (wallet-initiated issuance), an optional extra.
-- The CI workflows on GitHub itself (see above).
-- A fresh clone on a second **machine**. On 24 Oct I ran a fresh `git clone` in an empty directory and started it
-  under its own project name with no existing volumes (`PLAYGROUND_PROJECT=fresh-test ./playground.sh up
-  --external`). It passed `doctor` and rows M1, M11, M12, C1 and A1 as expected. It did not run on different
-  hardware.
+- A fresh clone on a second **person's machine**. On 24 Oct I ran a fresh `git clone` in an empty directory and
+  started it under its own project name with no existing volumes (`PLAYGROUND_PROJECT=fresh-test
+  ./playground.sh up --external`). It passed `doctor` and rows M1, M11, M12, C1 and A1 as expected. On 25 Oct the
+  nightly workflow started the bundle from scratch on a GitHub runner and ran all 75 journeys, with the same
+  62 / 13 / 0 result. No one else has run it yet.
