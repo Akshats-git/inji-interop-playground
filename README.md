@@ -223,7 +223,7 @@ The full report is [docs/interop-report.md](docs/interop-report.md). [docs/gaps.
   OpenID4VP 1.0 shape that Verify 1.0 uses. Sent to 0.x, it fails with a misleading
   `BOTH_ID_AND_PD_CANNOT_BE_NULL` (G22).
 - **Inji Verify 0.18.2 has three SD-JWT verification weaknesses** (G11, G19, G20). The 1.0.0-alpha.1 on Collab
-  fixes two and still has G11. I am reporting them to MOSIP privately, so I am not describing the mechanism yet.
+  fixes two and still has G11. I am not describing the mechanism in this public repository. MOSIP can ask me for the details.
 - **Collab's Verify 1.0 reads DCQL claim paths differently from OpenID4VP 1.0** (G36). A request written to the
   spec makes it reject honest presentations.
 - **The reference setups don't work out of the box.** At the released tags, broken database scripts and

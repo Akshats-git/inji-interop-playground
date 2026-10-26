@@ -172,8 +172,8 @@ privacy:
 ## Findings this lab surfaced about the Inji stack
 
 Testing with the tamper presets found weaknesses in Inji Verify 0.18.2 (G11, G19 and G20) and in Certify 0.14.0
-(G27 and G8). On Collab's Inji Verify 1.0.0-alpha.1, G19 and G20 are fixed but G11 is not. I am reporting all of
-these to MOSIP privately. See [gaps.md](gaps.md#responsible-disclosure). The playground's own Reference Verifier
+(G27 and G8). On Collab's Inji Verify 1.0.0-alpha.1, G19 and G20 are fixed but G11 is not. The details
+are withheld from this repository. See [gaps.md](gaps.md#responsible-disclosure). The playground's own Reference Verifier
 rejects all of these presentations. That comparison is what shows the gap.
 
 ## Deploying beyond localhost

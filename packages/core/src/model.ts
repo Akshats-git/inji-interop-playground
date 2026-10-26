@@ -261,10 +261,10 @@ export const VERIFIERS: Record<VerifierId, { label: string; accepts: QueryLangua
 
 /** Upstream problems written up in docs/gaps.md that runs reproduce on purpose. */
 export const KNOWN_GAPS = {
-  G11: "Inji Verify accepts a forged SD-JWT (reported privately to MOSIP)",
+  G11: "Inji Verify accepts a forged SD-JWT (details withheld)",
   G15: "Certify signs Ed25519Signature2020 proofs without that suite's @context, so strict JSON-LD processors cannot check them",
-  G19: "Inji Verify accepts a replayed SD-JWT presentation (reported privately to MOSIP)",
-  G20: "Inji Verify accepts an SD-JWT presentation without holder proof (reported privately to MOSIP)",
+  G19: "Inji Verify accepts a replayed SD-JWT presentation (details withheld)",
+  G20: "Inji Verify accepts an SD-JWT presentation without holder proof (details withheld)",
   G30: "walt.id's wallet cannot read Inji Certify's issuer metadata",
   G32: "walt.id's verifier cannot read the holder key in Certify's SD-JWTs",
   G33: "walt.id's wallet puts the definition id in descriptor_map",

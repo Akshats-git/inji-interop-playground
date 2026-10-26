@@ -46,10 +46,10 @@ files).
 | G5 | Certify (injistack Compose) | The default cache list lacks `credentialOfferCache`. `/pre-authorized-data` fails ("credentialOfferCache not available"), so the pre-authorized flow does not work out of the box. | High | Workaround: [certify-playground.properties](../infra/certify/certify-playground.properties) | Public issue (inji-certify) |
 | G6 | Certify | Errors come back as HTTP **200** with an `errors[]` envelope (`/pre-authorized-data`, `/actuator/health`). Health checks and clients that trust status codes are misled. | Low | Probe (below). Workaround: the Compose health check reads issuer metadata. | Public issue (inji-certify) |
 | G7 | Certify | Any `CertifyException` during issuance is re-labelled `ERROR_SIGNING_QR_DATA`. One example is a JSON-LD context that fails to load. | Low | Run `run-ch3oqa` message 6: `ERROR_SIGNING_QR_DATA` / "Error occurred during canonicalization" | Public issue (inji-certify) |
-| G8 | Certify | Reported privately to MOSIP. Details withheld until they have had time to respond. | Medium (security) | Withheld | **Private** |
+| G8 | Certify | Security finding. Details withheld from this public repository. | Medium (security) | Withheld | **Private** |
 | G9 | Certify | `sdJwtClaims` rejects `mandatory`, yet the pre-authorized validator reads `mandatory` from it. So you can't configure mandatory SD-JWT claims through the API. | Low | Probe (Phase 1). The Studio omits `mandatory`. | Public issue (inji-certify) |
 | G10 | Certify | SD-JWT VCs carry no `iat`, `exp` or `nbf`, so no expiry can be enforced. They are signed with the default self-signed `www.example.com (ROOT)` certificate in `x5c`. **Collab's Certify 1.0 does the same** (`injicertify-mock`). | Medium | Probe of the Matrix M3 credential (below). Matrix C14 (Collab's SD-JWT has no `exp`). | Public issue (inji-certify) |
-| G11 | Inji Verify (0.18.2 and 1.0.0-alpha.1) | Reported privately to MOSIP. Details withheld until they have had time to respond. | **High (security)** | Withheld | **Private** |
+| G11 | Inji Verify (0.18.2 and 1.0.0-alpha.1) | Security finding. Details withheld from this public repository. | **High (security)** | Withheld | **Private** |
 | G12 | db_scripts | `certify-key_policy_def.csv` lacks `CERTIFY_VC_SIGN_EC_R1`. So ES256 signing fails on a database built from the release scripts. The DDL also relies on a fresh session's `search_path`. | Low | Workaround: [01-certify.sql](../infra/postgres/init/01-certify.sql), [certify-default.properties](../infra/certify/certify-default.properties) | Public issue (inji-certify) |
 | G13 | Inji PE dialect | Inji's presentation definitions filter `$.type` with `{"type":"object","pattern":…}`. That is not valid JSON Schema for an array. Spec-style `contains/const` filters may not match in Inji wallets. | Medium | The Verifier desk shows both dialects. See `PeDialect` in [core/query.ts](../packages/core/src/query.ts). | Public issue (inji-verify) |
 | G14 | Inji Verify | `/vc-verification` (v1) only answers `INVALID`, with no reason. The reason is only available from `/v2/vc-verification`. | Low | Probe (below) | Public issue (inji-verify) |
@@ -57,15 +57,15 @@ files).
 | G16 | Certify | Certify fetches standard JSON-LD contexts (`https://www.w3.org/ns/credentials/v2` and others) from the internet at **every signature**. A transient network error fails issuance (`Error occurred during canonicalization`). The 1.0 line adds a context loader. **Inji Verify 0.18.2 does the same.** On 24 Oct, one verification of a fresh Studio credential failed with `LOADING_REMOTE_CONTEXT_FAILED` (reported as `VP_VERIFICATION_FAILED`, "runtime exception"). Three reruns of the same credential were accepted. | Medium | Run `run-ch3oqa` message 6 (failed, retried at message 7). The Reference Wallet and the matrix retry once. | Public issue (inji-certify) |
 | G17 | vc-verifier | `did:web` identifiers with a port (`did:web:host%3A8080:…`, as the did:web spec requires) fail with `Invalid URL host`, because `%3A` is not decoded. | Low | Workaround: URL keys in local mode ([compose.yml](../infra/compose.yml)) | Public issue (vc-verifier) |
 | G18 | Certify (injistack Compose) | The keystore volume is mounted at `/home/mosip/CERTIFY_PKCS12`, but the image runs from `/home/inji`. So the keys are **not persisted**. After a container re-create, Certify refuses to start (`KER-KMA-004 No such alias`) until the database is wiped. | High | Workaround: [compose.yml](../infra/compose.yml) mounts `/home/inji/CERTIFY_PKCS12`. | Public issue (inji-certify) |
-| G19 | Inji Verify 0.18.2 | Reported privately to MOSIP. Details withheld until they have had time to respond. | **High (security)** | Withheld | **Private** |
-| G20 | Inji Verify 0.18.2 | Reported privately to MOSIP. Details withheld until they have had time to respond. | **High (security)** | Withheld | **Private** |
+| G19 | Inji Verify 0.18.2 | Security finding. Details withheld from this public repository. | **High (security)** | Withheld | **Private** |
+| G20 | Inji Verify 0.18.2 | Security finding. Details withheld from this public repository. | **High (security)** | Withheld | **Private** |
 | G21 | Inji Verify | When a credential's status list can't be resolved, the whole presentation fails with an opaque `VP_VERIFICATION_FAILED` ("runtime exception"). It should give a status-check error instead. | Low | Observed in Phase 2 (below) | Public issue (inji-verify) |
 | G22 | Inji Verify | A DCQL request (`dcqlQuery`, the 1.0 shape) sent to 0.18.2 fails with `BOTH_ID_AND_PD_CANNOT_BE_NULL`, not a clear "query language not supported". Integrators who mix versions get a misleading error. In the other direction, 1.0.0-alpha.1 answers a Presentation Exchange request with `UNKNOWN_FIELD`. | Low | Matrix M11 (0.18.2) and C9 (Collab, 1.0.0-alpha.1) | Public issue (inji-verify) |
 | G23 | Certify | A template `validFrom` that is valid RFC 3339 but has no milliseconds (`2024-01-02T00:00:00Z`) makes issuance fail with HTTP 500 (`DateTimeParseException` in the ledger). So issuers can't set their own validity dates freely. | Low | Workaround: [core/studio.ts](../packages/core/src/studio.ts) keeps milliseconds. | Public issue (inji-certify) |
 | G24 | Certify | Certify writes each issued credential's type to `certify.ledger.credential_type`, a `varchar(100)`. For SD-JWT that is the `vct`. A URL `vct` on a longer host (101 characters on a quick tunnel) makes every issuance fail with `ERROR_SIGNING_QR_DATA` after a `value too long` SQL error. | Medium | Matrix over a tunnel (Phase 4). Workaround: a short `/pub/vct/<id>`. | Public issue (inji-certify) |
 | G25 | Inji Verify and Verify SDK | Verify only returns a `requestUri` (a signed request object) when `clientId` is its own DID. With any other client id, it returns the request by value. For a one-field request, the SDK then builds a 1,191-character `openid4vp://` URL (QR version 28 at the SDK's level M). That request is unsigned, and it is denser than Inji Verify's own camera limit (v27). | Medium | Probe (below) | Public issue (inji-verify) |
 | G26 | Certify (SD-JWT) and QR | A 5-claim SD-JWT VC from Certify is 4,545 characters. 73 % of that is the two-certificate `x5c` chain in the header, so it **fits no QR code** (PixelPass makes it 5 % larger). A JSON-LD credential with a 1 KB photo already needs QR v27 (Inji Verify's camera limit). Above about 2.4 KB, nothing fits. | Medium | QR Lab probes (below) | Public issue (inji-certify) |
-| G27 | Certify | Reported privately to MOSIP. Details withheld until they have had time to respond. | Medium (privacy) | Withheld | **Private** |
+| G27 | Certify | Security finding. Details withheld from this public repository. | Medium (privacy) | Withheld | **Private** |
 | G28 | Certify | Concurrent pre-authorized issuances sometimes fail with `invalid_proof`. Each proof JWT carries the `c_nonce` from its own token response and uses its own holder key. | Low | Runs `run-c7mbyq` and `run-izg6ca` (failed) next to `run-hkvnrw`. `run-jg3rbg` (below). | Public issue (inji-certify), after confirming |
 | G29 | Inji Verify React SDK | `QRCodeVerification` refuses uploaded images under **10 KB** ("File size not supported. The file size should be between 10 KB and 5 MB"). A plain QR PNG is usually smaller. Two of the four sample QR codes in Inji Verify's own docs (3.4 KB and 4.4 KB) can't be uploaded. | Low | Probe on the Verifier desk (below) | Public issue (inji-verify) |
 | G30 | walt.id wallet-api 1.0 and Certify | walt.id's wallet reads every credential configuration's `claims` as an mdoc-style namespace map. Certify's SD-JWT configurations use the draft-13 shape (`{"fullName": {"display": […]}}`). So parsing the **whole** metadata fails. The wallet can then collect **no** Certify credential, JSON-LD ones included, while Certify advertises any SD-JWT type. | Medium | Matrix X11, X12 (below) | Public issue (walt-id/waltid-identity) |
@@ -101,10 +101,9 @@ Since then, the matrix has grown:
 
 ## Responsible disclosure
 
-**G8, G11, G19, G20 and G27** are security or privacy weaknesses in released MOSIP software. I have reported them
-to the MOSIP team privately, or I am in the process of doing so. So this file lists them without the mechanism
-or the steps to reproduce. The matrix still records which rows are affected. I will add the details here once
-MOSIP has had time to respond.
+**G8, G11, G19, G20 and G27** are security or privacy weaknesses in released MOSIP software. This file lists them
+without the mechanism or the steps to reproduce, so a public repository does not publish a live weakness.
+The matrix still records which rows are affected. MOSIP can ask me for the details.
 
 ## How to reproduce
 
@@ -145,8 +144,8 @@ Issue a JSON-LD credential while `www.w3.org` is slow or unreachable (or block i
 credential request fails with `ERROR_SIGNING_QR_DATA` / "Error occurred during canonicalization". It also
 happens by itself now and then. Run `run-ch3oqa` shows one at message 6 and the retry at message 7.
 
-### G8: reported privately
-Details withheld until MOSIP has had time to respond.
+### G8: details withheld
+Details are withheld from this public repository because they describe weaknesses in released software.
 
 ### G9: mandatory SD-JWT claims
 `POST /v1/certify/credential-configurations` with `sdJwtClaims.<claim>.mandatory: true` is rejected as an unknown
@@ -158,8 +157,8 @@ Issue the seeded **Karnataka Farmer Card (SD-JWT)** (Matrix M3) and decode it (L
 - The subject of header `x5c[0]` is `CN=www.example.com (CERTIFY_VC_SIGN_EC_R1-EC_SECP256R1_SIGN)`. It is issued by
   `CN=www.example.com (ROOT)`.
 
-### G11, G19, G20: reported privately
-Details withheld until MOSIP has had time to respond.
+### G11, G19, G20: details withheld
+Details are withheld from this public repository because they describe weaknesses in released software.
 
 ### G13: the Inji PE dialect
 In the Verifier desk, choose a credential. Switch between **Inji style** and **Spec style** for the same
@@ -246,8 +245,8 @@ overhead wins and the payload grows by 5 to 11 %. The SD-JWT's header alone is 3
 those are the `x5c` chain. That chain costs most of the size. The matrix's "direct share" rows (M4, M5) submit
 the PixelPass payload directly. So they test verification, not camera scanning.
 
-### G27: reported privately
-Details withheld until MOSIP has had time to respond.
+### G27: details withheld
+Details are withheld from this public repository because they describe weaknesses in released software.
 
 ### G28: concurrent issuance
 Start three runs of the same JSON-LD type at the same moment (`POST /api/runs` three times in parallel). On 11
